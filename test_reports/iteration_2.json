@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 2: tested NEW Settings screen + PATCH /driver/me + Directions /orders/{id}/route. Backend: 16/16 pytest passing (9 regression + 7 new). Frontend: All 18 settings testIDs render, inputs prefilled with seeded data, vehicle tile selection updates UI (Car highlighted), push toggle visually flips, back navigation returns home. Directions endpoint correctly returns source='fallback' with 2-point straight-line polyline because Google Cloud billing is disabled (REQUEST_DENIED confirmed in backend logs). Route caching is idempotent across calls.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "settings + home", "issues": ["RN-Web warning: 'shadow*' style props deprecated, migrate to boxShadow (non-blocking, same as iter1)"]}
+    ],
+    "react_native_issues": [
+      {"component": "react-native-maps app.json plugin", "issue": "Expo logs show 'PluginError: Unable to resolve a valid config plugin for react-native-maps' on web build. Bundle still renders fine (Platform.select falls back to SvgMapView on web), but the plugin entry in app.json should likely be removed since react-native-maps does not export an app.plugin.js. This will block native (iOS/Android) dev-client builds via EAS until fixed."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_driver_api.py",
+    "/app/backend/tests/test_settings_and_route.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Main agent: remove 'react-native-maps' from the plugins array in /app/frontend/app.json (it is a native module, not a config plugin). Keep the dependency installed.",
+    "Optional: migrate 'shadow*' style props to boxShadow to silence RN-Web warnings.",
+    "Once Google Cloud billing is enabled by the user, /api/orders/{id}/route will automatically switch from source='fallback' to source='google' (the cache key persists per pickup/dropoff pair, so prior fallback responses will be returned until cache eviction — consider clearing db.route_cache after enabling billing)."
+  ],
+  "critical_code_review_comments": [
+    "server.py PATCH /driver/me correctly uses model_dump(exclude_unset=True) and re-serialises notifications nested dict — partial updates work as expected.",
+    "Route endpoint gracefully degrades: tries Google → on REQUEST_DENIED/non-OK status, falls through to haversine fallback. Cache write only on Google success which is correct (avoids permanently caching the fallback).",
+    "ensure_seed() migration logic correctly back-fills missing fields for existing driver docs without overwriting live numeric state (is_online/earnings_today/...).",
+    "settings.tsx onBlur-save pattern is reasonable; saveField also fires immediately on vehicle tap + notification toggle for snappy UX."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_driver_api.py (fixed hardcoded fallback BASE URL)",
+    "/app/backend/tests/test_settings_and_route.py (new)"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "~95% (all settings flows verified; native MapView path requires dev-client and was not exercised)"},
+  "seed_data_creation": "Driver migration auto-populated vehicle_type='bicycle', plate='STO-2841', email='alex.lindqvist@driver.app', phone='+46 70 911 4422', notifications={push,sound,new_orders,earnings_summary:true} on backend startup. Tests restore mutated fields after each case.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend public URL https://delivery-ui-kit-3.preview.emergentagent.com — both pytest files share a module-level BASE pulled from EXPO_PUBLIC_BACKEND_URL. To test the 'google' source path, the user must enable billing on GCP project for AIzaSyCm_A2yMaW6HF-PTFnu-AuSvkWLCJMHtyM and the Directions API must be enabled; after that, delete db.route_cache entries to force re-fetch. The react-native-maps plugin entry in app.json will need to be removed before any native build; web works because of Platform.select fallback to SvgMapView. Settings screen testIDs are wired correctly and inputs save on blur via PATCH /driver/me.",
+  "rca_of_issue": "No app bugs found. One CONFIGURATION ISSUE: app.json has 'react-native-maps' in plugins[] but the package does not export a config plugin → Expo logs a PluginError on every bundle. Web still bundles successfully due to Platform.select, but native EAS builds will fail to prebuild. Fix: remove that entry from app.json plugins (RNMaps is auto-linked, no plugin needed)."
+}

@@ -9,14 +9,24 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.emergent.driverapp",
+      "config": {
+        "googleMapsApiKey": "AIzaSyCm_A2yMaW6HF-PTFnu-AuSvkWLCJMHtyM"
+      }
     },
     "android": {
+      "package": "com.emergent.driverapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCm_A2yMaW6HF-PTFnu-AuSvkWLCJMHtyM"
+        }
+      }
     },
     "web": {
       "bundler": "metro",

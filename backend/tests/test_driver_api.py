@@ -3,8 +3,7 @@ import os
 import pytest
 import requests
 
-BASE = os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "https://da0bdf31-c3a6-4c51-8d62-98307823844f.preview.emergentagent.com"
-BASE = BASE.rstrip("/")
+BASE = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://delivery-ui-kit-3.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"
 
 

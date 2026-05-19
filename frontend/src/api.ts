@@ -1,4 +1,4 @@
-import type { Driver, Order } from "./types";
+import type { DirectionsResponse, Driver, DriverUpdate, Order } from "./types";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -34,4 +34,7 @@ export const api = {
       body: JSON.stringify({ rating, feedback }),
     }),
   seedNewPending: () => request<Order>(`/orders/seed-new-pending`, { method: "POST" }),
+  updateDriver: (update: DriverUpdate) =>
+    request<Driver>("/driver/me", { method: "PATCH", body: JSON.stringify(update) }),
+  getRoute: (orderId: string) => request<DirectionsResponse>(`/orders/${orderId}/route`),
 };

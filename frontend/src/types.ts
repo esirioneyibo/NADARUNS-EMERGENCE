@@ -50,14 +50,48 @@ export interface Order {
   feedback?: string | null;
 }
 
+export interface NotificationPrefs {
+  push: boolean;
+  sound: boolean;
+  new_orders: boolean;
+  earnings_summary: boolean;
+}
+
 export interface Driver {
   id: string;
   name: string;
   rating: number;
   avatar: string;
   vehicle: string;
+  vehicle_type: string;
+  plate: string;
+  email: string;
+  phone: string;
   is_online: boolean;
   earnings_today: number;
   deliveries_today: number;
   acceptance_rate: number;
+  notifications: NotificationPrefs;
+}
+
+export interface DriverUpdate {
+  name?: string;
+  vehicle?: string;
+  vehicle_type?: string;
+  plate?: string;
+  email?: string;
+  phone?: string;
+  notifications?: NotificationPrefs;
+}
+
+export interface RoutePoint {
+  lat: number;
+  lng: number;
+}
+
+export interface DirectionsResponse {
+  points: RoutePoint[];
+  distance_meters: number;
+  duration_seconds: number;
+  source: "google" | "fallback";
 }

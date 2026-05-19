@@ -111,13 +111,22 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.iconBtn, shadows.md]}
-          onPress={() => router.push("/history")}
-          testID="open-history-button"
-        >
-          <Ionicons name="time-outline" size={22} color={theme.textPrimary} />
-        </TouchableOpacity>
+        <View style={styles.iconRow}>
+          <TouchableOpacity
+            style={[styles.iconBtn, shadows.md]}
+            onPress={() => router.push("/settings")}
+            testID="open-settings-button"
+          >
+            <Ionicons name="person-circle-outline" size={22} color={theme.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconBtn, shadows.md, { marginLeft: 8 }]}
+            onPress={() => router.push("/history")}
+            testID="open-history-button"
+          >
+            <Ionicons name="time-outline" size={22} color={theme.textPrimary} />
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
       {/* Status pill */}
@@ -321,6 +330,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.surface,
     alignItems: "center", justifyContent: "center",
   },
+  iconRow: { flexDirection: "row", alignItems: "center" },
   statusPill: {
     position: "absolute",
     alignSelf: "center",

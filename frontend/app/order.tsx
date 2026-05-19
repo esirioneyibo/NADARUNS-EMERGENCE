@@ -14,7 +14,7 @@ import Animated, { FadeIn, FadeInUp, Layout, SlideInDown } from "react-native-re
 import * as Haptics from "expo-haptics";
 
 import { api } from "../src/api";
-import type { Order, OrderStatus } from "../src/types";
+import type { Order, OrderStatus, RoutePoint } from "../src/types";
 import { radius, shadows, spacing, theme } from "../src/theme";
 import MapView from "../src/components/MapView";
 import SwipeToConfirm from "../src/components/SwipeToConfirm";
@@ -37,11 +37,20 @@ export default function OrderFlowScreen() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
 
   const load = useCallback(async () => {
     try {
       const a = await api.getActive();
       setOrder(a);
+      if (a) {
+        try {
+          const r = await api.getRoute(a.id);
+          setRoutePoints(r.points);
+        } catch (e) {
+          console.warn("route load failed", e);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -99,6 +108,7 @@ export default function OrderFlowScreen() {
           pickup={order.pickup}
           dropoff={order.dropoff}
           driver={targetIsPickup ? { lat: order.pickup.lat - 0.005, lng: order.pickup.lng - 0.004 } : order.pickup}
+          routePoints={routePoints}
           showRoute
         />
       </View>

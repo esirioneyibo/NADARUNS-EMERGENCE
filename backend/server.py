@@ -5,9 +5,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import random
+import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Tuple
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -18,6 +19,8 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+GOOGLE_DIRECTIONS_API_KEY = os.environ.get('GOOGLE_DIRECTIONS_API_KEY')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -85,16 +88,50 @@ class Order(BaseModel):
     feedback: Optional[str] = None
 
 
+class NotificationPrefs(BaseModel):
+    push: bool = True
+    sound: bool = True
+    new_orders: bool = True
+    earnings_summary: bool = True
+
+
 class Driver(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     rating: float
     avatar: str
     vehicle: str
+    vehicle_type: str = "bicycle"  # bicycle | scooter | car | motorbike
+    plate: str = ""
+    email: str = ""
+    phone: str = ""
     is_online: bool = False
     earnings_today: float = 0.0
     deliveries_today: int = 0
     acceptance_rate: float = 96.0
+    notifications: NotificationPrefs = Field(default_factory=NotificationPrefs)
+
+
+class DriverUpdate(BaseModel):
+    name: Optional[str] = None
+    vehicle: Optional[str] = None
+    vehicle_type: Optional[str] = None
+    plate: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    notifications: Optional[NotificationPrefs] = None
+
+
+class RoutePoint(BaseModel):
+    lat: float
+    lng: float
+
+
+class DirectionsResponse(BaseModel):
+    points: List[RoutePoint]
+    distance_meters: int
+    duration_seconds: int
+    source: str  # "google" or "fallback"
 
 
 class AdvanceRequest(BaseModel):
@@ -116,10 +153,15 @@ SEED_DRIVER = {
     "rating": 4.92,
     "avatar": "https://images.unsplash.com/photo-1551825687-f9de1603ed8b?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
     "vehicle": "Bicycle • Black",
+    "vehicle_type": "bicycle",
+    "plate": "STO-2841",
+    "email": "alex.lindqvist@driver.app",
+    "phone": "+46 70 911 4422",
     "is_online": False,
     "earnings_today": 0.0,
     "deliveries_today": 0,
     "acceptance_rate": 96.0,
+    "notifications": {"push": True, "sound": True, "new_orders": True, "earnings_summary": True},
 }
 
 RESTAURANTS = [
@@ -199,6 +241,15 @@ async def ensure_seed():
     if not driver:
         await db.drivers.insert_one(SEED_DRIVER.copy())
         logger.info("Seeded driver")
+    else:
+        # Migrate missing fields into existing driver doc
+        missing = {k: v for k, v in SEED_DRIVER.items() if k not in driver or driver.get(k) in (None, "")}
+        # Don't overwrite live numeric state
+        for k in ("is_online", "earnings_today", "deliveries_today", "acceptance_rate", "rating"):
+            missing.pop(k, None)
+        if missing:
+            await db.drivers.update_one({"id": DRIVER_ID}, {"$set": missing})
+            logger.info("Migrated driver fields: %s", list(missing.keys()))
 
     pending = await db.orders.find_one({"status": "pending"}, {"_id": 0})
     if not pending:
@@ -330,6 +381,127 @@ async def seed_new_pending():
     new_order = build_order("pending")
     await db.orders.insert_one(new_order.copy())
     return Order(**new_order)
+
+
+# ===================== Driver Update =====================
+
+@api_router.patch("/driver/me", response_model=Driver)
+async def update_driver(update: DriverUpdate):
+    payload = {k: v for k, v in update.model_dump(exclude_unset=True).items() if v is not None}
+    if payload.get("notifications") is not None:
+        payload["notifications"] = update.notifications.model_dump()
+    if payload:
+        await db.drivers.update_one({"id": DRIVER_ID}, {"$set": payload})
+    driver = await db.drivers.find_one({"id": DRIVER_ID}, {"_id": 0})
+    return Driver(**driver)
+
+
+# ===================== Directions =====================
+
+def decode_polyline(polyline_str: str) -> List[Tuple[float, float]]:
+    """Decode Google encoded polyline algorithm into list of (lat, lng)."""
+    index = 0
+    lat = 0
+    lng = 0
+    coordinates: List[Tuple[float, float]] = []
+    while index < len(polyline_str):
+        result = 0
+        shift = 0
+        while True:
+            b = ord(polyline_str[index]) - 63
+            index += 1
+            result |= (b & 0x1F) << shift
+            shift += 5
+            if b < 0x20:
+                break
+        delta_lat = ~(result >> 1) if (result & 1) else (result >> 1)
+        lat += delta_lat
+        result = 0
+        shift = 0
+        while True:
+            b = ord(polyline_str[index]) - 63
+            index += 1
+            result |= (b & 0x1F) << shift
+            shift += 5
+            if b < 0x20:
+                break
+        delta_lng = ~(result >> 1) if (result & 1) else (result >> 1)
+        lng += delta_lng
+        coordinates.append((lat / 1e5, lng / 1e5))
+    return coordinates
+
+
+def _haversine_km(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> float:
+    import math
+    R = 6371.0
+    dlat = math.radians(b_lat - a_lat)
+    dlng = math.radians(b_lng - a_lng)
+    h = math.sin(dlat / 2) ** 2 + math.cos(math.radians(a_lat)) * math.cos(math.radians(b_lat)) * math.sin(dlng / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(h))
+
+
+@api_router.get("/orders/{order_id}/route", response_model=DirectionsResponse)
+async def get_route(order_id: str):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    origin = order["pickup"]
+    dest = order["dropoff"]
+
+    # Cache routes per (origin, dest) pair to save quota.
+    cache_key = f"{origin['lat']:.5f},{origin['lng']:.5f}|{dest['lat']:.5f},{dest['lng']:.5f}"
+    cached = await db.route_cache.find_one({"key": cache_key}, {"_id": 0})
+    if cached:
+        return DirectionsResponse(**cached["response"])
+
+    if GOOGLE_DIRECTIONS_API_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client_http:
+                resp = await client_http.get(
+                    "https://maps.googleapis.com/maps/api/directions/json",
+                    params={
+                        "origin": f"{origin['lat']},{origin['lng']}",
+                        "destination": f"{dest['lat']},{dest['lng']}",
+                        "mode": "bicycling",
+                        "key": GOOGLE_DIRECTIONS_API_KEY,
+                    },
+                )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "OK" and data.get("routes"):
+                    route = data["routes"][0]
+                    encoded = route.get("overview_polyline", {}).get("points")
+                    if encoded:
+                        decoded = decode_polyline(encoded)
+                        legs = route.get("legs", [])
+                        total_distance = sum(leg.get("distance", {}).get("value", 0) for leg in legs)
+                        total_duration = sum(leg.get("duration", {}).get("value", 0) for leg in legs)
+                        response = DirectionsResponse(
+                            points=[RoutePoint(lat=lat, lng=lng) for lat, lng in decoded],
+                            distance_meters=total_distance,
+                            duration_seconds=total_duration,
+                            source="google",
+                        )
+                        await db.route_cache.insert_one({"key": cache_key, "response": response.model_dump()})
+                        return response
+                else:
+                    logger.warning("Directions API status: %s", data.get("status"))
+            else:
+                logger.warning("Directions API HTTP %s", resp.status_code)
+        except Exception as e:
+            logger.warning("Directions API call failed: %s", e)
+
+    # Fallback: straight-line polyline (2 points)
+    distance_km = _haversine_km(origin["lat"], origin["lng"], dest["lat"], dest["lng"])
+    response = DirectionsResponse(
+        points=[RoutePoint(lat=origin["lat"], lng=origin["lng"]),
+                RoutePoint(lat=dest["lat"], lng=dest["lng"])],
+        distance_meters=int(distance_km * 1000),
+        duration_seconds=int(distance_km * 240),  # ~15 km/h for bicycle
+        source="fallback",
+    )
+    return response
 
 
 # ===================== Lifecycle =====================
