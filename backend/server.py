@@ -82,10 +82,35 @@ class Order(BaseModel):
     eta_minutes: int
     earnings: float
     tip: float = 0.0
+    pickup_otp: str = ""
+    dropoff_otp: str = ""
+    pickup_otp_verified: bool = False
+    dropoff_otp_verified: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     completed_at: Optional[str] = None
     rating_given: Optional[int] = None  # thumbs up/down: 1 or -1
     feedback: Optional[str] = None
+
+
+class OtpRequest(BaseModel):
+    otp: str
+    kind: Literal["pickup", "dropoff"]
+
+
+class WalletTransaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    type: Literal["delivery", "tip", "payout", "bonus"]
+    amount: float
+    description: str
+    timestamp: str
+
+
+class Wallet(BaseModel):
+    available_balance: float
+    pending_balance: float
+    payout_schedule: str
+    next_payout_date: str
+    transactions: List[WalletTransaction]
 
 
 class NotificationPrefs(BaseModel):
@@ -229,6 +254,10 @@ def build_order(status: OrderStatus = "pending", completed_offset_hours: Optiona
         eta_minutes=eta,
         earnings=earnings,
         tip=tip,
+        pickup_otp=f"{random.randint(1000, 9999)}",
+        dropoff_otp=f"{random.randint(1000, 9999)}",
+        pickup_otp_verified=(status not in ("pending", "rejected", "accepted", "enroute_pickup", "arrived_pickup")),
+        dropoff_otp_verified=(status == "delivered"),
         created_at=created.isoformat(),
         completed_at=completed,
         rating_given=random.choice([1, 1, 1, -1]) if completed else None,
@@ -255,6 +284,19 @@ async def ensure_seed():
     if not pending:
         await db.orders.insert_one(build_order("pending"))
         logger.info("Seeded pending order")
+
+    # Migrate any orders missing OTPs (added in a later version)
+    missing_otp = await db.orders.update_many(
+        {"$or": [{"pickup_otp": {"$exists": False}}, {"pickup_otp": ""}]},
+        [{"$set": {
+            "pickup_otp": {"$toString": {"$floor": {"$add": [1000, {"$multiply": [{"$rand": {}}, 9000]}]}}},
+            "dropoff_otp": {"$toString": {"$floor": {"$add": [1000, {"$multiply": [{"$rand": {}}, 9000]}]}}},
+            "pickup_otp_verified": {"$ifNull": ["$pickup_otp_verified", False]},
+            "dropoff_otp_verified": {"$ifNull": ["$dropoff_otp_verified", False]},
+        }}],
+    )
+    if missing_otp.modified_count:
+        logger.info("Migrated %d orders with OTPs", missing_otp.modified_count)
 
     history_count = await db.orders.count_documents({"status": "delivered"})
     if history_count < 6:
@@ -372,6 +414,76 @@ async def rate_order(order_id: str, body: RateRequest):
     order["rating_given"] = body.rating
     order["feedback"] = body.feedback
     return Order(**order)
+
+
+@api_router.post("/orders/{order_id}/verify-otp", response_model=Order)
+async def verify_otp(order_id: str, body: OtpRequest):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    expected = order.get("pickup_otp") if body.kind == "pickup" else order.get("dropoff_otp")
+    if str(body.otp).strip() != str(expected):
+        raise HTTPException(400, "Invalid OTP")
+    field = "pickup_otp_verified" if body.kind == "pickup" else "dropoff_otp_verified"
+    await db.orders.update_one({"id": order_id}, {"$set": {field: True}})
+    order[field] = True
+    return Order(**order)
+
+
+@api_router.get("/driver/wallet", response_model=Wallet)
+async def get_wallet():
+    history = await db.orders.find({"status": "delivered"}, {"_id": 0}).sort("completed_at", -1).limit(40).to_list(40)
+    txns: List[dict] = []
+    available = 0.0
+    pending = 0.0
+    now = datetime.now(timezone.utc)
+    for o in history:
+        ts = o.get("completed_at") or o.get("created_at")
+        try:
+            done_at = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except Exception:
+            done_at = now
+        age_hours = (now - done_at).total_seconds() / 3600
+        is_pending = age_hours < 48  # earnings clear after 48h
+        base_amount = float(o.get("earnings", 0))
+        tip_amount = float(o.get("tip", 0) or 0)
+        if is_pending:
+            pending += base_amount + tip_amount
+        else:
+            available += base_amount + tip_amount
+        txns.append(WalletTransaction(
+            type="delivery",
+            amount=base_amount,
+            description=f"Delivery {o.get('order_number')} • {o['pickup'].get('name', '')}",
+            timestamp=ts,
+        ).model_dump())
+        if tip_amount > 0:
+            txns.append(WalletTransaction(
+                type="tip",
+                amount=tip_amount,
+                description=f"Tip from {o['customer'].get('name', 'customer')}",
+                timestamp=ts,
+            ).model_dump())
+
+    # Add a fake recent payout
+    payout_ts = (now - timedelta(days=3)).isoformat()
+    txns.append(WalletTransaction(
+        type="payout",
+        amount=-min(available * 0.6, 240.0) if available > 0 else -120.0,
+        description="Weekly payout to **** 4422",
+        timestamp=payout_ts,
+    ).model_dump())
+
+    txns.sort(key=lambda t: t["timestamp"], reverse=True)
+    next_payout = (now + timedelta(days=(7 - now.weekday()) % 7 or 7)).date().isoformat()
+
+    return Wallet(
+        available_balance=round(available, 2),
+        pending_balance=round(pending, 2),
+        payout_schedule="Weekly • Mondays",
+        next_payout_date=next_payout,
+        transactions=[WalletTransaction(**t) for t in txns],
+    )
 
 
 @api_router.post("/orders/seed-new-pending", response_model=Order)

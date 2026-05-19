@@ -44,10 +44,30 @@ export interface Order {
   eta_minutes: number;
   earnings: number;
   tip: number;
+  pickup_otp: string;
+  dropoff_otp: string;
+  pickup_otp_verified: boolean;
+  dropoff_otp_verified: boolean;
   created_at: string;
   completed_at?: string | null;
   rating_given?: number | null;
   feedback?: string | null;
+}
+
+export interface WalletTransaction {
+  id: string;
+  type: "delivery" | "tip" | "payout" | "bonus";
+  amount: number;
+  description: string;
+  timestamp: string;
+}
+
+export interface Wallet {
+  available_balance: number;
+  pending_balance: number;
+  payout_schedule: string;
+  next_payout_date: string;
+  transactions: WalletTransaction[];
 }
 
 export interface NotificationPrefs {

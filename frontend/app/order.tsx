@@ -18,6 +18,7 @@ import type { Order, OrderStatus, RoutePoint } from "../src/types";
 import { radius, shadows, spacing, theme } from "../src/theme";
 import MapView from "../src/components/MapView";
 import SwipeToConfirm from "../src/components/SwipeToConfirm";
+import OtpModal from "../src/components/OtpModal";
 
 const STAGE_TITLES: Record<OrderStatus, { title: string; subtitle: string; primary: string }> = {
   pending: { title: "New request", subtitle: "Reviewing order details", primary: "Continue" },
@@ -38,6 +39,8 @@ export default function OrderFlowScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
+  const [otpOpen, setOtpOpen] = useState<null | "pickup" | "dropoff">(null);
+  const [otpError, setOtpError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -240,7 +243,19 @@ export default function OrderFlowScreen() {
         {(order.status === "arrived_pickup" || order.status === "arrived_dropoff") ? (
           <SwipeToConfirm
             label={order.status === "arrived_pickup" ? "Swipe to confirm pickup" : "Swipe to complete delivery"}
-            onComplete={advance}
+            onComplete={() => {
+              if (order.status === "arrived_pickup" && !order.pickup_otp_verified) {
+                setOtpError(null);
+                setOtpOpen("pickup");
+                return;
+              }
+              if (order.status === "arrived_dropoff" && !order.dropoff_otp_verified) {
+                setOtpError(null);
+                setOtpOpen("dropoff");
+                return;
+              }
+              advance();
+            }}
             testID={order.status === "arrived_pickup" ? "swipe-confirm-pickup" : "swipe-confirm-delivery"}
             color={order.status === "arrived_dropoff" ? theme.success : theme.primary}
           />
@@ -272,6 +287,28 @@ export default function OrderFlowScreen() {
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      <OtpModal
+        visible={otpOpen !== null}
+        kind={otpOpen || "pickup"}
+        expectedHint={otpOpen === "pickup" ? order.pickup_otp : otpOpen === "dropoff" ? order.dropoff_otp : undefined}
+        error={otpError}
+        onClose={() => { setOtpOpen(null); setOtpError(null); }}
+        onSubmit={async (otp) => {
+          if (!otpOpen) return;
+          try {
+            const updated = await api.verifyOtp(order.id, otp, otpOpen);
+            setOrder(updated);
+            setOtpOpen(null);
+            setOtpError(null);
+            // After successful OTP verify, automatically advance to next stage
+            await advance();
+          } catch (e: any) {
+            setOtpError("Incorrect code. Please try again.");
+            throw e;
+          }
+        }}
+      />
     </View>
   );
 }

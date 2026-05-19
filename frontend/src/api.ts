@@ -1,4 +1,4 @@
-import type { DirectionsResponse, Driver, DriverUpdate, Order } from "./types";
+import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet } from "./types";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -37,4 +37,10 @@ export const api = {
   updateDriver: (update: DriverUpdate) =>
     request<Driver>("/driver/me", { method: "PATCH", body: JSON.stringify(update) }),
   getRoute: (orderId: string) => request<DirectionsResponse>(`/orders/${orderId}/route`),
+  verifyOtp: (orderId: string, otp: string, kind: "pickup" | "dropoff") =>
+    request<Order>(`/orders/${orderId}/verify-otp`, {
+      method: "POST",
+      body: JSON.stringify({ otp, kind }),
+    }),
+  getWallet: () => request<Wallet>("/driver/wallet"),
 };

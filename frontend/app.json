@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "NadaRuns Driver",
+    "slug": "nadaruns-driver",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

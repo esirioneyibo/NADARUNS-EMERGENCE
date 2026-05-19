@@ -234,7 +234,7 @@ export default function SettingsScreen() {
         {/* Payouts & Support */}
         <SectionTitle title="More" />
         <Animated.View entering={FadeInUp.delay(320)} style={[styles.card, shadows.sm]}>
-          <LinkRow icon="card" label="Payouts & bank" badge="Weekly" testID="link-payouts" />
+          <LinkRow icon="card" label="Payouts & bank" badge="Weekly" testID="link-payouts" onPress={() => router.push("/wallet")} />
           <Divider />
           <LinkRow icon="document-text-outline" label="Tax documents" testID="link-tax" />
           <Divider />
@@ -323,9 +323,9 @@ function ToggleRow(props: {
   );
 }
 
-function LinkRow(props: { icon: keyof typeof Ionicons.glyphMap; label: string; badge?: string; testID?: string }) {
+function LinkRow(props: { icon: keyof typeof Ionicons.glyphMap; label: string; badge?: string; testID?: string; onPress?: () => void }) {
   return (
-    <TouchableOpacity style={styles.row} testID={props.testID}>
+    <TouchableOpacity style={styles.row} testID={props.testID} onPress={props.onPress}>
       <Ionicons name={props.icon} size={20} color={theme.textSecondary} />
       <Text style={[styles.rowLabel, { flex: 1, marginLeft: 12, fontSize: 15, color: theme.textPrimary }]}>
         {props.label}

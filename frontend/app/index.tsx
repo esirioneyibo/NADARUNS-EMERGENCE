@@ -138,6 +138,8 @@ export default function HomeScreen() {
         <Text style={styles.statusText}>
           {driver.is_online ? "You're online" : "You're offline"}
         </Text>
+        <View style={styles.brandSep} />
+        <Text style={styles.brandText}>NadaRuns</Text>
       </Animated.View>
 
       {/* Bottom card */}
@@ -344,6 +346,8 @@ const styles = StyleSheet.create({
   },
   dot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   statusText: { fontSize: 13, fontWeight: "600", color: theme.textPrimary },
+  brandSep: { width: 1, height: 12, backgroundColor: theme.border, marginHorizontal: 10 },
+  brandText: { fontSize: 12, fontWeight: "800", color: theme.primary, letterSpacing: 0.6 },
   bottomSheet: {
     position: "absolute",
     left: 0, right: 0, bottom: 0,
