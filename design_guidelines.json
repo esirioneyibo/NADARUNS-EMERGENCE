@@ -1,0 +1,267 @@
+{
+  "theme_archetype": "Premium Scandinavian Logistics (Archetype 1 / Archetype 4 Hybrid)",
+  "colors": {
+    "light": {
+      "background": "#F8FAFC",
+      "surface": "#FFFFFF",
+      "surface_glass": "rgba(255, 255, 255, 0.85)",
+      "primary": "#0C4A42",
+      "primary_active": "#147B6D",
+      "primary_light": "#E6F2F0",
+      "secondary": "#0F172A",
+      "text_primary": "#0F172A",
+      "text_secondary": "#64748B",
+      "text_inverse": "#FFFFFF",
+      "border": "#E2E8F0",
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "error": "#EF4444",
+      "route_line": "#0C4A42"
+    },
+    "dark": {
+      "background": "#0A0A0A",
+      "surface": "#1C1C1E",
+      "surface_glass": "rgba(28, 28, 30, 0.85)",
+      "primary": "#147B6D",
+      "primary_active": "#1BB5A0",
+      "primary_light": "rgba(20, 123, 109, 0.2)",
+      "secondary": "#F8FAFC",
+      "text_primary": "#F8FAFC",
+      "text_secondary": "#94A3B8",
+      "text_inverse": "#0A0A0A",
+      "border": "#2D2D30",
+      "success": "#34D399",
+      "warning": "#FBBF24",
+      "error": "#F87171",
+      "route_line": "#1BB5A0"
+    }
+  },
+  "typography": {
+    "font_family": "Outfit",
+    "fallback_font": "System",
+    "sizes": {
+      "xs": 12,
+      "sm": 14,
+      "base": 16,
+      "lg": 18,
+      "xl": 20,
+      "2xl": 24,
+      "3xl": 32,
+      "4xl": 40,
+      "5xl": 48
+    },
+    "weights": {
+      "light": "300",
+      "regular": "400",
+      "medium": "500",
+      "semibold": "600",
+      "bold": "700",
+      "black": "900"
+    },
+    "letter_spacing": {
+      "tight": -0.5,
+      "normal": 0,
+      "wide": 0.5,
+      "widest": 1.5
+    }
+  },
+  "spacing": {
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48,
+    "16": 64
+  },
+  "shadows": {
+    "sm": {
+      "elevation": 2,
+      "shadowColor": "#000",
+      "shadowOffset": { "width": 0, "height": 1 },
+      "shadowOpacity": 0.05,
+      "shadowRadius": 3
+    },
+    "md": {
+      "elevation": 5,
+      "shadowColor": "#000",
+      "shadowOffset": { "width": 0, "height": 4 },
+      "shadowOpacity": 0.1,
+      "shadowRadius": 6
+    },
+    "lg": {
+      "elevation": 10,
+      "shadowColor": "#000",
+      "shadowOffset": { "width": 0, "height": 8 },
+      "shadowOpacity": 0.15,
+      "shadowRadius": 12
+    },
+    "glass": {
+      "elevation": 0,
+      "shadowColor": "transparent"
+    }
+  },
+  "components": {
+    "bottom_sheets": {
+      "library": "@gorhom/bottom-sheet",
+      "styling": {
+        "borderRadius": 24,
+        "shadow": "lg",
+        "padding": 24
+      },
+      "handle_indicator": {
+        "width": 40,
+        "height": 4,
+        "borderRadius": 2,
+        "backgroundColor": "border"
+      }
+    },
+    "buttons": {
+      "primary": {
+        "height": 56,
+        "borderRadius": 16,
+        "backgroundColor": "primary",
+        "textColor": "text_inverse",
+        "fontWeight": "bold",
+        "fontSize": 18,
+        "alignment": "center"
+      },
+      "secondary": {
+        "height": 56,
+        "borderRadius": 16,
+        "backgroundColor": "surface",
+        "borderWidth": 1,
+        "borderColor": "border",
+        "textColor": "text_primary",
+        "fontWeight": "semibold",
+        "fontSize": 18,
+        "alignment": "center"
+      },
+      "swipe_to_confirm": {
+        "height": 64,
+        "borderRadius": 32,
+        "backgroundColor": "primary_light",
+        "trackColor": "primary",
+        "thumbColor": "surface",
+        "textColor": "primary",
+        "fontWeight": "bold"
+      }
+    },
+    "status_pills": {
+      "height": 32,
+      "borderRadius": 16,
+      "paddingHorizontal": 16,
+      "fontSize": 14,
+      "fontWeight": "semibold"
+    },
+    "map_elements": {
+      "route_line": {
+        "strokeWidth": 5,
+        "strokeColor": "route_line",
+        "lineCap": "round",
+        "lineJoin": "round"
+      },
+      "markers": {
+        "pickup": {
+          "type": "circle_icon",
+          "backgroundColor": "primary",
+          "icon": "Store",
+          "iconColor": "surface"
+        },
+        "dropoff": {
+          "type": "circle_icon",
+          "backgroundColor": "secondary",
+          "icon": "Home",
+          "iconColor": "surface"
+        },
+        "driver": {
+          "type": "directional_arrow",
+          "backgroundColor": "primary"
+        }
+      }
+    }
+  },
+  "screens": {
+    "1_home_dashboard": {
+      "description": "Full-screen map view. Floating action button for centering location. Small bottom sheet at 25% height showing 'Offline' / 'Online' toggle switch, today's earnings ($0.00), and quick stats.",
+      "animations": "Bottom sheet uses spring animation on toggle."
+    },
+    "2_incoming_order": {
+      "description": "High-priority modal or 60% bottom sheet overlay. Shows route map preview on the top half. Content: Estimated payout (huge text, $12.50), Pickup name, Dropoff distance (2.4 mi), ETA (15 min). Two massive buttons: Accept (Primary) and Reject (Subtle/Ghost).",
+      "animations": "Sheet springs up aggressively. Map camera animates to fit route bounds with padding."
+    },
+    "3_navigation_to_pickup": {
+      "description": "Live navigation view. Map is angled/tilted for 3D feel. Bottom sheet at 20% showing next turn instruction. Floating pill at top showing ETA to pickup. 'Arrived at Pickup' button appears when within radius.",
+      "animations": "Smooth camera tracking. Bottom sheet gracefully shrinks from step 2."
+    },
+    "4_arrived_at_pickup": {
+      "description": "Bottom sheet expands to 40%. Shows restaurant name, address, and an 'Arrived' button.",
+      "animations": "BottomSheet expands smoothly."
+    },
+    "5_confirm_pickup": {
+      "description": "Expands to 75% or full screen. Detailed list of order items, order number (#A94B), customer notes ('Please knock'). Swipe-to-confirm slider at the bottom.",
+      "animations": "Items stagger fade-in."
+    },
+    "6_navigation_to_customer": {
+      "description": "Similar to step 3, but route is from pickup to dropoff. ETA updates.",
+      "animations": "Map camera animates out, then zooms into new route."
+    },
+    "7_arrived_at_dropoff": {
+      "description": "Bottom sheet expands to 40%. Shows customer address, apartment number, gate code.",
+      "animations": "Smooth sheet expansion."
+    },
+    "8_confirm_delivery": {
+      "description": "Optional photo capture placeholder area. Swipe-to-complete slider 'Swipe to Complete Delivery'.",
+      "animations": "Swipe action triggers success haptic and transitions screen."
+    },
+    "9_earnings_summary": {
+      "description": "Celebratory overlay sheet. Big bold typography showing amount earned ('+ $12.50'). 'Done' button to return to home.",
+      "animations": "Slide up with slight bounce. Numbers counter animation from 0 to total."
+    },
+    "10_rating_feedback": {
+      "description": "Thumbs up / Thumbs down quick rating for the dropoff experience. Can be integrated into the earnings summary sheet.",
+      "animations": "Fade in interactive elements."
+    },
+    "11_delivery_history": {
+      "description": "Separate screen accessed from a drawer or profile icon. List of past deliveries in cards (Date, Amount, Locations).",
+      "animations": "List items slide up and fade in."
+    }
+  },
+  "animations_specs": {
+    "spring": {
+      "damping": 15,
+      "stiffness": 150,
+      "mass": 1
+    },
+    "timing": {
+      "duration": 300,
+      "easing": "bezier(0.25, 0.1, 0.25, 1)"
+    }
+  },
+  "image_urls": {
+    "driver_avatar": {
+      "url": "https://images.unsplash.com/photo-1551825687-f9de1603ed8b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBkZWxpdmVyeSUyMGRyaXZlciUyMHBvcnRyYWl0fGVufDB8fHx8MTc3OTE5OTkxMnww&ixlib=rb-4.1.0&q=85",
+      "description": "Smiling man in delivery uniform",
+      "usage": "Profile section, header avatar"
+    },
+    "restaurant_image": {
+      "url": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwxfHxyZXN0YXVyYW50JTIwc3RvcmVmcm9udCUyMG1vZGVybnxlbnwwfHx8fDE3NzkxOTk5MTJ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Modern restaurant storefront",
+      "usage": "Pickup details screen header"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Use strictly React Native Expo with react-native-reanimated and @gorhom/bottom-sheet for all slide-up panels.",
+    "Use lucide-react-native for all icons (e.g., MapPin, Navigation, CheckCircle, Package). Do not use web-only libraries.",
+    "Ensure the map (react-native-maps) is set to full screen ('absoluteFillObject') and UI elements float above it using absolute positioning or bottom sheets.",
+    "Implement swipe-to-confirm buttons using react-native-gesture-handler.",
+    "Use Outfit font if available via @expo-google-fonts/outfit. If not, default to standard system geometric font with tight letter spacing.",
+    "Do NOT use raw text elements directly; create a standardized Typography component based on the sizes provided in this guideline.",
+    "All interactive elements MUST include testID matching data-testid conventions for robust automated testing (e.g., testID='accept-order-button').",
+    "Build the 11-step flow iteratively, using a central state machine or React Context to drive the active step.",
+    "Ensure the OpenStreetMap tile uses a minimal style URL without an API key, fitting a modern, uncluttered look."
+  ]
+}
