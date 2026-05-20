@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   StyleSheet,
   Text,
   TextInput,
@@ -91,7 +92,7 @@ export default function SummaryScreen() {
       <Animated.View entering={FadeInUp.delay(240)} style={[styles.earnCard, shadows.lg]}>
         <Text style={styles.earnLabel}>You earned</Text>
         <Animated.Text style={[styles.earnAmount, animatedNumStyle]} testID="earned-amount">
-          ${total.toFixed(2)}
+          €{total.toFixed(2)}
         </Animated.Text>
         <View style={styles.breakdownRow}>
           <View style={styles.breakdownItem}>
@@ -102,7 +103,7 @@ export default function SummaryScreen() {
           <View style={styles.breakdownItem}>
             <Text style={styles.breakdownLabel}>Tip</Text>
             <Text style={[styles.breakdownValue, { color: theme.success }]}>
-              ${order.tip.toFixed(2)}
+              €{order.tip.toFixed(2)}
             </Text>
           </View>
           <View style={styles.vDivider} />
@@ -112,6 +113,17 @@ export default function SummaryScreen() {
           </View>
         </View>
       </Animated.View>
+
+      {order.delivery_photo ? (
+        <Animated.View entering={FadeInUp.delay(280)} style={styles.proofCard} testID="summary-proof-card">
+          <Image source={{ uri: order.delivery_photo }} style={styles.proofThumb} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.proofTitle}>Proof of delivery captured</Text>
+            <Text style={styles.proofSub}>Saved with this order</Text>
+          </View>
+          <Ionicons name="shield-checkmark" size={22} color={theme.success} />
+        </Animated.View>
+      ) : null}
 
       <Animated.View entering={FadeInUp.delay(320)} style={styles.ratingCard}>
         <Text style={styles.ratingTitle}>How was the customer?</Text>
@@ -189,6 +201,20 @@ const styles = StyleSheet.create({
   breakdownValue: { color: "#fff", fontWeight: "700", fontSize: 16, marginTop: 4 },
   vDivider: { width: 1, height: 28, backgroundColor: "rgba(255,255,255,0.18)" },
   ratingCard: { marginTop: spacing.xl, padding: spacing.lg, backgroundColor: theme.surface, borderRadius: radius.xl, borderWidth: 1, borderColor: theme.border },
+  proofCard: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    backgroundColor: theme.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: theme.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  proofThumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: theme.surfaceMuted },
+  proofTitle: { fontSize: 14, fontWeight: "700", color: theme.textPrimary },
+  proofSub: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
   ratingTitle: { fontSize: 16, fontWeight: "700", color: theme.textPrimary, textAlign: "center" },
   thumbsRow: { flexDirection: "row", justifyContent: "center", gap: 16, marginTop: spacing.md },
   thumbBtn: { width: 64, height: 64, borderRadius: 32, backgroundColor: theme.surfaceMuted, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "transparent" },

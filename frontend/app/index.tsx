@@ -171,7 +171,7 @@ export default function HomeScreen() {
             <View style={styles.statsRow}>
               <View style={styles.statBox}>
                 <Text style={styles.statValue} testID="earnings-today">
-                  ${driver.earnings_today.toFixed(2)}
+                  €{driver.earnings_today.toFixed(2)}
                 </Text>
                 <Text style={styles.statLabel}>Today's earnings</Text>
               </View>
@@ -226,12 +226,12 @@ export default function HomeScreen() {
 
           <View style={styles.earningsRow}>
             <Text style={styles.earningsAmount} testID="incoming-earnings">
-              ${pending!.earnings.toFixed(2)}
+              €{pending!.earnings.toFixed(2)}
             </Text>
             {pending!.tip > 0 ? (
               <View style={styles.tipBadge}>
                 <Ionicons name="cash-outline" size={12} color={theme.success} />
-                <Text style={styles.tipText}>+${pending!.tip.toFixed(2)} tip</Text>
+                <Text style={styles.tipText}>+€{pending!.tip.toFixed(2)} tip</Text>
               </View>
             ) : null}
           </View>

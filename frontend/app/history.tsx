@@ -2,6 +2,7 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -63,7 +64,7 @@ export default function HistoryScreen() {
       <Animated.View entering={FadeInUp.delay(120)} style={[styles.summaryCard, shadows.md]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.summaryLabel}>Lifetime earnings</Text>
-          <Text style={styles.summaryAmount} testID="history-total">${total.toFixed(2)}</Text>
+          <Text style={styles.summaryAmount} testID="history-total">€{total.toFixed(2)}</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={{ flex: 1, alignItems: "flex-end" }}>
@@ -91,18 +92,28 @@ export default function HistoryScreen() {
           >
             <View style={styles.itemHeader}>
               <Text style={styles.itemOrder}>{item.order_number}</Text>
-              <Text style={styles.itemAmount}>+${(item.earnings + (item.tip || 0)).toFixed(2)}</Text>
+              <Text style={styles.itemAmount}>+€{(item.earnings + (item.tip || 0)).toFixed(2)}</Text>
             </View>
-            <View style={styles.routeBlock}>
-              <View style={styles.routeRow}>
-                <View style={[styles.dot, { backgroundColor: theme.primary }]} />
-                <Text style={styles.routeText} numberOfLines={1}>{item.pickup.name}</Text>
+            <View style={styles.itemBody}>
+              <View style={styles.routeBlock}>
+                <View style={styles.routeRow}>
+                  <View style={[styles.dot, { backgroundColor: theme.primary }]} />
+                  <Text style={styles.routeText} numberOfLines={1}>{item.pickup.name}</Text>
+                </View>
+                <View style={styles.routeLink} />
+                <View style={styles.routeRow}>
+                  <View style={[styles.dot, { backgroundColor: theme.secondary }]} />
+                  <Text style={styles.routeText} numberOfLines={1}>{item.dropoff.address}</Text>
+                </View>
               </View>
-              <View style={styles.routeLink} />
-              <View style={styles.routeRow}>
-                <View style={[styles.dot, { backgroundColor: theme.secondary }]} />
-                <Text style={styles.routeText} numberOfLines={1}>{item.dropoff.address}</Text>
-              </View>
+              {item.delivery_photo ? (
+                <View style={styles.proofWrap} testID={`history-proof-${index}`}>
+                  <Image source={{ uri: item.delivery_photo }} style={styles.proofImg} />
+                  <View style={styles.proofBadge}>
+                    <Ionicons name="shield-checkmark" size={10} color="#fff" />
+                  </View>
+                </View>
+              ) : null}
             </View>
             <View style={styles.itemFooter}>
               <View style={styles.metaItem}>
@@ -138,13 +149,29 @@ const styles = StyleSheet.create({
   summaryAmount: { fontSize: 24, fontWeight: "800", color: theme.textPrimary, marginTop: 4, letterSpacing: -0.5 },
   itemCard: { backgroundColor: theme.surface, borderRadius: radius.xl, padding: spacing.lg, borderWidth: 1, borderColor: theme.border },
   itemHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md },
+  itemBody: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: spacing.md },
   itemOrder: { fontSize: 12, color: theme.textSecondary, fontWeight: "700", letterSpacing: 0.8 },
   itemAmount: { fontSize: 18, fontWeight: "800", color: theme.primary },
-  routeBlock: { marginBottom: spacing.md },
+  routeBlock: { flex: 1 },
   routeRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   routeLink: { width: 2, height: 14, backgroundColor: theme.border, marginLeft: 5, marginVertical: 3 },
   dot: { width: 12, height: 12, borderRadius: 6 },
   routeText: { fontSize: 14, color: theme.textPrimary, fontWeight: "500", flex: 1 },
+  proofWrap: { position: "relative" },
+  proofImg: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: theme.surfaceMuted },
+  proofBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: theme.success,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: theme.surface,
+  },
   itemFooter: { flexDirection: "row", alignItems: "center", gap: 16, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: theme.border },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   metaText: { fontSize: 12, color: theme.textSecondary, fontWeight: "500" },

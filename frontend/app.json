@@ -11,6 +11,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.driverapp",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Take delivery proof photos at dropoff",
+        "NSPhotoLibraryUsageDescription": "Attach proof photos to deliveries"
+      },
       "config": {
         "googleMapsApiKey": "AIzaSyCm_A2yMaW6HF-PTFnu-AuSvkWLCJMHtyM"
       }
@@ -22,6 +26,10 @@
         "backgroundColor": "#000"
       },
       "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES"
+      ],
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyCm_A2yMaW6HF-PTFnu-AuSvkWLCJMHtyM"

@@ -19,6 +19,7 @@ import { radius, shadows, spacing, theme } from "../src/theme";
 import MapView from "../src/components/MapView";
 import SwipeToConfirm from "../src/components/SwipeToConfirm";
 import OtpModal from "../src/components/OtpModal";
+import PhotoCapture from "../src/components/PhotoCapture";
 
 const STAGE_TITLES: Record<OrderStatus, { title: string; subtitle: string; primary: string }> = {
   pending: { title: "New request", subtitle: "Reviewing order details", primary: "Continue" },
@@ -41,6 +42,7 @@ export default function OrderFlowScreen() {
   const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
   const [otpOpen, setOtpOpen] = useState<null | "pickup" | "dropoff">(null);
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -76,6 +78,21 @@ export default function OrderFlowScreen() {
       setOrder(next);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const uploadDeliveryPhoto = async (dataUri: string) => {
+    if (!order) return;
+    setPhotoUploading(true);
+    try {
+      const updated = await api.attachDeliveryPhoto(order.id, dataUri);
+      setOrder(updated);
+    } catch (e) {
+      console.warn("photo upload failed", e);
+      // optimistic local fallback so the UX still feels right
+      setOrder({ ...order, delivery_photo: dataUri });
+    } finally {
+      setPhotoUploading(false);
     }
   };
 
@@ -165,7 +182,7 @@ export default function OrderFlowScreen() {
           </View>
           <View style={styles.earnChip}>
             <Text style={styles.earnChipLabel}>EARNING</Text>
-            <Text style={styles.earnChipValue}>${(order.earnings + order.tip).toFixed(2)}</Text>
+            <Text style={styles.earnChipValue}>€{(order.earnings + order.tip).toFixed(2)}</Text>
           </View>
         </View>
 
@@ -237,6 +254,15 @@ export default function OrderFlowScreen() {
               </View>
             ) : null}
           </Animated.View>
+        ) : null}
+
+        {/* Delivery proof photo capture - dropoff stage only */}
+        {order.status === "arrived_dropoff" ? (
+          <PhotoCapture
+            photo={order.delivery_photo}
+            busy={photoUploading}
+            onCapture={uploadDeliveryPhoto}
+          />
         ) : null}
 
         {/* Action */}

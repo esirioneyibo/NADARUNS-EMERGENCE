@@ -101,3 +101,60 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Continue iterating on the NadaRuns Driver MVP. Started with feature (a) Photo proof at delivery."
+
+backend:
+  - task: "Photo proof endpoint (POST /api/orders/{id}/photo)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Added delivery_photo field to Order model, PhotoRequest model, POST /api/orders/{id}/photo endpoint with base64 + data-URI normalisation, 7.5MB soft size cap, and startup migration setting delivery_photo=None on existing orders. Smoke-tested with curl: stored & normalised correctly."
+
+frontend:
+  - task: "PhotoCapture component + dropoff integration"
+    implemented: true
+    working: true
+    file: "frontend/src/components/PhotoCapture.tsx, frontend/app/order.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "New PhotoCapture component with native camera (expo-image-picker v17), library fallback, web FileReader fallback for base64 conversion. Renders in arrived_dropoff stage. Manually verified through full driver flow: empty state shows dashed 'Take photo' CTA, captured state shows 96px thumb + Retake + success checkmark. Summary shows proof card. History card shows thumbnail with shield-checkmark badge."
+
+  - task: "Delivery proof shown in summary + history"
+    implemented: true
+    working: true
+    file: "frontend/app/summary.tsx, frontend/app/history.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Summary screen now shows a 'Proof of delivery captured' card with thumbnail + shield icon when delivery_photo exists. History cards now have right-side 56px thumbnail with green shield badge overlay."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 0
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Photo proof endpoint (POST /api/orders/{id}/photo)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "Implemented Photo Proof at Delivery (feature a). Backend has new POST /api/orders/{id}/photo endpoint and delivery_photo field on Order. Please run backend tests focusing on the new endpoint: valid base64, raw base64 (no data: prefix should be normalised), unknown order id (404), oversized payload (>7.5MB → 413), empty photo (400). Existing endpoints must still pass."

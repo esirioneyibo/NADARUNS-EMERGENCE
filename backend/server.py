@@ -86,6 +86,7 @@ class Order(BaseModel):
     dropoff_otp: str = ""
     pickup_otp_verified: bool = False
     dropoff_otp_verified: bool = False
+    delivery_photo: Optional[str] = None  # base64 data URI captured at dropoff
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     completed_at: Optional[str] = None
     rating_given: Optional[int] = None  # thumbs up/down: 1 or -1
@@ -95,6 +96,10 @@ class Order(BaseModel):
 class OtpRequest(BaseModel):
     otp: str
     kind: Literal["pickup", "dropoff"]
+
+
+class PhotoRequest(BaseModel):
+    photo: str  # base64 data URI
 
 
 class WalletTransaction(BaseModel):
@@ -171,17 +176,18 @@ class RateRequest(BaseModel):
 # ===================== Seed Data =====================
 
 DRIVER_ID = "driver-001"
+SEED_VERSION = 2  # bump to force re-seed (Stockholm → Helsinki)
 
 SEED_DRIVER = {
     "id": DRIVER_ID,
-    "name": "Alex Lindqvist",
+    "name": "Eero Virtanen",
     "rating": 4.92,
     "avatar": "https://images.unsplash.com/photo-1551825687-f9de1603ed8b?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
     "vehicle": "Bicycle • Black",
     "vehicle_type": "bicycle",
-    "plate": "STO-2841",
-    "email": "alex.lindqvist@driver.app",
-    "phone": "+46 70 911 4422",
+    "plate": "HKI-2841",
+    "email": "eero.virtanen@driver.app",
+    "phone": "+358 41 911 4422",
     "is_online": False,
     "earnings_today": 0.0,
     "deliveries_today": 0,
@@ -190,35 +196,35 @@ SEED_DRIVER = {
 }
 
 RESTAURANTS = [
-    {"name": "Nordic Bowl", "address": "12 Hamngatan, Stockholm", "lat": 59.3326, "lng": 18.0649},
-    {"name": "Söder Pizzeria", "address": "44 Götgatan, Stockholm", "lat": 59.3145, "lng": 18.0731},
-    {"name": "Kaffekoppen", "address": "20 Stortorget, Stockholm", "lat": 59.3251, "lng": 18.0710},
-    {"name": "Östermalm Sushi", "address": "8 Karlavägen, Stockholm", "lat": 59.3380, "lng": 18.0760},
-    {"name": "Vasa Burger", "address": "61 Odengatan, Stockholm", "lat": 59.3437, "lng": 18.0577},
+    {"name": "Karl Fazer Café", "address": "3 Kluuvikatu, Helsinki", "lat": 60.1696, "lng": 24.9442},
+    {"name": "Pizzeria Forza", "address": "12 Kolmas Linja, Helsinki", "lat": 60.1822, "lng": 24.9498},
+    {"name": "Café Esplanad", "address": "37 Pohjoisesplanadi, Helsinki", "lat": 60.1683, "lng": 24.9460},
+    {"name": "Sushibar Punavuori", "address": "21 Iso Roobertinkatu, Helsinki", "lat": 60.1620, "lng": 24.9385},
+    {"name": "Hesburger Kamppi", "address": "1 Urho Kekkosen katu, Helsinki", "lat": 60.1690, "lng": 24.9320},
 ]
 
 CUSTOMERS = [
-    {"name": "Emma S.", "rating": 4.8, "phone": "+46 70 123 4567"},
-    {"name": "Liam K.", "rating": 4.6, "phone": "+46 70 234 5678"},
-    {"name": "Saga N.", "rating": 5.0, "phone": "+46 70 345 6789"},
-    {"name": "Noah B.", "rating": 4.4, "phone": "+46 70 456 7890"},
-    {"name": "Alma R.", "rating": 4.9, "phone": "+46 70 567 8901"},
+    {"name": "Aino K.", "rating": 4.8, "phone": "+358 41 123 4567"},
+    {"name": "Onni L.", "rating": 4.6, "phone": "+358 41 234 5678"},
+    {"name": "Liisa N.", "rating": 5.0, "phone": "+358 41 345 6789"},
+    {"name": "Mikko B.", "rating": 4.4, "phone": "+358 41 456 7890"},
+    {"name": "Sanna R.", "rating": 4.9, "phone": "+358 41 567 8901"},
 ]
 
 DROPOFFS = [
-    {"address": "15 Birger Jarlsgatan, Stockholm", "lat": 59.3360, "lng": 18.0710, "apt": "Apt 4B"},
-    {"address": "92 Sveavägen, Stockholm", "lat": 59.3420, "lng": 18.0610, "apt": "Apt 12"},
-    {"address": "5 Folkungagatan, Stockholm", "lat": 59.3160, "lng": 18.0770, "apt": "Apt 2A"},
-    {"address": "33 Kungsgatan, Stockholm", "lat": 59.3349, "lng": 18.0633, "apt": "Apt 7"},
-    {"address": "18 Drottninggatan, Stockholm", "lat": 59.3328, "lng": 18.0620, "apt": "Apt 3C"},
+    {"address": "15 Mannerheimintie, Helsinki", "lat": 60.1729, "lng": 24.9356, "apt": "Apt 4B"},
+    {"address": "92 Hämeentie, Helsinki", "lat": 60.1872, "lng": 24.9543, "apt": "Apt 12"},
+    {"address": "5 Bulevardi, Helsinki", "lat": 60.1645, "lng": 24.9395, "apt": "Apt 2A"},
+    {"address": "33 Aleksanterinkatu, Helsinki", "lat": 60.1685, "lng": 24.9410, "apt": "Apt 7"},
+    {"address": "18 Fredrikinkatu, Helsinki", "lat": 60.1655, "lng": 24.9320, "apt": "Apt 3C"},
 ]
 
 ITEM_SETS = [
-    [{"name": "Salmon Poke Bowl", "quantity": 1}, {"name": "Miso Soup", "quantity": 1}, {"name": "Sparkling Water", "quantity": 2}],
+    [{"name": "Korvapuusti", "quantity": 2}, {"name": "Cappuccino", "quantity": 1}],
     [{"name": "Margherita Pizza", "quantity": 1}, {"name": "Caesar Salad", "quantity": 1}],
-    [{"name": "Cappuccino", "quantity": 2}, {"name": "Cinnamon Bun", "quantity": 3}],
+    [{"name": "Salmon Soup", "quantity": 1}, {"name": "Rye Bread", "quantity": 1}, {"name": "Sparkling Water", "quantity": 2}],
     [{"name": "Rainbow Maki", "quantity": 2}, {"name": "Edamame", "quantity": 1}],
-    [{"name": "Classic Burger", "quantity": 1}, {"name": "Fries", "quantity": 1}, {"name": "Coke", "quantity": 1}],
+    [{"name": "Megamaster Burger", "quantity": 1}, {"name": "Fries", "quantity": 1}, {"name": "Kotijuoma", "quantity": 1}],
 ]
 
 NOTES = ["Please knock softly", "Leave at door", "Ring buzzer 3 times", "No contact please", None]
@@ -266,6 +272,15 @@ def build_order(status: OrderStatus = "pending", completed_offset_hours: Optiona
 
 
 async def ensure_seed():
+    # Detect a seed version bump (e.g., locale change Stockholm → Helsinki) and wipe stale data
+    meta = await db.meta.find_one({"_id": "seed"})
+    current_version = (meta or {}).get("version", 0)
+    if current_version < SEED_VERSION:
+        logger.info("Seed version bump %s -> %s: wiping orders + driver", current_version, SEED_VERSION)
+        await db.orders.delete_many({})
+        await db.drivers.delete_many({})
+        await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)
+
     driver = await db.drivers.find_one({"id": DRIVER_ID}, {"_id": 0})
     if not driver:
         await db.drivers.insert_one(SEED_DRIVER.copy())
@@ -297,6 +312,12 @@ async def ensure_seed():
     )
     if missing_otp.modified_count:
         logger.info("Migrated %d orders with OTPs", missing_otp.modified_count)
+
+    # Ensure delivery_photo field exists on all orders
+    await db.orders.update_many(
+        {"delivery_photo": {"$exists": False}},
+        {"$set": {"delivery_photo": None}},
+    )
 
     history_count = await db.orders.count_documents({"status": "delivered"})
     if history_count < 6:
@@ -427,6 +448,25 @@ async def verify_otp(order_id: str, body: OtpRequest):
     field = "pickup_otp_verified" if body.kind == "pickup" else "dropoff_otp_verified"
     await db.orders.update_one({"id": order_id}, {"$set": {field: True}})
     order[field] = True
+    return Order(**order)
+
+
+@api_router.post("/orders/{order_id}/photo", response_model=Order)
+async def attach_photo(order_id: str, body: PhotoRequest):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    photo = (body.photo or "").strip()
+    if not photo:
+        raise HTTPException(400, "Photo payload is empty")
+    # accept either raw base64 or full data URI; normalise to data URI
+    if not photo.startswith("data:"):
+        photo = f"data:image/jpeg;base64,{photo}"
+    # Soft size guard (~6MB encoded ≈ 4.5MB raw)
+    if len(photo) > 7_500_000:
+        raise HTTPException(413, "Photo too large; please resize")
+    await db.orders.update_one({"id": order_id}, {"$set": {"delivery_photo": photo}})
+    order["delivery_photo"] = photo
     return Order(**order)
 
 

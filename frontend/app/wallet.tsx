@@ -78,12 +78,12 @@ export default function WalletScreen() {
             <Animated.View entering={FadeInUp.delay(80)} style={[styles.balanceCard, shadows.lg]}>
               <Text style={styles.balanceLabel}>Available balance</Text>
               <Text style={styles.balanceAmount} testID="wallet-balance">
-                ${wallet.available_balance.toFixed(2)}
+                €{wallet.available_balance.toFixed(2)}
               </Text>
               <View style={styles.pendingRow}>
                 <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.65)" />
                 <Text style={styles.pendingText}>
-                  ${wallet.pending_balance.toFixed(2)} pending · clears in 48h
+                  €{wallet.pending_balance.toFixed(2)} pending · clears in 48h
                 </Text>
               </View>
 
@@ -132,7 +132,7 @@ export default function WalletScreen() {
               <Text style={styles.txnTime}>{formatDate(item.timestamp)}</Text>
             </View>
             <Text style={[styles.txnAmount, item.amount < 0 && { color: theme.textSecondary }]}>
-              {item.amount >= 0 ? "+" : ""}${Math.abs(item.amount).toFixed(2)}
+              {item.amount >= 0 ? "+" : "-"}€{Math.abs(item.amount).toFixed(2)}
             </Text>
           </Animated.View>
         )}
