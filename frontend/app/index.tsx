@@ -126,7 +126,7 @@ export default function HomeScreen() {
         />
         
         <ScrollView 
-          contentContainerStyle={[styles.welcomeContent, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }]}
+          contentContainerStyle={[styles.welcomeContent, { paddingTop: insets.top + 20, paddingBottom: 100 }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
@@ -198,10 +198,10 @@ export default function HomeScreen() {
           </Animated.View>
         </ScrollView>
 
-        {/* Slide to go online - fixed at bottom */}
+        {/* Slide to go online - fixed at bottom, above tab bar */}
         <Animated.View 
           entering={SlideInUp.delay(600).springify()}
-          style={[styles.slideContainer, { paddingBottom: insets.bottom + 90 }]}
+          style={[styles.slideContainer, { bottom: 16 }]}
         >
           <SlideToGoOnline 
             onGoOnline={goOnline} 
@@ -264,7 +264,7 @@ export default function HomeScreen() {
       {/* Bottom card */}
       <Animated.View
         entering={SlideInDown.springify().damping(18)}
-        style={[styles.bottomSheet, { paddingBottom: insets.bottom + 90 }, shadows.lg]}
+        style={[styles.bottomSheet, { paddingBottom: 20 }, shadows.lg]}
       >
         <View style={styles.handle} />
 
