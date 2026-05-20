@@ -176,7 +176,7 @@ class RateRequest(BaseModel):
 # ===================== Seed Data =====================
 
 DRIVER_ID = "driver-001"
-SEED_VERSION = 2  # bump to force re-seed (Stockholm → Helsinki)
+SEED_VERSION = 3  # bump to force re-seed (test OTP keyboard fix)
 
 SEED_DRIVER = {
     "id": DRIVER_ID,

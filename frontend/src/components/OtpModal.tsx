@@ -81,20 +81,21 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} testID="otp-backdrop">
-        <Animated.View entering={FadeIn.duration(180)} style={StyleSheet.absoluteFill} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.kbWrap}
-          pointerEvents="box-none"
-        >
-          <Animated.View
-            entering={SlideInDown.springify().damping(16)}
-            style={[styles.sheet, shadows.lg]}
-            testID="otp-modal"
-          >
-            <Pressable onPress={() => {}}>
-              <View style={styles.handle} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.kbContainer}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
+        <Pressable style={styles.backdrop} onPress={onClose} testID="otp-backdrop">
+          <Animated.View entering={FadeIn.duration(180)} style={StyleSheet.absoluteFill} />
+          <View style={styles.kbWrap} pointerEvents="box-none">
+            <Animated.View
+              entering={SlideInDown.springify().damping(16)}
+              style={[styles.sheet, shadows.lg]}
+              testID="otp-modal"
+            >
+              <Pressable onPress={() => {}}>
+                <View style={styles.handle} />
               <View style={styles.iconWrap}>
                 <Ionicons
                   name={kind === "pickup" ? "key-outline" : "lock-closed-outline"}
@@ -147,15 +148,17 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
               </TouchableOpacity>
             </Pressable>
           </Animated.View>
-        </KeyboardAvoidingView>
+        </View>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  kbContainer: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  kbWrap: { justifyContent: "flex-end" },
+  kbWrap: { justifyContent: "flex-end", flex: 1 },
   sheet: {
     backgroundColor: theme.surface,
     borderTopLeftRadius: radius.xxl,

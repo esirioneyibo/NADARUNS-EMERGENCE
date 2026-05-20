@@ -13,7 +13,9 @@
       "bundleIdentifier": "com.emergent.driverapp",
       "infoPlist": {
         "NSCameraUsageDescription": "Take delivery proof photos at dropoff",
-        "NSPhotoLibraryUsageDescription": "Attach proof photos to deliveries"
+        "NSPhotoLibraryUsageDescription": "Attach proof photos to deliveries",
+        "NSLocationWhenInUseUsageDescription": "Navigate to pickup and dropoff locations",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Track deliveries in background"
       },
       "config": {
         "googleMapsApiKey": "AIzaSyCm_A2yMaW6HF-PTFnu-AuSvkWLCJMHtyM"
@@ -28,7 +30,10 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_MEDIA_IMAGES"
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
       ],
       "config": {
         "googleMaps": {
@@ -43,6 +48,14 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Track deliveries in background",
+          "locationAlwaysPermission": "Track deliveries when app is closed",
+          "locationWhenInUsePermission": "Navigate to pickup and dropoff locations"
+        }
+      ],
       [
         "expo-splash-screen",
         {
