@@ -3,8 +3,8 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -12,13 +12,32 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInDown } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInDown, SlideInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { api } from "../src/api";
 import type { Driver, Order } from "../src/types";
 import { radius, shadows, spacing, theme } from "../src/theme";
 import MapView from "../src/components/MapView";
+import SlideToGoOnline from "../src/components/SlideToGoOnline";
+
+// Helper to get greeting based on time of day
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+// Format current date
+function formatDate(): string {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -60,7 +79,19 @@ export default function HomeScreen() {
     return () => clearInterval(id);
   }, [driver?.is_online]);
 
-  const toggleOnline = async () => {
+  const goOnline = async () => {
+    if (driver?.is_online) return;
+    setToggling(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    try {
+      const d = await api.toggleOnline();
+      setDriver(d);
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const goOffline = async () => {
     setToggling(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
@@ -85,6 +116,104 @@ export default function HomeScreen() {
 
   const showRequest = driver.is_online && pending && !active;
 
+  // OFFLINE STATE: Show welcome screen
+  if (!driver.is_online && !active) {
+    return (
+      <View style={styles.container} testID="home-screen">
+        <LinearGradient
+          colors={[theme.background, "#E8F5F3"]}
+          style={StyleSheet.absoluteFill}
+        />
+        
+        <ScrollView 
+          contentContainerStyle={[styles.welcomeContent, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.welcomeHeader}>
+            <View style={styles.welcomeAvatarRow}>
+              <Image source={{ uri: driver.avatar }} style={styles.welcomeAvatar} />
+              <View style={styles.welcomeBrand}>
+                <Ionicons name="flash" size={16} color={theme.primary} />
+                <Text style={styles.welcomeBrandText}>NadaRuns</Text>
+              </View>
+            </View>
+            
+            <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+              <Text style={styles.welcomeGreeting}>{getGreeting()},</Text>
+              <Text style={styles.welcomeName}>{driver.name.split(" ")[0]}!</Text>
+            </Animated.View>
+            
+            <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+              <Text style={styles.welcomeDate}>{formatDate()}</Text>
+            </Animated.View>
+          </Animated.View>
+
+          {/* Stats Cards */}
+          <Animated.View entering={FadeInUp.delay(300).duration(400)} style={styles.statsCards}>
+            <View style={[styles.statCard, shadows.sm]}>
+              <View style={[styles.statIconWrap, { backgroundColor: theme.primaryLight }]}>
+                <Ionicons name="cash-outline" size={22} color={theme.primary} />
+              </View>
+              <Text style={styles.statCardValue}>€{driver.earnings_today.toFixed(2)}</Text>
+              <Text style={styles.statCardLabel}>Today's earnings</Text>
+            </View>
+            
+            <View style={[styles.statCard, shadows.sm]}>
+              <View style={[styles.statIconWrap, { backgroundColor: "#FEF3C7" }]}>
+                <Ionicons name="bicycle-outline" size={22} color="#D97706" />
+              </View>
+              <Text style={styles.statCardValue}>{driver.deliveries_today}</Text>
+              <Text style={styles.statCardLabel}>Deliveries</Text>
+            </View>
+            
+            <View style={[styles.statCard, shadows.sm]}>
+              <View style={[styles.statIconWrap, { backgroundColor: "#DBEAFE" }]}>
+                <Ionicons name="star-outline" size={22} color="#2563EB" />
+              </View>
+              <Text style={styles.statCardValue}>{driver.rating.toFixed(2)}</Text>
+              <Text style={styles.statCardLabel}>Rating</Text>
+            </View>
+          </Animated.View>
+
+          {/* Quick Info */}
+          <Animated.View entering={FadeInUp.delay(400).duration(400)} style={[styles.infoCard, shadows.sm]}>
+            <View style={styles.infoRow}>
+              <Ionicons name="car-outline" size={20} color={theme.textSecondary} />
+              <Text style={styles.infoText}>{driver.vehicle}</Text>
+            </View>
+            <View style={styles.infoDivider} />
+            <View style={styles.infoRow}>
+              <Ionicons name="checkmark-circle-outline" size={20} color={theme.success} />
+              <Text style={styles.infoText}>{driver.acceptance_rate.toFixed(0)}% acceptance</Text>
+            </View>
+          </Animated.View>
+
+          {/* Ready message */}
+          <Animated.View entering={FadeInUp.delay(500).duration(400)} style={styles.readyMessage}>
+            <Ionicons name="location-outline" size={24} color={theme.textSecondary} />
+            <Text style={styles.readyText}>
+              Ready to start earning? Slide below to go online and receive delivery requests nearby.
+            </Text>
+          </Animated.View>
+        </ScrollView>
+
+        {/* Slide to go online - fixed at bottom */}
+        <Animated.View 
+          entering={SlideInUp.delay(600).springify()}
+          style={[styles.slideContainer, { paddingBottom: insets.bottom + 90 }]}
+        >
+          <SlideToGoOnline 
+            onGoOnline={goOnline} 
+            disabled={toggling}
+            testID="slide-to-go-online"
+          />
+        </Animated.View>
+      </View>
+    );
+  }
+
+  // ONLINE STATE: Show map with orders
   return (
     <View style={styles.container} testID="home-screen">
       <View style={StyleSheet.absoluteFill}>
@@ -111,22 +240,14 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.iconRow}>
-          <TouchableOpacity
-            style={[styles.iconBtn, shadows.md]}
-            onPress={() => router.push("/settings")}
-            testID="open-settings-button"
-          >
-            <Ionicons name="person-circle-outline" size={22} color={theme.textPrimary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.iconBtn, shadows.md, { marginLeft: 8 }]}
-            onPress={() => router.push("/history")}
-            testID="open-history-button"
-          >
-            <Ionicons name="time-outline" size={22} color={theme.textPrimary} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={[styles.offlineBtn, shadows.md]}
+          onPress={goOffline}
+          disabled={toggling}
+          testID="go-offline-button"
+        >
+          <Ionicons name="power" size={18} color={theme.error} />
+        </TouchableOpacity>
       </Animated.View>
 
       {/* Status pill */}
@@ -134,10 +255,8 @@ export default function HomeScreen() {
         entering={FadeIn.delay(120)}
         style={[styles.statusPill, { top: insets.top + 90 }, shadows.sm]}
       >
-        <View style={[styles.dot, { backgroundColor: driver.is_online ? theme.success : theme.textSecondary }]} />
-        <Text style={styles.statusText}>
-          {driver.is_online ? "You're online" : "You're offline"}
-        </Text>
+        <View style={[styles.dot, { backgroundColor: theme.success }]} />
+        <Text style={styles.statusText}>You're online</Text>
         <View style={styles.brandSep} />
         <Text style={styles.brandText}>NadaRuns</Text>
       </Animated.View>
@@ -145,7 +264,7 @@ export default function HomeScreen() {
       {/* Bottom card */}
       <Animated.View
         entering={SlideInDown.springify().damping(18)}
-        style={[styles.bottomSheet, { paddingBottom: insets.bottom + 20 }, shadows.lg]}
+        style={[styles.bottomSheet, { paddingBottom: insets.bottom + 90 }, shadows.lg]}
       >
         <View style={styles.handle} />
 
@@ -187,25 +306,9 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View style={styles.toggleRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.toggleTitle}>
-                  {driver.is_online ? "Ready for requests" : "Go online to start"}
-                </Text>
-                <Text style={styles.toggleSub}>
-                  {driver.is_online
-                    ? "We'll notify you when a new order arrives nearby."
-                    : "Toggle online and we'll match you with deliveries."}
-                </Text>
-              </View>
-              <Switch
-                value={driver.is_online}
-                onValueChange={toggleOnline}
-                disabled={toggling}
-                trackColor={{ true: theme.primary, false: "#CBD5E1" }}
-                thumbColor="#FFFFFF"
-                testID="online-toggle"
-              />
+            <View style={styles.waitingMessage}>
+              <ActivityIndicator size="small" color={theme.primary} />
+              <Text style={styles.waitingText}>Waiting for delivery requests...</Text>
             </View>
           </>
         )}
@@ -215,7 +318,7 @@ export default function HomeScreen() {
       {showRequest ? (
         <Animated.View
           entering={SlideInDown.springify().damping(16).mass(0.9)}
-          style={[styles.requestOverlay, { paddingBottom: insets.bottom + 24 }, shadows.lg]}
+          style={[styles.requestOverlay, { paddingBottom: insets.bottom + 90 }, shadows.lg]}
           testID="incoming-order-card"
         >
           <View style={styles.requestHeader}>
@@ -304,6 +407,138 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.background },
+  
+  // Welcome screen styles
+  welcomeContent: {
+    paddingHorizontal: spacing.xl,
+  },
+  welcomeHeader: {
+    marginBottom: spacing.xl,
+  },
+  welcomeAvatarRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.xl,
+  },
+  welcomeAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: theme.surfaceMuted,
+    borderWidth: 3,
+    borderColor: theme.primary,
+  },
+  welcomeBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: theme.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+  },
+  welcomeBrandText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: theme.primary,
+    letterSpacing: 0.5,
+  },
+  welcomeGreeting: {
+    fontSize: 28,
+    fontWeight: "400",
+    color: theme.textSecondary,
+  },
+  welcomeName: {
+    fontSize: 36,
+    fontWeight: "800",
+    color: theme.textPrimary,
+    letterSpacing: -1,
+    marginTop: -4,
+  },
+  welcomeDate: {
+    fontSize: 15,
+    color: theme.textSecondary,
+    marginTop: 8,
+  },
+  statsCards: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: spacing.xl,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: theme.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  statIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  statCardValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: theme.textPrimary,
+  },
+  statCardLabel: {
+    fontSize: 11,
+    color: theme.textSecondary,
+    marginTop: 2,
+    textAlign: "center",
+  },
+  infoCard: {
+    backgroundColor: theme.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.xl,
+  },
+  infoRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    justifyContent: "center",
+  },
+  infoDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: theme.border,
+  },
+  infoText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: theme.textPrimary,
+  },
+  readyMessage: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    backgroundColor: theme.surfaceMuted,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+  },
+  readyText: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.textSecondary,
+    lineHeight: 20,
+  },
+  slideContainer: {
+    position: "absolute",
+    left: spacing.xl,
+    right: spacing.xl,
+    bottom: 0,
+  },
+
+  // Online state styles
   topBar: {
     position: "absolute",
     left: spacing.lg,
@@ -327,12 +562,11 @@ const styles = StyleSheet.create({
   profileName: { fontSize: 14, fontWeight: "700", color: theme.textPrimary },
   profileMeta: { fontSize: 11, color: theme.textSecondary, marginTop: 1 },
   rowCenter: { flexDirection: "row", alignItems: "center" },
-  iconBtn: {
+  offlineBtn: {
     width: 44, height: 44, borderRadius: 22,
     backgroundColor: theme.surface,
     alignItems: "center", justifyContent: "center",
   },
-  iconRow: { flexDirection: "row", alignItems: "center" },
   statusPill: {
     position: "absolute",
     alignSelf: "center",
@@ -358,14 +592,25 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   handle: { alignSelf: "center", width: 44, height: 5, backgroundColor: theme.border, borderRadius: 3, marginBottom: spacing.lg },
-  statsRow: { flexDirection: "row", alignItems: "center", marginBottom: spacing.xl },
+  statsRow: { flexDirection: "row", alignItems: "center", marginBottom: spacing.md },
   statBox: { flex: 1, alignItems: "center" },
   statDivider: { width: 1, height: 32, backgroundColor: theme.border },
   statValue: { fontSize: 22, fontWeight: "800", color: theme.textPrimary, letterSpacing: -0.5 },
   statLabel: { fontSize: 11, color: theme.textSecondary, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 },
-  toggleRow: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.md },
-  toggleTitle: { fontSize: 16, fontWeight: "700", color: theme.textPrimary },
-  toggleSub: { fontSize: 13, color: theme.textSecondary, marginTop: 3, paddingRight: 12 },
+  waitingMessage: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: spacing.md,
+    backgroundColor: theme.surfaceMuted,
+    borderRadius: radius.lg,
+  },
+  waitingText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    fontWeight: "500",
+  },
   activeBanner: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
   activeLabel: { fontSize: 11, color: theme.textSecondary, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: "700" },
   activeTitle: { fontSize: 17, fontWeight: "700", color: theme.textPrimary, marginTop: 4 },

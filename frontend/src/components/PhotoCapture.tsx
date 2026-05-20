@@ -22,10 +22,14 @@ interface Props {
   onCapture: (dataUri: string) => Promise<void> | void;
   /** caller can render in disabled state e.g. during network upload */
   busy?: boolean;
+  /** Custom title for the component */
+  title?: string;
+  /** Custom subtitle when no photo */
+  subtitle?: string;
   testID?: string;
 }
 
-export default function PhotoCapture({ photo, onCapture, busy, testID }: Props) {
+export default function PhotoCapture({ photo, onCapture, busy, title, subtitle, testID }: Props) {
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,9 +118,9 @@ export default function PhotoCapture({ photo, onCapture, busy, testID }: Props) 
           <Ionicons name="camera-outline" size={16} color={theme.primary} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Delivery proof</Text>
+          <Text style={styles.title}>{title || "Delivery proof"}</Text>
           <Text style={styles.subtitle}>
-            {photo ? "Photo attached" : "Snap a photo of the handed-over order"}
+            {photo ? "Photo attached" : (subtitle || "Snap a photo of the handed-over order")}
           </Text>
         </View>
         {photo ? (

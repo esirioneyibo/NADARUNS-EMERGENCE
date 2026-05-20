@@ -20,6 +20,7 @@ import MapView from "../src/components/MapView";
 import SwipeToConfirm from "../src/components/SwipeToConfirm";
 import OtpModal from "../src/components/OtpModal";
 import PhotoCapture from "../src/components/PhotoCapture";
+import NavigateButton from "../src/components/NavigateButton";
 
 const STAGE_TITLES: Record<OrderStatus, { title: string; subtitle: string; primary: string }> = {
   pending: { title: "New request", subtitle: "Reviewing order details", primary: "Continue" },
@@ -91,6 +92,21 @@ export default function OrderFlowScreen() {
       console.warn("photo upload failed", e);
       // optimistic local fallback so the UX still feels right
       setOrder({ ...order, delivery_photo: dataUri });
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const uploadPickupPhoto = async (dataUri: string) => {
+    if (!order) return;
+    setPhotoUploading(true);
+    try {
+      const updated = await api.attachPickupPhoto(order.id, dataUri);
+      setOrder(updated);
+    } catch (e) {
+      console.warn("pickup photo upload failed", e);
+      // optimistic local fallback
+      setOrder({ ...order, pickup_photo: dataUri });
     } finally {
       setPhotoUploading(false);
     }
@@ -231,6 +247,34 @@ export default function OrderFlowScreen() {
                 <Text style={styles.notesText}>Customer note: {order.customer.notes}</Text>
               </View>
             ) : null}
+          </Animated.View>
+        ) : null}
+
+        {/* Pickup photo proof - at pickup stage */}
+        {order.status === "arrived_pickup" ? (
+          <PhotoCapture
+            photo={order.pickup_photo}
+            busy={photoUploading}
+            onCapture={uploadPickupPhoto}
+            title="Pickup proof"
+            subtitle="Photo of items received from merchant"
+            testID="pickup-photo-capture"
+          />
+        ) : null}
+
+        {/* Navigation button - shown during navigation stages */}
+        {isNavStage ? (
+          <Animated.View entering={FadeInUp.duration(280)} style={{ marginBottom: spacing.lg }}>
+            <NavigateButton
+              destination={{
+                lat: targetIsPickup ? order.pickup.lat : order.dropoff.lat,
+                lng: targetIsPickup ? order.pickup.lng : order.dropoff.lng,
+                address: targetIsPickup ? order.pickup.address : order.dropoff.address,
+                name: targetIsPickup ? order.pickup.name : order.customer.name,
+              }}
+              label={targetIsPickup ? "Navigate to pickup" : "Navigate to customer"}
+              testID="navigate-button"
+            />
           </Animated.View>
         ) : null}
 

@@ -47,5 +47,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ photo }),
     }),
+  attachPickupPhoto: (orderId: string, photo: string) =>
+    request<Order>(`/orders/${orderId}/pickup-photo`, {
+      method: "POST",
+      body: JSON.stringify({ photo }),
+    }),
   getWallet: () => request<Wallet>("/driver/wallet"),
 };

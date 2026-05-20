@@ -48,6 +48,7 @@ export interface Order {
   dropoff_otp: string;
   pickup_otp_verified: boolean;
   dropoff_otp_verified: boolean;
+  pickup_photo?: string | null;
   delivery_photo?: string | null;
   created_at: string;
   completed_at?: string | null;

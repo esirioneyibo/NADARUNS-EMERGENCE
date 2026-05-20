@@ -86,6 +86,7 @@ class Order(BaseModel):
     dropoff_otp: str = ""
     pickup_otp_verified: bool = False
     dropoff_otp_verified: bool = False
+    pickup_photo: Optional[str] = None  # base64 data URI captured at pickup
     delivery_photo: Optional[str] = None  # base64 data URI captured at dropoff
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     completed_at: Optional[str] = None
@@ -176,7 +177,7 @@ class RateRequest(BaseModel):
 # ===================== Seed Data =====================
 
 DRIVER_ID = "driver-001"
-SEED_VERSION = 3  # bump to force re-seed (test OTP keyboard fix)
+SEED_VERSION = 5  # bump to force re-seed (full flow test)
 
 SEED_DRIVER = {
     "id": DRIVER_ID,
@@ -470,7 +471,24 @@ async def attach_photo(order_id: str, body: PhotoRequest):
     return Order(**order)
 
 
-@api_router.get("/driver/wallet", response_model=Wallet)
+@api_router.post("/orders/{order_id}/pickup-photo", response_model=Order)
+async def attach_pickup_photo(order_id: str, body: PhotoRequest):
+    """Attach a photo proof taken at pickup (order items received from merchant)."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    photo = (body.photo or "").strip()
+    if not photo:
+        raise HTTPException(400, "Photo payload is empty")
+    # accept either raw base64 or full data URI; normalise to data URI
+    if not photo.startswith("data:"):
+        photo = f"data:image/jpeg;base64,{photo}"
+    # Soft size guard (~6MB encoded ≈ 4.5MB raw)
+    if len(photo) > 7_500_000:
+        raise HTTPException(413, "Photo too large; please resize")
+    await db.orders.update_one({"id": order_id}, {"$set": {"pickup_photo": photo}})
+    order["pickup_photo"] = photo
+    return Order(**order)
 async def get_wallet():
     history = await db.orders.find({"status": "delivered"}, {"_id": 0}).sort("completed_at", -1).limit(40).to_list(40)
     txns: List[dict] = []

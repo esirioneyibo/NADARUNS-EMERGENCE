@@ -1,21 +1,18 @@
-import { Stack } from "expo-router";
+import React from "react";
+import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
-import { View, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator, Platform } from "react-native";
 import { theme } from "../src/theme";
 
 export default function RootLayout() {
-  // Explicitly preload Ionicons font to avoid Expo Go race condition
-  // ("Font file for ionicons is empty" CodedError on cold start over tunnel)
   const [fontsLoaded, fontError] = useFonts({
     ...Ionicons.font,
   });
 
-  // Render anyway after font attempt — if it fails, icons will fall back
-  // to whatever the system can render rather than blocking the whole app.
   if (!fontsLoaded && !fontError) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.background }}>
@@ -28,13 +25,84 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
-        <Stack
+        <Tabs
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: theme.background },
-            animation: "fade",
+            tabBarActiveTintColor: theme.primary,
+            tabBarInactiveTintColor: theme.textSecondary,
+            tabBarStyle: {
+              backgroundColor: theme.surface,
+              borderTopColor: theme.border,
+              borderTopWidth: 1,
+              paddingTop: 8,
+              paddingBottom: Platform.OS === "ios" ? 24 : 12,
+              height: Platform.OS === "ios" ? 84 : 68,
+            },
+            tabBarLabelStyle: {
+              fontSize: 11,
+              fontWeight: "600",
+              marginTop: 4,
+            },
           }}
-        />
+        >
+          <Tabs.Screen
+            name="index"
+            options={{
+              title: "Home",
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="home" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="history"
+            options={{
+              title: "History",
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="time-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="wallet"
+            options={{
+              title: "Wallet",
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="wallet-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="settings"
+            options={{
+              title: "Profile",
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="person-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          {/* Hidden screens - accessible via navigation but not in tab bar */}
+          <Tabs.Screen
+            name="order"
+            options={{
+              href: null, // Hide from tab bar
+              tabBarStyle: { display: "none" }, // Hide tab bar on this screen
+            }}
+          />
+          <Tabs.Screen
+            name="summary"
+            options={{
+              href: null,
+              tabBarStyle: { display: "none" },
+            }}
+          />
+          <Tabs.Screen
+            name="+html"
+            options={{
+              href: null,
+            }}
+          />
+        </Tabs>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
