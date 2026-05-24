@@ -89,6 +89,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if user_type == "admin":
         return {"id": user_id, "type": "admin", "email": ADMIN_EMAIL}
     
+    if user_type == "shipper":
+        shipper = await db.shippers.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        if not shipper:
+            raise HTTPException(401, "Shipper not found")
+        return {"id": user_id, "type": "shipper", "shipper": shipper}
+    
     driver = await db.drivers.find_one({"id": user_id}, {"_id": 0})
     if not driver:
         raise HTTPException(401, "User not found")
@@ -175,6 +181,156 @@ class Order(BaseModel):
     completed_at: Optional[str] = None
     rating_given: Optional[int] = None  # thumbs up/down: 1 or -1
     feedback: Optional[str] = None
+    # Logistics fields
+    shipper_id: Optional[str] = None  # FK to shipper who created the order
+    driver_id: Optional[str] = None  # FK to assigned driver
+    vehicle_type: Optional[str] = None  # Required vehicle type
+    cargo_weight_kg: Optional[float] = None
+    cargo_dimensions: Optional[str] = None  # LxWxH in cm
+    cargo_type: Optional[str] = None  # general, fragile, hazardous, perishable, liquid
+    special_requirements: Optional[List[str]] = None  # tail_lift, forklift, straps, refrigeration
+    scheduled_pickup: Optional[str] = None  # ISO datetime for scheduled pickups
+    price_quote: Optional[float] = None  # Quoted price for shipper
+    shipper_notes: Optional[str] = None
+
+
+# ===================== Logistics Vehicle Types =====================
+
+VEHICLE_TYPES = {
+    "sprinter_van": {
+        "id": "sprinter_van",
+        "name": "Sprinter Van",
+        "icon": "🚐",
+        "max_weight_kg": 1500,
+        "description": "Small cargo, quick deliveries",
+        "base_rate_per_km": 1.20,
+    },
+    "box_truck": {
+        "id": "box_truck",
+        "name": "Box Truck",
+        "icon": "📦",
+        "max_weight_kg": 5000,
+        "description": "Medium cargo, palletized goods",
+        "base_rate_per_km": 1.80,
+    },
+    "flatbed": {
+        "id": "flatbed",
+        "name": "Flatbed Truck",
+        "icon": "🚚",
+        "max_weight_kg": 15000,
+        "description": "Heavy equipment, construction materials",
+        "base_rate_per_km": 2.50,
+    },
+    "refrigerated": {
+        "id": "refrigerated",
+        "name": "Refrigerated Truck",
+        "icon": "❄️",
+        "max_weight_kg": 10000,
+        "description": "Temperature controlled, perishables",
+        "base_rate_per_km": 3.00,
+    },
+    "tanker": {
+        "id": "tanker",
+        "name": "Tanker",
+        "icon": "🛢️",
+        "max_weight_kg": 20000,
+        "description": "Liquid cargo, chemicals",
+        "base_rate_per_km": 3.50,
+    },
+    "container": {
+        "id": "container",
+        "name": "Container Truck",
+        "icon": "📦",
+        "max_weight_kg": 20000,
+        "description": "20ft/40ft containers",
+        "base_rate_per_km": 3.20,
+    },
+    "semi_trailer": {
+        "id": "semi_trailer",
+        "name": "Semi-Trailer",
+        "icon": "🚜",
+        "max_weight_kg": 25000,
+        "description": "Heavy freight, long haul",
+        "base_rate_per_km": 2.80,
+    },
+}
+
+CARGO_TYPES = ["general", "fragile", "hazardous", "perishable", "liquid", "oversized"]
+
+SPECIAL_REQUIREMENTS = ["tail_lift", "forklift", "straps", "refrigeration", "hazmat_certified", "covered_transport"]
+
+
+# ===================== Shipper Models =====================
+
+class Shipper(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    company_name: str
+    contact_name: str
+    email: str
+    phone: str
+    password_hash: Optional[str] = None
+    tax_id: Optional[str] = None
+    address: Optional[str] = None
+    avatar: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    is_verified: bool = False
+    total_shipments: int = 0
+    rating: float = 5.0
+
+
+class ShipperRegistration(BaseModel):
+    company_name: str
+    contact_name: str
+    email: str
+    phone: str
+    password: str
+    tax_id: Optional[str] = None
+    address: Optional[str] = None
+
+
+class ShipmentCreateRequest(BaseModel):
+    # Pickup details
+    pickup_address: str
+    pickup_lat: float
+    pickup_lng: float
+    pickup_contact_name: str
+    pickup_contact_phone: str
+    pickup_notes: Optional[str] = None
+    # Dropoff details
+    dropoff_address: str
+    dropoff_lat: float
+    dropoff_lng: float
+    dropoff_contact_name: str
+    dropoff_contact_phone: str
+    dropoff_notes: Optional[str] = None
+    # Cargo details
+    vehicle_type: str
+    cargo_weight_kg: float
+    cargo_dimensions: Optional[str] = None  # LxWxH
+    cargo_type: str = "general"
+    cargo_description: str
+    special_requirements: Optional[List[str]] = None
+    # Scheduling
+    scheduled_pickup: Optional[str] = None  # ISO datetime, null for ASAP
+
+
+class PriceQuoteRequest(BaseModel):
+    pickup_lat: float
+    pickup_lng: float
+    dropoff_lat: float
+    dropoff_lng: float
+    vehicle_type: str
+    cargo_weight_kg: float
+
+
+class PriceQuoteResponse(BaseModel):
+    distance_km: float
+    estimated_duration_minutes: int
+    base_price: float
+    weight_surcharge: float
+    total_price: float
+    vehicle_type: str
+    currency: str = "EUR"
 
 
 class OtpRequest(BaseModel):
@@ -837,7 +993,420 @@ async def get_me(user: dict = Depends(get_current_user)):
     """Get current authenticated user info."""
     if user["type"] == "admin":
         return {"id": "admin", "type": "admin", "email": ADMIN_EMAIL, "name": "Admin"}
+    if user["type"] == "shipper":
+        return {"id": user["id"], "type": "shipper", "shipper": user["shipper"]}
     return {"id": user["id"], "type": "driver", "driver": user["driver"]}
+
+
+# ===================== Shipper Registration & Auth =====================
+
+@api_router.post("/shipper/register")
+async def register_shipper(registration: ShipperRegistration):
+    """Register a new shipper/business account."""
+    # Check if email already exists
+    existing = await db.shippers.find_one({"email": registration.email})
+    if existing:
+        raise HTTPException(400, "A business with this email already exists")
+    
+    shipper_id = str(uuid.uuid4())
+    password_hash = hash_password(registration.password)
+    
+    new_shipper = Shipper(
+        id=shipper_id,
+        company_name=registration.company_name,
+        contact_name=registration.contact_name,
+        email=registration.email,
+        phone=registration.phone,
+        password_hash=password_hash,
+        tax_id=registration.tax_id,
+        address=registration.address,
+        avatar=f"https://api.dicebear.com/7.x/initials/png?seed={registration.company_name}",
+    )
+    
+    await db.shippers.insert_one(new_shipper.model_dump())
+    
+    token = create_token(shipper_id, "shipper")
+    
+    logger.info(f"Registered new shipper: {registration.email} ({shipper_id})")
+    
+    return {
+        "shipper_id": shipper_id,
+        "token": token,
+        "message": "Business registration successful!"
+    }
+
+
+@api_router.post("/auth/shipper-login")
+async def shipper_login(request: LoginRequest):
+    """Login for shippers/businesses."""
+    shipper = await db.shippers.find_one({"email": request.email}, {"_id": 0})
+    if not shipper:
+        raise HTTPException(401, "Invalid email or password")
+    
+    if not shipper.get("password_hash"):
+        raise HTTPException(401, "Invalid email or password")
+    
+    if not verify_password(request.password, shipper["password_hash"]):
+        raise HTTPException(401, "Invalid email or password")
+    
+    token = create_token(shipper["id"], "shipper")
+    
+    logger.info(f"Shipper logged in: {request.email}")
+    
+    return LoginResponse(
+        token=token,
+        driver_id=shipper["id"],  # reusing field name for simplicity
+        name=shipper["company_name"],
+        is_admin=False
+    )
+
+
+# ===================== Shipper Profile =====================
+
+@api_router.get("/shipper/me")
+async def get_shipper_profile(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get current shipper profile."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "shipper":
+        raise HTTPException(403, "Shipper access required")
+    
+    shipper = await db.shippers.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+    if not shipper:
+        raise HTTPException(404, "Shipper not found")
+    
+    return shipper
+
+
+# ===================== Shipper Orders (Shipments) =====================
+
+@api_router.get("/shipper/vehicle-types")
+async def get_vehicle_types():
+    """Get available vehicle types for shipping."""
+    return list(VEHICLE_TYPES.values())
+
+
+@api_router.post("/shipper/quote", response_model=PriceQuoteResponse)
+async def get_price_quote(request: PriceQuoteRequest):
+    """Get a price quote for a shipment."""
+    # Calculate distance
+    distance_km = _haversine_km(
+        request.pickup_lat, request.pickup_lng,
+        request.dropoff_lat, request.dropoff_lng
+    )
+    
+    # Get vehicle rate
+    vehicle = VEHICLE_TYPES.get(request.vehicle_type)
+    if not vehicle:
+        raise HTTPException(400, f"Invalid vehicle type: {request.vehicle_type}")
+    
+    # Calculate price
+    base_rate = vehicle["base_rate_per_km"]
+    base_price = distance_km * base_rate
+    
+    # Weight surcharge (€0.01 per kg over 500kg)
+    weight_surcharge = max(0, (request.cargo_weight_kg - 500) * 0.01)
+    
+    # Minimum price
+    total_price = max(15.0, base_price + weight_surcharge)
+    
+    # Estimate duration (average 60 km/h for trucks)
+    estimated_duration = int(distance_km / 60 * 60)  # minutes
+    
+    return PriceQuoteResponse(
+        distance_km=round(distance_km, 2),
+        estimated_duration_minutes=max(30, estimated_duration),
+        base_price=round(base_price, 2),
+        weight_surcharge=round(weight_surcharge, 2),
+        total_price=round(total_price, 2),
+        vehicle_type=request.vehicle_type,
+    )
+
+
+@api_router.post("/shipper/shipments")
+async def create_shipment(
+    request: ShipmentCreateRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Create a new shipment order."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "shipper":
+        raise HTTPException(403, "Shipper access required")
+    
+    shipper_id = payload["sub"]
+    shipper = await db.shippers.find_one({"id": shipper_id}, {"_id": 0})
+    if not shipper:
+        raise HTTPException(404, "Shipper not found")
+    
+    # Validate vehicle type
+    vehicle = VEHICLE_TYPES.get(request.vehicle_type)
+    if not vehicle:
+        raise HTTPException(400, f"Invalid vehicle type: {request.vehicle_type}")
+    
+    # Check weight capacity
+    if request.cargo_weight_kg > vehicle["max_weight_kg"]:
+        raise HTTPException(400, f"Cargo weight exceeds vehicle capacity ({vehicle['max_weight_kg']} kg)")
+    
+    # Calculate distance and price
+    distance_km = _haversine_km(
+        request.pickup_lat, request.pickup_lng,
+        request.dropoff_lat, request.dropoff_lng
+    )
+    
+    base_price = distance_km * vehicle["base_rate_per_km"]
+    weight_surcharge = max(0, (request.cargo_weight_kg - 500) * 0.01)
+    total_price = max(15.0, base_price + weight_surcharge)
+    
+    # Generate order
+    order_id = str(uuid.uuid4())
+    order_number = f"SHP-{random.randint(1000, 9999)}"
+    
+    # Create OTPs
+    pickup_otp = str(random.randint(1000, 9999))
+    dropoff_otp = str(random.randint(1000, 9999))
+    
+    # Driver earnings (80% of price)
+    driver_earnings = total_price * 0.80
+    
+    new_order = Order(
+        id=order_id,
+        order_number=order_number,
+        status="pending",
+        pickup=GeoPoint(
+            lat=request.pickup_lat,
+            lng=request.pickup_lng,
+            address=request.pickup_address,
+            name=request.pickup_contact_name,
+        ),
+        dropoff=GeoPoint(
+            lat=request.dropoff_lat,
+            lng=request.dropoff_lng,
+            address=request.dropoff_address,
+            name=request.dropoff_contact_name,
+        ),
+        customer=Customer(
+            name=request.dropoff_contact_name,
+            rating=5.0,
+            phone=request.dropoff_contact_phone,
+            notes=request.dropoff_notes,
+        ),
+        items=[OrderItem(name=request.cargo_description, quantity=1)],
+        distance_km=round(distance_km, 2),
+        eta_minutes=max(30, int(distance_km / 60 * 60)),
+        earnings=round(driver_earnings, 2),
+        tip=0.0,
+        pickup_otp=pickup_otp,
+        dropoff_otp=dropoff_otp,
+        shipper_id=shipper_id,
+        vehicle_type=request.vehicle_type,
+        cargo_weight_kg=request.cargo_weight_kg,
+        cargo_dimensions=request.cargo_dimensions,
+        cargo_type=request.cargo_type,
+        special_requirements=request.special_requirements,
+        scheduled_pickup=request.scheduled_pickup,
+        price_quote=round(total_price, 2),
+        shipper_notes=request.pickup_notes,
+    )
+    
+    await db.orders.insert_one(new_order.model_dump())
+    
+    # Update shipper stats
+    await db.shippers.update_one(
+        {"id": shipper_id},
+        {"$inc": {"total_shipments": 1}}
+    )
+    
+    logger.info(f"Shipper {shipper_id} created shipment {order_id}")
+    
+    return {
+        "order_id": order_id,
+        "order_number": order_number,
+        "status": "pending",
+        "pickup_otp": pickup_otp,
+        "dropoff_otp": dropoff_otp,
+        "price": total_price,
+        "distance_km": round(distance_km, 2),
+        "estimated_duration_minutes": new_order.eta_minutes,
+        "message": "Shipment created successfully! Waiting for driver assignment."
+    }
+
+
+@api_router.get("/shipper/shipments")
+async def get_shipper_shipments(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get all shipments for the current shipper."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "shipper":
+        raise HTTPException(403, "Shipper access required")
+    
+    shipper_id = payload["sub"]
+    
+    shipments = []
+    async for order in db.orders.find({"shipper_id": shipper_id}, {"_id": 0}).sort("created_at", -1):
+        # Get driver info if assigned
+        driver_info = None
+        if order.get("driver_id"):
+            driver = await db.drivers.find_one({"id": order["driver_id"]}, {"_id": 0, "password_hash": 0})
+            if driver:
+                driver_info = {
+                    "id": driver["id"],
+                    "name": driver["name"],
+                    "phone": driver.get("phone"),
+                    "vehicle": driver.get("vehicle"),
+                    "rating": driver.get("rating"),
+                    "avatar": driver.get("avatar"),
+                }
+        
+        shipments.append({
+            **order,
+            "driver": driver_info,
+        })
+    
+    return shipments
+
+
+@api_router.get("/shipper/shipments/{order_id}")
+async def get_shipment_details(
+    order_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Get details of a specific shipment."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "shipper":
+        raise HTTPException(403, "Shipper access required")
+    
+    shipper_id = payload["sub"]
+    
+    order = await db.orders.find_one({"id": order_id, "shipper_id": shipper_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Shipment not found")
+    
+    # Get driver info if assigned
+    driver_info = None
+    if order.get("driver_id"):
+        driver = await db.drivers.find_one({"id": order["driver_id"]}, {"_id": 0, "password_hash": 0})
+        if driver:
+            driver_info = {
+                "id": driver["id"],
+                "name": driver["name"],
+                "phone": driver.get("phone"),
+                "vehicle": driver.get("vehicle"),
+                "rating": driver.get("rating"),
+                "avatar": driver.get("avatar"),
+                "location": driver.get("location"),
+            }
+    
+    return {
+        **order,
+        "driver": driver_info,
+    }
+
+
+@api_router.post("/shipper/shipments/{order_id}/cancel")
+async def cancel_shipment(
+    order_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Cancel a shipment (only if not yet picked up)."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "shipper":
+        raise HTTPException(403, "Shipper access required")
+    
+    shipper_id = payload["sub"]
+    
+    order = await db.orders.find_one({"id": order_id, "shipper_id": shipper_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Shipment not found")
+    
+    # Can only cancel if not yet picked up
+    if order["status"] in ["picked_up", "enroute_dropoff", "arrived_dropoff", "delivered"]:
+        raise HTTPException(400, "Cannot cancel shipment after pickup")
+    
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"status": "rejected", "completed_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    logger.info(f"Shipper {shipper_id} cancelled shipment {order_id}")
+    
+    return {"message": "Shipment cancelled successfully"}
+
+
+@api_router.get("/shipper/shipments/{order_id}/tracking")
+async def track_shipment(
+    order_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Get real-time tracking info for a shipment."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "shipper":
+        raise HTTPException(403, "Shipper access required")
+    
+    shipper_id = payload["sub"]
+    
+    order = await db.orders.find_one({"id": order_id, "shipper_id": shipper_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Shipment not found")
+    
+    # Get driver location if assigned and in transit
+    driver_location = None
+    driver_info = None
+    if order.get("driver_id") and order["status"] in ["enroute_pickup", "arrived_pickup", "picked_up", "enroute_dropoff", "arrived_dropoff"]:
+        driver = await db.drivers.find_one({"id": order["driver_id"]}, {"_id": 0})
+        if driver:
+            driver_info = {
+                "name": driver["name"],
+                "phone": driver.get("phone"),
+                "vehicle": driver.get("vehicle"),
+                "avatar": driver.get("avatar"),
+            }
+            # Simulate driver location (in real app, this would come from driver's location updates)
+            if order["status"] in ["enroute_pickup", "arrived_pickup"]:
+                driver_location = {"lat": order["pickup"]["lat"], "lng": order["pickup"]["lng"]}
+            else:
+                driver_location = {"lat": order["dropoff"]["lat"], "lng": order["dropoff"]["lng"]}
+    
+    # Status descriptions
+    status_messages = {
+        "pending": "Waiting for driver assignment",
+        "accepted": "Driver assigned, preparing for pickup",
+        "enroute_pickup": "Driver is on the way to pickup",
+        "arrived_pickup": "Driver arrived at pickup location",
+        "picked_up": "Cargo picked up, preparing for delivery",
+        "enroute_dropoff": "Driver is on the way to delivery",
+        "arrived_dropoff": "Driver arrived at delivery location",
+        "delivered": "Delivery completed",
+        "rejected": "Shipment cancelled",
+    }
+    
+    return {
+        "order_id": order_id,
+        "status": order["status"],
+        "status_message": status_messages.get(order["status"], "Unknown status"),
+        "pickup": order["pickup"],
+        "dropoff": order["dropoff"],
+        "driver": driver_info,
+        "driver_location": driver_location,
+        "eta_minutes": order.get("eta_minutes"),
+        "created_at": order.get("created_at"),
+        "completed_at": order.get("completed_at"),
+    }
 
 
 # ===================== KYC Endpoints =====================
