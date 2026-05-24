@@ -318,7 +318,7 @@ export default function HomeScreen() {
       {showRequest ? (
         <Animated.View
           entering={SlideInDown.springify().damping(16).mass(0.9)}
-          style={[styles.requestOverlay, { paddingBottom: insets.bottom + 90 }, shadows.lg]}
+          style={[styles.requestOverlay, { paddingBottom: 20 }, shadows.lg]}
           testID="incoming-order-card"
         >
           <View style={styles.requestHeader}>
