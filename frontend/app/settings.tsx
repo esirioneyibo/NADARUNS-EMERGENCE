@@ -18,7 +18,8 @@ import * as Haptics from "expo-haptics";
 
 import { api } from "../src/api";
 import type { Driver, NotificationPrefs } from "../src/types";
-import { radius, shadows, spacing, theme } from "../src/theme";
+import { radius, shadows, spacing } from "../src/theme";
+import { useTheme, ThemeMode } from "../src/contexts/ThemeContext";
 
 const VEHICLE_OPTIONS: Array<{ id: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "bicycle", label: "Bicycle", icon: "bicycle-outline" },
@@ -27,9 +28,16 @@ const VEHICLE_OPTIONS: Array<{ id: string; label: string; icon: keyof typeof Ion
   { id: "car", label: "Car", icon: "car-outline" },
 ];
 
+const THEME_OPTIONS: Array<{ id: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { id: "light", label: "Light", icon: "sunny-outline" },
+  { id: "dark", label: "Dark", icon: "moon-outline" },
+  { id: "system", label: "System", icon: "phone-portrait-outline" },
+];
+
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { theme, mode, setMode, isDark } = useTheme();
   const [driver, setDriver] = useState<Driver | null>(null);
   const [name, setName] = useState("");
   const [plate, setPlate] = useState("");
@@ -78,6 +86,13 @@ export default function SettingsScreen() {
     Haptics.selectionAsync().catch(() => {});
   };
 
+  const selectTheme = (newMode: ThemeMode) => {
+    setMode(newMode);
+    Haptics.selectionAsync().catch(() => {});
+  };
+
+  const styles = createStyles(theme);
+
   if (!driver) {
     return (
       <View style={styles.loading}>
@@ -124,8 +139,29 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
 
+        {/* Appearance / Theme */}
+        <SectionTitle title="Appearance" theme={theme} />
+        <Animated.View entering={FadeInUp.delay(100)} style={[styles.card, shadows.sm]}>
+          <View style={styles.themeGrid}>
+            {THEME_OPTIONS.map((t) => {
+              const selected = t.id === mode;
+              return (
+                <TouchableOpacity
+                  key={t.id}
+                  style={[styles.themeTile, selected && { backgroundColor: theme.primary, borderColor: theme.primary }]}
+                  onPress={() => selectTheme(t.id)}
+                  testID={`theme-${t.id}`}
+                >
+                  <Ionicons name={t.icon} size={22} color={selected ? "#fff" : theme.textPrimary} />
+                  <Text style={[styles.themeLabel, selected && { color: "#fff" }]}>{t.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Animated.View>
+
         {/* Personal info */}
-        <SectionTitle title="Personal info" />
+        <SectionTitle title="Personal info" theme={theme} />
         <Animated.View entering={FadeInUp.delay(140)} style={[styles.card, shadows.sm]}>
           <InputRow
             icon="person-outline"
@@ -135,8 +171,9 @@ export default function SettingsScreen() {
             onBlur={() => saveField({ name }, "name")}
             saving={savingField === "name"}
             testID="settings-name-input"
+            theme={theme}
           />
-          <Divider />
+          <Divider theme={theme} />
           <InputRow
             icon="mail-outline"
             label="Email"
@@ -146,8 +183,9 @@ export default function SettingsScreen() {
             saving={savingField === "email"}
             keyboardType="email-address"
             testID="settings-email-input"
+            theme={theme}
           />
-          <Divider />
+          <Divider theme={theme} />
           <InputRow
             icon="call-outline"
             label="Phone"
@@ -157,11 +195,12 @@ export default function SettingsScreen() {
             saving={savingField === "phone"}
             keyboardType="phone-pad"
             testID="settings-phone-input"
+            theme={theme}
           />
         </Animated.View>
 
         {/* Vehicle */}
-        <SectionTitle title="Vehicle" />
+        <SectionTitle title="Vehicle" theme={theme} />
         <Animated.View entering={FadeInUp.delay(200)} style={[styles.card, shadows.sm]}>
           <View style={styles.vehicleGrid}>
             {VEHICLE_OPTIONS.map((v) => {
@@ -169,7 +208,7 @@ export default function SettingsScreen() {
               return (
                 <TouchableOpacity
                   key={v.id}
-                  style={[styles.vehicleTile, selected && styles.vehicleTileSelected]}
+                  style={[styles.vehicleTile, selected && { backgroundColor: theme.primary, borderColor: theme.primary }]}
                   onPress={() => selectVehicle(v.id)}
                   testID={`vehicle-${v.id}`}
                 >
@@ -179,7 +218,7 @@ export default function SettingsScreen() {
               );
             })}
           </View>
-          <Divider />
+          <Divider theme={theme} />
           <InputRow
             icon="card-outline"
             label="License plate"
@@ -192,11 +231,12 @@ export default function SettingsScreen() {
             saving={savingField === "plate"}
             autoCapitalize="characters"
             testID="settings-plate-input"
+            theme={theme}
           />
         </Animated.View>
 
         {/* Notifications */}
-        <SectionTitle title="Notifications" />
+        <SectionTitle title="Notifications" theme={theme} />
         <Animated.View entering={FadeInUp.delay(260)} style={[styles.card, shadows.sm]}>
           <ToggleRow
             icon="notifications-outline"
@@ -204,43 +244,61 @@ export default function SettingsScreen() {
             value={notifications.push}
             onToggle={() => toggleNotification("push")}
             testID="toggle-push"
+            theme={theme}
           />
-          <Divider />
+          <Divider theme={theme} />
           <ToggleRow
             icon="volume-high-outline"
             label="Notification sound"
             value={notifications.sound}
             onToggle={() => toggleNotification("sound")}
             testID="toggle-sound"
+            theme={theme}
           />
-          <Divider />
+          <Divider theme={theme} />
           <ToggleRow
             icon="cube-outline"
             label="New order alerts"
             value={notifications.new_orders}
             onToggle={() => toggleNotification("new_orders")}
             testID="toggle-new-orders"
+            theme={theme}
           />
-          <Divider />
+          <Divider theme={theme} />
           <ToggleRow
             icon="cash-outline"
             label="Daily earnings summary"
             value={notifications.earnings_summary}
             onToggle={() => toggleNotification("earnings_summary")}
             testID="toggle-earnings"
+            theme={theme}
           />
         </Animated.View>
 
-        {/* Payouts & Support */}
-        <SectionTitle title="More" />
-        <Animated.View entering={FadeInUp.delay(320)} style={[styles.card, shadows.sm]}>
-          <LinkRow icon="card" label="Payouts & bank" badge="Weekly" testID="link-payouts" onPress={() => router.push("/wallet")} />
-          <Divider />
-          <LinkRow icon="document-text-outline" label="Tax documents" testID="link-tax" />
-          <Divider />
-          <LinkRow icon="help-circle-outline" label="Help & Support" testID="link-support" />
-          <Divider />
-          <LinkRow icon="shield-checkmark-outline" label="Privacy & terms" testID="link-privacy" />
+        {/* Documents & More */}
+        <SectionTitle title="Documents" theme={theme} />
+        <Animated.View entering={FadeInUp.delay(300)} style={[styles.card, shadows.sm]}>
+          <LinkRow 
+            icon="document-text-outline" 
+            label="KYC Verification" 
+            badge="Required"
+            badgeColor={theme.warning}
+            testID="link-kyc" 
+            onPress={() => router.push("/kyc")}
+            theme={theme}
+          />
+          <Divider theme={theme} />
+          <LinkRow icon="card" label="Payouts & bank" badge="Weekly" testID="link-payouts" onPress={() => router.push("/wallet")} theme={theme} />
+          <Divider theme={theme} />
+          <LinkRow icon="receipt-outline" label="Tax documents" testID="link-tax" theme={theme} />
+        </Animated.View>
+
+        {/* Support */}
+        <SectionTitle title="Support" theme={theme} />
+        <Animated.View entering={FadeInUp.delay(340)} style={[styles.card, shadows.sm]}>
+          <LinkRow icon="help-circle-outline" label="Help & Support" testID="link-support" theme={theme} />
+          <Divider theme={theme} />
+          <LinkRow icon="shield-checkmark-outline" label="Privacy & terms" testID="link-privacy" theme={theme} />
         </Animated.View>
 
         {/* Sign out */}
@@ -259,12 +317,12 @@ export default function SettingsScreen() {
   );
 }
 
-function SectionTitle({ title }: { title: string }) {
-  return <Text style={styles.sectionTitle}>{title.toUpperCase()}</Text>;
+function SectionTitle({ title, theme }: { title: string; theme: any }) {
+  return <Text style={{ fontSize: 11, fontWeight: "800", color: theme.textSecondary, letterSpacing: 1.2, marginTop: spacing.xxl, marginBottom: spacing.md, paddingHorizontal: 4 }}>{title.toUpperCase()}</Text>;
 }
 
-function Divider() {
-  return <View style={styles.divider} />;
+function Divider({ theme }: { theme: any }) {
+  return <View style={{ height: 1, backgroundColor: theme.border, marginLeft: 32 }} />;
 }
 
 function InputRow(props: {
@@ -277,24 +335,25 @@ function InputRow(props: {
   keyboardType?: "default" | "email-address" | "phone-pad";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   testID?: string;
+  theme: any;
 }) {
   return (
-    <View style={styles.row}>
-      <Ionicons name={props.icon} size={20} color={theme.textSecondary} />
+    <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.md }}>
+      <Ionicons name={props.icon} size={20} color={props.theme.textSecondary} />
       <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={styles.rowLabel}>{props.label}</Text>
+        <Text style={{ fontSize: 11, color: props.theme.textSecondary, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 }}>{props.label}</Text>
         <TextInput
-          style={styles.input}
+          style={{ fontSize: 16, color: props.theme.textPrimary, fontWeight: "600", paddingVertical: 4, marginTop: 2 }}
           value={props.value}
           onChangeText={props.onChangeText}
           onBlur={props.onBlur}
           keyboardType={props.keyboardType}
           autoCapitalize={props.autoCapitalize}
-          placeholderTextColor={theme.textSecondary}
+          placeholderTextColor={props.theme.textSecondary}
           testID={props.testID}
         />
       </View>
-      {props.saving ? <ActivityIndicator size="small" color={theme.primary} /> : null}
+      {props.saving ? <ActivityIndicator size="small" color={props.theme.primary} /> : null}
     </View>
   );
 }
@@ -305,17 +364,18 @@ function ToggleRow(props: {
   value: boolean;
   onToggle: () => void;
   testID?: string;
+  theme: any;
 }) {
   return (
-    <View style={styles.row}>
-      <Ionicons name={props.icon} size={20} color={theme.textSecondary} />
-      <Text style={[styles.rowLabel, { flex: 1, marginLeft: 12, fontSize: 15, color: theme.textPrimary }]}>
+    <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.md }}>
+      <Ionicons name={props.icon} size={20} color={props.theme.textSecondary} />
+      <Text style={{ flex: 1, marginLeft: 12, fontSize: 15, color: props.theme.textPrimary, fontWeight: "500" }}>
         {props.label}
       </Text>
       <Switch
         value={props.value}
         onValueChange={props.onToggle}
-        trackColor={{ true: theme.primary, false: "#CBD5E1" }}
+        trackColor={{ true: props.theme.primary, false: "#CBD5E1" }}
         thumbColor="#FFFFFF"
         testID={props.testID}
       />
@@ -323,24 +383,32 @@ function ToggleRow(props: {
   );
 }
 
-function LinkRow(props: { icon: keyof typeof Ionicons.glyphMap; label: string; badge?: string; testID?: string; onPress?: () => void }) {
+function LinkRow(props: { 
+  icon: keyof typeof Ionicons.glyphMap; 
+  label: string; 
+  badge?: string; 
+  badgeColor?: string;
+  testID?: string; 
+  onPress?: () => void;
+  theme: any;
+}) {
   return (
-    <TouchableOpacity style={styles.row} testID={props.testID} onPress={props.onPress}>
-      <Ionicons name={props.icon} size={20} color={theme.textSecondary} />
-      <Text style={[styles.rowLabel, { flex: 1, marginLeft: 12, fontSize: 15, color: theme.textPrimary }]}>
+    <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.md }} testID={props.testID} onPress={props.onPress}>
+      <Ionicons name={props.icon} size={20} color={props.theme.textSecondary} />
+      <Text style={{ flex: 1, marginLeft: 12, fontSize: 15, color: props.theme.textPrimary, fontWeight: "500" }}>
         {props.label}
       </Text>
       {props.badge ? (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{props.badge}</Text>
+        <View style={{ backgroundColor: props.badgeColor ? `${props.badgeColor}20` : props.theme.primaryLight, paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.pill, marginRight: 6 }}>
+          <Text style={{ color: props.badgeColor || props.theme.primary, fontSize: 11, fontWeight: "700" }}>{props.badge}</Text>
         </View>
       ) : null}
-      <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+      <Ionicons name="chevron-forward" size={18} color={props.theme.textSecondary} />
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.background },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
@@ -352,18 +420,13 @@ const styles = StyleSheet.create({
   profileMetaRow: { flexDirection: "row", gap: 8, marginTop: spacing.md },
   metaPill: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, gap: 4 },
   metaPillText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  sectionTitle: { fontSize: 11, fontWeight: "800", color: theme.textSecondary, letterSpacing: 1.2, marginTop: spacing.xxl, marginBottom: spacing.md, paddingHorizontal: 4 },
   card: { backgroundColor: theme.surface, borderRadius: radius.xl, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
-  row: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.md },
-  rowLabel: { fontSize: 11, color: theme.textSecondary, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 },
-  input: { fontSize: 16, color: theme.textPrimary, fontWeight: "600", paddingVertical: 4, marginTop: 2 },
-  divider: { height: 1, backgroundColor: theme.border, marginLeft: 32 },
+  themeGrid: { flexDirection: "row", gap: 8, paddingVertical: spacing.md },
+  themeTile: { flex: 1, paddingVertical: 14, borderRadius: radius.lg, backgroundColor: theme.surfaceMuted, alignItems: "center", gap: 6, borderWidth: 1.5, borderColor: "transparent" },
+  themeLabel: { fontSize: 12, color: theme.textPrimary, fontWeight: "600" },
   vehicleGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: spacing.md },
   vehicleTile: { flexGrow: 1, flexBasis: "47%", paddingVertical: 14, paddingHorizontal: 10, borderRadius: radius.lg, backgroundColor: theme.surfaceMuted, alignItems: "center", flexDirection: "row", gap: 10, borderWidth: 1.5, borderColor: "transparent" },
-  vehicleTileSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
   vehicleLabel: { fontSize: 14, color: theme.textPrimary, fontWeight: "600" },
-  badge: { backgroundColor: theme.primaryLight, paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.pill, marginRight: 6 },
-  badgeText: { color: theme.primary, fontSize: 11, fontWeight: "700" },
   signOutBtn: { marginTop: spacing.xxl, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: theme.surface, paddingVertical: 16, borderRadius: radius.lg, gap: 8 },
   signOutText: { color: theme.error, fontWeight: "700", fontSize: 16 },
   versionText: { textAlign: "center", color: theme.textSecondary, fontSize: 12, marginTop: spacing.xl },

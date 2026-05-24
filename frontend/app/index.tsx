@@ -18,7 +18,8 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { api } from "../src/api";
 import type { Driver, Order } from "../src/types";
-import { radius, shadows, spacing, theme } from "../src/theme";
+import { radius, shadows, spacing } from "../src/theme";
+import { useTheme } from "../src/contexts/ThemeContext";
 import MapView from "../src/components/MapView";
 import SlideToGoOnline from "../src/components/SlideToGoOnline";
 
@@ -42,11 +43,14 @@ function formatDate(): string {
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
   const [driver, setDriver] = useState<Driver | null>(null);
   const [pending, setPending] = useState<Order | null>(null);
   const [active, setActive] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
+
+  const styles = createStyles(theme);
 
   const load = useCallback(async () => {
     try {
@@ -404,7 +408,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.background },
   
