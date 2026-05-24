@@ -1,8 +1,8 @@
 import React, { useState, useRef } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -15,9 +15,10 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeInDown, FadeInRight, FadeInUp, SlideInRight, SlideOutLeft } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeInRight, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
+import { api } from "../src/api";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 
@@ -88,11 +89,31 @@ export default function OnboardingScreen() {
     setLoading(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const response = await api.registerDriver({
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        vehicle_type: formData.vehicleType,
+        city: formData.city,
+        license_plate: formData.licensePlate || undefined,
+      });
+      
+      Alert.alert(
+        "Registration Successful!",
+        response.message,
+        [{ 
+          text: "Continue to KYC", 
+          onPress: () => router.replace("/kyc") 
+        }]
+      );
+    } catch (error: any) {
+      const message = error?.message || "Registration failed. Please try again.";
+      Alert.alert("Error", message);
+    } finally {
       setLoading(false);
-      router.replace("/");
-    }, 2000);
+    }
   };
 
   const isStepValid = () => {

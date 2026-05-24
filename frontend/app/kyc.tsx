@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +16,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 
+import { api } from "../src/api";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 
@@ -23,7 +24,7 @@ type DocumentType = "license_front" | "license_back" | "selfie";
 
 interface DocumentState {
   uri: string | null;
-  status: "pending" | "uploading" | "uploaded" | "error";
+  status: "pending" | "uploading" | "uploaded" | "approved" | "rejected" | "error";
 }
 
 export default function KYCScreen() {
@@ -37,8 +38,36 @@ export default function KYCScreen() {
     selfie: { uri: null, status: "pending" },
   });
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const styles = createStyles(theme);
+
+  // Load existing KYC status
+  useEffect(() => {
+    (async () => {
+      try {
+        const status = await api.getKYCStatus();
+        setDocuments({
+          license_front: { 
+            uri: null, 
+            status: (status.license_front as any) || "pending" 
+          },
+          license_back: { 
+            uri: null, 
+            status: (status.license_back as any) || "pending" 
+          },
+          selfie: { 
+            uri: null, 
+            status: (status.selfie as any) || "pending" 
+          },
+        });
+      } catch (e) {
+        console.warn("Failed to load KYC status", e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const pickImage = async (type: DocumentType, useCamera: boolean = false) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -81,14 +110,27 @@ export default function KYCScreen() {
           [type]: { uri: asset.uri, status: "uploading" },
         }));
 
-        // Simulate upload delay
-        setTimeout(() => {
+        // Upload to backend
+        try {
+          const imageData = asset.base64 
+            ? `data:image/jpeg;base64,${asset.base64}`
+            : asset.uri;
+          
+          await api.uploadKYCDocument(type, imageData);
+          
           setDocuments((prev) => ({
             ...prev,
             [type]: { uri: asset.uri, status: "uploaded" },
           }));
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        }, 1500);
+        } catch (error) {
+          console.warn("Upload failed:", error);
+          setDocuments((prev) => ({
+            ...prev,
+            [type]: { uri: asset.uri, status: "error" },
+          }));
+          Alert.alert("Upload Failed", "Please try again.");
+        }
       }
     } catch (error) {
       console.warn("Image picker error:", error);
@@ -110,7 +152,7 @@ export default function KYCScreen() {
     );
   };
 
-  const allUploaded = Object.values(documents).every((d) => d.status === "uploaded");
+  const allUploaded = Object.values(documents).every((d) => d.status === "uploaded" || d.status === "approved");
   const anyUploading = Object.values(documents).some((d) => d.status === "uploading");
 
   const handleSubmit = async () => {
@@ -119,16 +161,30 @@ export default function KYCScreen() {
     setSubmitting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     
-    // Simulate API submission
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      // Simulate KYC approval for demo
+      await api.simulateKYCApproval();
+      
       Alert.alert(
         "Documents Submitted",
         "Your documents have been submitted for verification. This usually takes 1-2 business days.",
         [{ text: "OK", onPress: () => router.back() }]
       );
-    }, 2000);
+    } catch (error) {
+      console.warn("Submit failed:", error);
+      Alert.alert("Error", "Failed to submit documents. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
 
   const DocumentCard = ({ 
     type, 

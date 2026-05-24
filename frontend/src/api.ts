@@ -53,4 +53,43 @@ export const api = {
       body: JSON.stringify({ photo }),
     }),
   getWallet: () => request<Wallet>("/driver/wallet"),
+  
+  // Registration
+  registerDriver: (data: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    vehicle_type: string;
+    city: string;
+    license_plate?: string;
+  }) => request<{ driver_id: string; message: string; kyc_required: boolean }>("/driver/register", {
+    method: "POST",
+    body: JSON.stringify(data),
+  }),
+  
+  // KYC
+  getKYCStatus: () => request<{
+    driver_id: string;
+    license_front: string | null;
+    license_back: string | null;
+    selfie: string | null;
+    overall_status: string;
+    submitted_at: string | null;
+    reviewed_at: string | null;
+  }>("/driver/kyc-status"),
+  
+  uploadKYCDocument: (document_type: string, image_data: string) =>
+    request<any>("/driver/kyc/upload", {
+      method: "POST",
+      body: JSON.stringify({ document_type, image_data }),
+    }),
+  
+  submitKYCDocuments: (license_front: string, license_back: string, selfie: string) =>
+    request<any>("/driver/kyc/submit", {
+      method: "POST",
+      body: JSON.stringify({ license_front, license_back, selfie }),
+    }),
+  
+  simulateKYCApproval: () => request<any>("/driver/kyc/simulate-approval", { method: "POST" }),
 };
