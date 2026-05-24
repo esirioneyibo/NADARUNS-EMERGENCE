@@ -2,22 +2,100 @@ import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet } from "./
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
+// Token storage for authenticated requests
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return authToken;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  
+  // Add auth token if available
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+  
   const res = await fetch(`${BASE}/api${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...init,
   });
+  
   if (!res.ok) {
     const txt = await res.text();
-    throw new Error(`API ${path} failed (${res.status}): ${txt}`);
+    // Parse error message from JSON if possible
+    try {
+      const err = JSON.parse(txt);
+      throw new Error(err.detail || err.message || `API ${path} failed (${res.status})`);
+    } catch {
+      throw new Error(`API ${path} failed (${res.status}): ${txt}`);
+    }
   }
+  
   const text = await res.text();
   return (text ? JSON.parse(text) : null) as T;
 }
 
+// Auth types
+export interface LoginResponse {
+  token: string;
+  driver_id: string;
+  name: string;
+  is_admin: boolean;
+}
+
+export interface RegisterResponse {
+  driver_id: string;
+  message: string;
+  token: string;
+  kyc_required: boolean;
+}
+
 export const api = {
+  // Authentication
+  login: (email: string, password: string) =>
+    request<LoginResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  
+  adminLogin: (email: string, password: string) =>
+    request<LoginResponse>("/auth/admin-login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  
+  getMe: () => request<{ id: string; type: string; email?: string; driver?: Driver }>("/auth/me"),
+  
+  // Registration
+  registerDriver: (data: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    password: string;
+    vehicle_type: string;
+    city: string;
+    license_plate?: string;
+  }) => request<RegisterResponse>("/driver/register", {
+    method: "POST",
+    body: JSON.stringify(data),
+  }),
+  
+  // Driver
   getDriver: () => request<Driver>("/driver/me"),
   toggleOnline: () => request<Driver>("/driver/toggle-online", { method: "POST" }),
+  updateDriver: (update: DriverUpdate) =>
+    request<Driver>("/driver/me", { method: "PATCH", body: JSON.stringify(update) }),
+  
+  // Orders
   getPending: () => request<Order | null>("/orders/pending"),
   getActive: () => request<Order | null>("/orders/active"),
   getHistory: () => request<Order[]>("/orders/history"),
@@ -34,8 +112,6 @@ export const api = {
       body: JSON.stringify({ rating, feedback }),
     }),
   seedNewPending: () => request<Order>(`/orders/seed-new-pending`, { method: "POST" }),
-  updateDriver: (update: DriverUpdate) =>
-    request<Driver>("/driver/me", { method: "PATCH", body: JSON.stringify(update) }),
   getRoute: (orderId: string) => request<DirectionsResponse>(`/orders/${orderId}/route`),
   verifyOtp: (orderId: string, otp: string, kind: "pickup" | "dropoff") =>
     request<Order>(`/orders/${orderId}/verify-otp`, {
@@ -52,21 +128,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ photo }),
     }),
-  getWallet: () => request<Wallet>("/driver/wallet"),
   
-  // Registration
-  registerDriver: (data: {
-    first_name: string;
-    last_name: string;
-    email: string;
-    phone: string;
-    vehicle_type: string;
-    city: string;
-    license_plate?: string;
-  }) => request<{ driver_id: string; message: string; kyc_required: boolean }>("/driver/register", {
-    method: "POST",
-    body: JSON.stringify(data),
-  }),
+  // Wallet
+  getWallet: () => request<Wallet>("/driver/wallet"),
   
   // KYC
   getKYCStatus: () => request<{

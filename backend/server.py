@@ -1,4 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,6 +8,8 @@ import os
 import logging
 import random
 import httpx
+import jwt
+import bcrypt
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Tuple
@@ -22,11 +26,90 @@ db = client[os.environ['DB_NAME']]
 
 GOOGLE_DIRECTIONS_API_KEY = os.environ.get('GOOGLE_DIRECTIONS_API_KEY')
 
+# JWT Configuration
+JWT_SECRET = os.environ.get('JWT_SECRET', 'nadaruns-super-secret-key-change-in-production')
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
+
+# Admin credentials (hardcoded for MVP)
+ADMIN_EMAIL = "admin@nadaruns.com"
+ADMIN_PASSWORD = "admin123"  # In production, use env variable
+
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+security = HTTPBearer(auto_error=False)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+# ===================== Auth Helpers =====================
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt."""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify a password against its hash."""
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+
+def create_token(user_id: str, user_type: str = "driver") -> str:
+    """Create a JWT token."""
+    payload = {
+        "sub": user_id,
+        "type": user_type,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS),
+        "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def decode_token(token: str) -> dict:
+    """Decode and validate a JWT token."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(401, "Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Invalid token")
+
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Dependency to get the current authenticated user."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    user_id = payload.get("sub")
+    user_type = payload.get("type", "driver")
+    
+    if user_type == "admin":
+        return {"id": user_id, "type": "admin", "email": ADMIN_EMAIL}
+    
+    driver = await db.drivers.find_one({"id": user_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(401, "User not found")
+    
+    return {"id": user_id, "type": "driver", "driver": driver}
+
+
+async def get_current_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Dependency to get the current authenticated driver."""
+    user = await get_current_user(credentials)
+    if user["type"] != "driver":
+        raise HTTPException(403, "Driver access required")
+    return user
+
+
+async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Dependency to ensure admin access."""
+    user = await get_current_user(credentials)
+    if user["type"] != "admin":
+        raise HTTPException(403, "Admin access required")
+    return user
 
 
 # ===================== Models =====================
@@ -136,6 +219,7 @@ class Driver(BaseModel):
     plate: str = ""
     email: str = ""
     phone: str = ""
+    password_hash: Optional[str] = None  # hashed password
     is_online: bool = False
     earnings_today: float = 0.0
     deliveries_today: int = 0
@@ -214,6 +298,7 @@ class DriverRegistration(BaseModel):
     last_name: str
     email: str
     phone: str
+    password: str  # plain password, will be hashed
     vehicle_type: Literal["bicycle", "scooter", "motorbike", "car"]
     city: str
     license_plate: Optional[str] = None
@@ -222,7 +307,25 @@ class DriverRegistration(BaseModel):
 class RegistrationResponse(BaseModel):
     driver_id: str
     message: str
+    token: str  # JWT token
     kyc_required: bool = True
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    token: str
+    driver_id: str
+    name: str
+    is_admin: bool = False
+
+
+class AdminLoginRequest(BaseModel):
+    email: str
+    password: str
 
 
 # ===================== Seed Data =====================
@@ -637,6 +740,9 @@ async def register_driver(registration: DriverRegistration):
     }
     vehicle_label = vehicle_labels.get(registration.vehicle_type, "Bicycle")
     
+    # Hash the password
+    password_hash = hash_password(registration.password)
+    
     new_driver = Driver(
         id=driver_id,
         name=f"{registration.first_name} {registration.last_name}",
@@ -647,6 +753,7 @@ async def register_driver(registration: DriverRegistration):
         plate=registration.license_plate or "",
         email=registration.email,
         phone=registration.phone,
+        password_hash=password_hash,
         is_online=False,
         earnings_today=0.0,
         deliveries_today=0,
@@ -667,13 +774,70 @@ async def register_driver(registration: DriverRegistration):
     }
     await db.kyc_status.insert_one(kyc_status)
     
+    # Generate JWT token
+    token = create_token(driver_id, "driver")
+    
     logger.info(f"Registered new driver: {registration.email} ({driver_id})")
     
     return RegistrationResponse(
         driver_id=driver_id,
         message="Registration successful! Please complete KYC verification to start delivering.",
+        token=token,
         kyc_required=True
     )
+
+
+# ===================== Authentication Endpoints =====================
+
+@api_router.post("/auth/login", response_model=LoginResponse)
+async def login(request: LoginRequest):
+    """Login with email and password."""
+    driver = await db.drivers.find_one({"email": request.email}, {"_id": 0})
+    if not driver:
+        raise HTTPException(401, "Invalid email or password")
+    
+    if not driver.get("password_hash"):
+        raise HTTPException(401, "Invalid email or password")
+    
+    if not verify_password(request.password, driver["password_hash"]):
+        raise HTTPException(401, "Invalid email or password")
+    
+    token = create_token(driver["id"], "driver")
+    
+    logger.info(f"Driver logged in: {request.email}")
+    
+    return LoginResponse(
+        token=token,
+        driver_id=driver["id"],
+        name=driver["name"],
+        is_admin=False
+    )
+
+
+@api_router.post("/auth/admin-login", response_model=LoginResponse)
+async def admin_login(request: AdminLoginRequest):
+    """Admin login with hardcoded credentials."""
+    if request.email != ADMIN_EMAIL or request.password != ADMIN_PASSWORD:
+        raise HTTPException(401, "Invalid admin credentials")
+    
+    token = create_token("admin", "admin")
+    
+    logger.info(f"Admin logged in: {request.email}")
+    
+    return LoginResponse(
+        token=token,
+        driver_id="admin",
+        name="Admin",
+        is_admin=True
+    )
+
+
+@api_router.get("/auth/me")
+async def get_me(user: dict = Depends(get_current_user)):
+    """Get current authenticated user info."""
+    if user["type"] == "admin":
+        return {"id": "admin", "type": "admin", "email": ADMIN_EMAIL, "name": "Admin"}
+    return {"id": user["id"], "type": "driver", "driver": user["driver"]}
 
 
 # ===================== KYC Endpoints =====================
@@ -943,6 +1107,373 @@ async def get_route(order_id: str):
         source="fallback",
     )
     return response
+
+
+# ===================== Admin Endpoints =====================
+
+@api_router.get("/admin/kyc-applications")
+async def get_kyc_applications(user: dict = Depends(get_admin_user)):
+    """Get all KYC applications for admin review."""
+    applications = []
+    async for status in db.kyc_status.find({}, {"_id": 0}):
+        # Get driver info
+        driver = await db.drivers.find_one({"id": status["driver_id"]}, {"_id": 0, "password_hash": 0})
+        
+        # Get document images
+        docs = {}
+        async for doc in db.kyc_documents.find({"driver_id": status["driver_id"]}, {"_id": 0}):
+            docs[doc["document_type"]] = {
+                "image_data": doc["image_data"],
+                "status": doc.get("status", "pending"),
+                "uploaded_at": doc.get("uploaded_at"),
+            }
+        
+        applications.append({
+            "driver": driver,
+            "kyc_status": status,
+            "documents": docs,
+        })
+    
+    return applications
+
+
+@api_router.post("/admin/kyc/{driver_id}/approve")
+async def approve_kyc(driver_id: str, user: dict = Depends(get_admin_user)):
+    """Approve a driver's KYC application."""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.kyc_status.update_one(
+        {"driver_id": driver_id},
+        {"$set": {
+            "license_front": "approved",
+            "license_back": "approved",
+            "selfie": "approved",
+            "overall_status": "approved",
+            "reviewed_at": now,
+        }}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(404, "KYC application not found")
+    
+    # Update document statuses
+    await db.kyc_documents.update_many(
+        {"driver_id": driver_id},
+        {"$set": {"status": "approved"}}
+    )
+    
+    logger.info(f"Admin approved KYC for driver {driver_id}")
+    
+    return {"message": "KYC approved successfully"}
+
+
+@api_router.post("/admin/kyc/{driver_id}/reject")
+async def reject_kyc(driver_id: str, reason: str = "Documents not clear", user: dict = Depends(get_admin_user)):
+    """Reject a driver's KYC application."""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.kyc_status.update_one(
+        {"driver_id": driver_id},
+        {"$set": {
+            "license_front": "rejected",
+            "license_back": "rejected",
+            "selfie": "rejected",
+            "overall_status": "rejected",
+            "reviewed_at": now,
+            "rejection_reason": reason,
+        }}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(404, "KYC application not found")
+    
+    # Update document statuses
+    await db.kyc_documents.update_many(
+        {"driver_id": driver_id},
+        {"$set": {"status": "rejected", "rejection_reason": reason}}
+    )
+    
+    logger.info(f"Admin rejected KYC for driver {driver_id}: {reason}")
+    
+    return {"message": "KYC rejected"}
+
+
+# ===================== Admin Dashboard HTML =====================
+
+ADMIN_DASHBOARD_HTML = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NadaRuns Admin - KYC Review</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #f8fafc; min-height: 100vh; }
+        .header { background: #1c1c1e; padding: 1rem 2rem; border-bottom: 1px solid #2d2d30; display: flex; justify-content: space-between; align-items: center; }
+        .logo { color: #1bb5a0; font-size: 1.5rem; font-weight: 800; }
+        .logout-btn { background: #ef4444; color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .login-container { display: flex; justify-content: center; align-items: center; min-height: calc(100vh - 80px); padding: 2rem; }
+        .login-box { background: #1c1c1e; padding: 2rem; border-radius: 16px; width: 100%; max-width: 400px; }
+        .login-box h2 { margin-bottom: 1.5rem; text-align: center; color: #1bb5a0; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.875rem; }
+        .form-group input { width: 100%; padding: 0.75rem 1rem; background: #26262a; border: 1px solid #2d2d30; border-radius: 8px; color: #f8fafc; font-size: 1rem; }
+        .form-group input:focus { outline: none; border-color: #1bb5a0; }
+        .login-btn { width: 100%; padding: 0.875rem; background: #1bb5a0; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 1rem; }
+        .login-btn:hover { background: #22d3b8; }
+        .error-msg { color: #ef4444; text-align: center; margin-top: 1rem; font-size: 0.875rem; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        .page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: #1c1c1e; padding: 1.25rem; border-radius: 12px; }
+        .stat-value { font-size: 2rem; font-weight: 800; color: #1bb5a0; }
+        .stat-label { color: #94a3b8; font-size: 0.875rem; margin-top: 0.25rem; }
+        .applications-list { display: flex; flex-direction: column; gap: 1rem; }
+        .app-card { background: #1c1c1e; border-radius: 16px; overflow: hidden; }
+        .app-header { padding: 1.25rem; border-bottom: 1px solid #2d2d30; display: flex; justify-content: space-between; align-items: center; }
+        .driver-info { display: flex; align-items: center; gap: 1rem; }
+        .driver-avatar { width: 48px; height: 48px; border-radius: 50%; background: #26262a; }
+        .driver-name { font-weight: 700; }
+        .driver-email { color: #94a3b8; font-size: 0.875rem; }
+        .status-badge { padding: 0.375rem 0.75rem; border-radius: 100px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+        .status-pending { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+        .status-approved { background: rgba(52, 211, 153, 0.2); color: #34d399; }
+        .status-rejected { background: rgba(248, 113, 113, 0.2); color: #f87171; }
+        .status-incomplete { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+        .docs-grid { padding: 1.25rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .doc-item { text-align: center; }
+        .doc-preview { width: 100%; aspect-ratio: 4/3; background: #26262a; border-radius: 8px; overflow: hidden; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .doc-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .doc-preview.empty { color: #64748b; font-size: 0.875rem; }
+        .doc-label { font-size: 0.75rem; color: #94a3b8; }
+        .app-actions { padding: 1.25rem; border-top: 1px solid #2d2d30; display: flex; gap: 0.75rem; justify-content: flex-end; }
+        .btn { padding: 0.625rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; font-size: 0.875rem; }
+        .btn-approve { background: #10b981; color: white; }
+        .btn-reject { background: #ef4444; color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .empty-state { text-align: center; padding: 4rem 2rem; color: #94a3b8; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+        .modal-close { position: absolute; top: 1rem; right: 1rem; background: #1c1c1e; color: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 1.5rem; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">⚡ NadaRuns Admin</div>
+        <button class="logout-btn" id="logoutBtn" style="display:none;" onclick="logout()">Logout</button>
+    </div>
+    
+    <div id="loginView" class="login-container">
+        <div class="login-box">
+            <h2>Admin Login</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="email" value="admin@nadaruns.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" value="admin123" required>
+                </div>
+                <button type="submit" class="login-btn">Login</button>
+                <div class="error-msg" id="loginError"></div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="dashboardView" class="container" style="display:none;">
+        <h1 class="page-title">KYC Applications</h1>
+        
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" id="totalCount">0</div>
+                <div class="stat-label">Total Applications</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="pendingCount">0</div>
+                <div class="stat-label">Pending Review</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="approvedCount">0</div>
+                <div class="stat-label">Approved</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="rejectedCount">0</div>
+                <div class="stat-label">Rejected</div>
+            </div>
+        </div>
+        
+        <div class="applications-list" id="applicationsList"></div>
+    </div>
+    
+    <div class="modal" id="imageModal" onclick="closeModal()">
+        <button class="modal-close" onclick="closeModal()">×</button>
+        <img id="modalImage" src="" alt="Document">
+    </div>
+    
+    <script>
+        let token = localStorage.getItem('admin_token');
+        
+        function showView(view) {
+            document.getElementById('loginView').style.display = view === 'login' ? 'flex' : 'none';
+            document.getElementById('dashboardView').style.display = view === 'dashboard' ? 'block' : 'none';
+            document.getElementById('logoutBtn').style.display = view === 'dashboard' ? 'block' : 'none';
+        }
+        
+        async function login(email, password) {
+            try {
+                const res = await fetch('/api/auth/admin-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                if (!res.ok) throw new Error('Invalid credentials');
+                const data = await res.json();
+                token = data.token;
+                localStorage.setItem('admin_token', token);
+                showView('dashboard');
+                loadApplications();
+            } catch (e) {
+                document.getElementById('loginError').textContent = e.message;
+            }
+        }
+        
+        function logout() {
+            token = null;
+            localStorage.removeItem('admin_token');
+            showView('login');
+        }
+        
+        async function loadApplications() {
+            try {
+                const res = await fetch('/api/admin/kyc-applications', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) throw new Error('Unauthorized');
+                const apps = await res.json();
+                renderApplications(apps);
+            } catch (e) {
+                if (e.message === 'Unauthorized') logout();
+            }
+        }
+        
+        function renderApplications(apps) {
+            const list = document.getElementById('applicationsList');
+            const pending = apps.filter(a => a.kyc_status.overall_status === 'pending').length;
+            const approved = apps.filter(a => a.kyc_status.overall_status === 'approved').length;
+            const rejected = apps.filter(a => a.kyc_status.overall_status === 'rejected').length;
+            
+            document.getElementById('totalCount').textContent = apps.length;
+            document.getElementById('pendingCount').textContent = pending;
+            document.getElementById('approvedCount').textContent = approved;
+            document.getElementById('rejectedCount').textContent = rejected;
+            
+            if (apps.length === 0) {
+                list.innerHTML = '<div class="empty-state">No KYC applications yet</div>';
+                return;
+            }
+            
+            list.innerHTML = apps.map(app => {
+                const driver = app.driver || {};
+                const status = app.kyc_status.overall_status;
+                const docs = app.documents || {};
+                
+                return `
+                    <div class="app-card">
+                        <div class="app-header">
+                            <div class="driver-info">
+                                <img class="driver-avatar" src="${driver.avatar || ''}" alt="">
+                                <div>
+                                    <div class="driver-name">${driver.name || 'Unknown'}</div>
+                                    <div class="driver-email">${driver.email || ''} · ${driver.phone || ''}</div>
+                                </div>
+                            </div>
+                            <span class="status-badge status-${status}">${status}</span>
+                        </div>
+                        <div class="docs-grid">
+                            ${renderDoc('License Front', docs.license_front)}
+                            ${renderDoc('License Back', docs.license_back)}
+                            ${renderDoc('Selfie', docs.selfie)}
+                        </div>
+                        <div class="app-actions">
+                            <button class="btn btn-reject" onclick="rejectKYC('${driver.id}')" ${status !== 'pending' ? 'disabled' : ''}>Reject</button>
+                            <button class="btn btn-approve" onclick="approveKYC('${driver.id}')" ${status !== 'pending' ? 'disabled' : ''}>Approve</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function renderDoc(label, doc) {
+            if (!doc || !doc.image_data) {
+                return `<div class="doc-item"><div class="doc-preview empty">No image</div><div class="doc-label">${label}</div></div>`;
+            }
+            return `<div class="doc-item"><div class="doc-preview" onclick="showImage('${doc.image_data}')"><img src="${doc.image_data}" alt="${label}"></div><div class="doc-label">${label}</div></div>`;
+        }
+        
+        function showImage(src) {
+            event.stopPropagation();
+            document.getElementById('modalImage').src = src;
+            document.getElementById('imageModal').classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('imageModal').classList.remove('active');
+        }
+        
+        async function approveKYC(driverId) {
+            if (!confirm('Approve this driver?')) return;
+            try {
+                const res = await fetch('/api/admin/kyc/' + driverId + '/approve', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) throw new Error('Failed to approve');
+                loadApplications();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+        
+        async function rejectKYC(driverId) {
+            const reason = prompt('Rejection reason:', 'Documents not clear');
+            if (!reason) return;
+            try {
+                const res = await fetch('/api/admin/kyc/' + driverId + '/reject?reason=' + encodeURIComponent(reason), {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) throw new Error('Failed to reject');
+                loadApplications();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+        
+        // Init
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            login(document.getElementById('email').value, document.getElementById('password').value);
+        });
+        
+        if (token) {
+            showView('dashboard');
+            loadApplications();
+        } else {
+            showView('login');
+        }
+    </script>
+</body>
+</html>
+"""
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_dashboard():
+    """Serve the admin dashboard HTML page."""
+    return ADMIN_DASHBOARD_HTML
 
 
 # ===================== Lifecycle =====================

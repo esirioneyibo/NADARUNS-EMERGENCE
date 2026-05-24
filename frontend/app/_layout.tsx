@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
 import { View, ActivityIndicator } from "react-native";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
+import { AuthProvider } from "../src/contexts/AuthContext";
 
 function TabsNavigator() {
   const insets = useSafeAreaInsets();
@@ -109,6 +110,13 @@ function TabsNavigator() {
           }}
         />
         <Tabs.Screen
+          name="login"
+          options={{
+            href: null,
+            tabBarStyle: { display: "none" },
+          }}
+        />
+        <Tabs.Screen
           name="+html"
           options={{
             href: null,
@@ -146,7 +154,9 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <AppContent />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </ThemeProvider>
   );
 }

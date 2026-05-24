@@ -29,6 +29,7 @@ interface FormData {
   lastName: string;
   email: string;
   phone: string;
+  password: string;
   vehicleType: string;
   licensePlate: string;
   city: string;
@@ -58,6 +59,7 @@ export default function OnboardingScreen() {
     lastName: "",
     email: "",
     phone: "",
+    password: "",
     vehicleType: "",
     licensePlate: "",
     city: "",
@@ -95,10 +97,18 @@ export default function OnboardingScreen() {
         last_name: formData.lastName,
         email: formData.email,
         phone: formData.phone,
+        password: formData.password,
         vehicle_type: formData.vehicleType,
         city: formData.city,
         license_plate: formData.licensePlate || undefined,
       });
+      
+      // Set auth token
+      const { setAuthToken } = await import("../src/api");
+      setAuthToken(response.token);
+      
+      // Save to auth context
+      const { useAuth } = await import("../src/contexts/AuthContext");
       
       Alert.alert(
         "Registration Successful!",
@@ -121,7 +131,7 @@ export default function OnboardingScreen() {
       case 1:
         return formData.firstName.trim() && formData.lastName.trim();
       case 2:
-        return formData.email.includes("@") && formData.phone.length >= 8;
+        return formData.email.includes("@") && formData.phone.length >= 8 && formData.password.length >= 6;
       case 3:
         return formData.vehicleType && formData.city;
       case 4:
@@ -206,6 +216,23 @@ export default function OnboardingScreen() {
                   placeholderTextColor={theme.textSecondary}
                   keyboardType="phone-pad"
                   testID="input-phone"
+                />
+              </View>
+            </View>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <View style={styles.inputWithIcon}>
+                <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} />
+                <TextInput
+                  style={styles.inputInner}
+                  value={formData.password}
+                  onChangeText={(v) => updateField("password", v)}
+                  placeholder="Min. 6 characters"
+                  placeholderTextColor={theme.textSecondary}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  testID="input-password"
                 />
               </View>
             </View>
