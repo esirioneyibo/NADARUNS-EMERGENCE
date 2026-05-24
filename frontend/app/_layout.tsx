@@ -1,11 +1,11 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useFonts } from "expo-font";
-import { View, ActivityIndicator } from "react-native";
+import * as Font from "expo-font";
+import { View, ActivityIndicator, Platform } from "react-native";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { AuthProvider } from "../src/contexts/AuthContext";
 
@@ -140,11 +140,32 @@ function AppContent() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    ...Ionicons.font,
-  });
+  const [fontsLoaded, setFontsLoaded] = useState(false);
 
-  if (!fontsLoaded && !fontError) {
+  useEffect(() => {
+    // On native platforms, @expo/vector-icons loads fonts automatically
+    // We only need to ensure the app is ready
+    async function prepare() {
+      try {
+        // For native Android/iOS, vector icons are bundled and load automatically
+        // No need to explicitly load Ionicons.font which can cause issues
+        if (Platform.OS === "web") {
+          // Only load fonts explicitly on web if needed
+          await Font.loadAsync({
+            ...Ionicons.font,
+          });
+        }
+      } catch (e) {
+        // Font loading failed but we can continue - icons may fallback
+        console.warn("Font loading warning:", e);
+      } finally {
+        setFontsLoaded(true);
+      }
+    }
+    prepare();
+  }, []);
+
+  if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }}>
         <ActivityIndicator size="large" color="#0C4A42" />
