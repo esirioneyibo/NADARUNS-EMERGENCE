@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -17,6 +18,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 import { api } from "../src/api";
+import { useAuth } from "../src/contexts/AuthContext";
 import type { Driver, NotificationPrefs } from "../src/types";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme, ThemeMode } from "../src/contexts/ThemeContext";

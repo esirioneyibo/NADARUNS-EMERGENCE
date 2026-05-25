@@ -117,6 +117,20 @@ function TabsNavigator() {
           }}
         />
         <Tabs.Screen
+          name="shipper-home"
+          options={{
+            href: null,
+            tabBarStyle: { display: "none" },
+          }}
+        />
+        <Tabs.Screen
+          name="shipper-login"
+          options={{
+            href: null,
+            tabBarStyle: { display: "none" },
+          }}
+        />
+        <Tabs.Screen
           name="+html"
           options={{
             href: null,
