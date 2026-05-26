@@ -83,13 +83,27 @@ export default function ShipperHomeScreen() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
 
   const styles = createStyles(theme);
 
   const loadData = useCallback(async () => {
     const token = getAuthToken();
+    
+    // If no token, use demo mode
     if (!token) {
-      router.replace("/shipper-login");
+      setIsDemo(true);
+      // Set demo profile
+      setProfile({
+        id: "demo-shipper",
+        company_name: "Demo Business",
+        contact_name: "Demo User",
+        email: "demo@nadaruns.com",
+        total_shipments: 0,
+        avatar: "https://api.dicebear.com/7.x/initials/png?seed=Demo",
+      });
+      setShipments([]);
+      setLoading(false);
       return;
     }
 

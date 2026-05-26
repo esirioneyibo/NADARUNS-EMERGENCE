@@ -84,8 +84,14 @@ export default function LoginScreen() {
 
   const handleDemoMode = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    // Demo mode goes to driver home by default
-    router.replace("/driver-home");
+    // Demo mode goes to the appropriate home based on selected role
+    if (selectedRole === "shipper") {
+      router.replace("/shipper-home");
+    } else if (selectedRole === "admin") {
+      Alert.alert("Admin Access", "Admin mode requires login credentials.");
+    } else {
+      router.replace("/driver-home");
+    }
   };
 
   const handleLogin = async () => {

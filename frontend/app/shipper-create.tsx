@@ -111,6 +111,19 @@ export default function ShipperCreateScreen() {
       return;
     }
     
+    const token = getAuthToken();
+    if (!token) {
+      Alert.alert(
+        "Sign In Required",
+        "Please sign in or register to create shipments.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Sign In", onPress: () => router.push("/login") },
+        ]
+      );
+      return;
+    }
+    
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     
