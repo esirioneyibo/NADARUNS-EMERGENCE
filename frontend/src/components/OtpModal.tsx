@@ -41,11 +41,16 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
     const showSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       (e) => {
-        const height = e.endCoordinates.height;
-        setKeyboardHeight(height);
-        // Animate sheet up when keyboard shows
+        const kbHeight = e.endCoordinates.height;
+        setKeyboardHeight(kbHeight);
+        // Calculate how much to move up - just enough to clear the keyboard
+        // The sheet is ~350px tall, so we only need to move part of it
+        // Move up by keyboard height minus some buffer to keep it just above keyboard
+        const moveAmount = Platform.OS === "android" 
+          ? Math.min(kbHeight * 0.6, kbHeight - 50)  // Android: move 60% of keyboard height
+          : kbHeight;  // iOS handles this better
         RNAnimated.timing(translateY, {
-          toValue: -height,
+          toValue: -moveAmount,
           duration: Platform.OS === "ios" ? 250 : 150,
           useNativeDriver: true,
         }).start();
