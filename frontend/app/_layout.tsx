@@ -1,16 +1,15 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { View, Platform, StyleSheet, Text, ActivityIndicator } from "react-native";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { AuthProvider } from "../src/contexts/AuthContext";
 
-// Prevent splash screen from auto-hiding until fonts are loaded
+// Prevent splash screen from auto-hiding until app is ready
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Ignore errors if splash screen is already hidden
 });
@@ -137,35 +136,36 @@ function LoadingScreen() {
 }
 
 export default function RootLayout() {
-  // CRITICAL: Preload Ionicons font before rendering any UI
-  // This prevents the "white circles" issue on Android
-  const [fontsLoaded, fontError] = useFonts({
-    // Load Ionicons directly from the @expo/vector-icons package
-    // This is the correct path that works in Expo Go on both iOS and Android
-    ...Ionicons.font,
-  });
+  const [appIsReady, setAppIsReady] = useState(false);
 
-  // Hide splash screen once fonts are loaded
+  // Hide splash screen after a short delay to ensure icons are loaded
+  // @expo/vector-icons handles Ionicons font loading internally
+  useEffect(() => {
+    async function prepare() {
+      try {
+        // Give vector icons time to initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (e) {
+        console.warn('App initialization warning:', e);
+      } finally {
+        setAppIsReady(true);
+      }
+    }
+    prepare();
+  }, []);
+
   const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded || fontError) {
+    if (appIsReady) {
       await SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, fontError]);
+  }, [appIsReady]);
 
   useEffect(() => {
     onLayoutRootView();
   }, [onLayoutRootView]);
 
-  // Log font errors for debugging but don't block the app
-  useEffect(() => {
-    if (fontError) {
-      console.warn('Font loading error:', fontError.message);
-    }
-  }, [fontError]);
-
-  // IMPORTANT: Return null/loading while fonts are loading
-  // This ensures icons are ready before UI renders
-  if (!fontsLoaded && !fontError) {
+  // Show loading screen until app is ready
+  if (!appIsReady) {
     return <LoadingScreen />;
   }
 

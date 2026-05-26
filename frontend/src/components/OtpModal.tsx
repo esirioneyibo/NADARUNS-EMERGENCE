@@ -5,6 +5,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -28,6 +29,7 @@ interface Props {
 
 const OTP_LENGTH = 4;
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const ANDROID_KEYBOARD_OFFSET = 100; // Extra offset for Android keyboards
 
 export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmit, error }: Props) {
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
@@ -104,18 +106,24 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={styles.modalContainer}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.modalContainer}
+        keyboardVerticalOffset={Platform.OS === "android" ? -ANDROID_KEYBOARD_OFFSET : 0}
+      >
         {/* Backdrop - dismisses on press */}
         <Pressable style={styles.backdrop} onPress={handleBackdropPress} testID="otp-backdrop">
           <Animated.View entering={FadeIn.duration(180)} style={StyleSheet.absoluteFill} />
         </Pressable>
         
-        {/* Content positioned from bottom, moves up with keyboard */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.keyboardAvoid}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        {/* ScrollView ensures content is scrollable when keyboard is open */}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+          showsVerticalScrollIndicator={false}
         >
+          <View style={styles.spacer} />
           <Animated.View
             entering={SlideInDown.springify().damping(16)}
             style={[styles.sheet, shadows.lg]}
@@ -183,8 +191,8 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
               </TouchableOpacity>
             </Pressable>
           </Animated.View>
-        </KeyboardAvoidingView>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -192,14 +200,17 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
-    justifyContent: "flex-end",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.5)",
   },
-  keyboardAvoid: {
-    width: "100%",
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "flex-end",
+  },
+  spacer: {
+    flex: 1,
   },
   sheet: {
     backgroundColor: theme.surface,
