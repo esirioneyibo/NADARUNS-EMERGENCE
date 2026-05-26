@@ -43,15 +43,14 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
       (e) => {
         const kbHeight = e.endCoordinates.height;
         setKeyboardHeight(kbHeight);
-        // Calculate how much to move up - just enough to clear the keyboard
-        // The sheet is ~350px tall, so we only need to move part of it
-        // Move up by keyboard height minus some buffer to keep it just above keyboard
+        // On Android, only move up enough to keep OTP inputs visible
+        // The sheet is at the bottom, so we just need a small lift
         const moveAmount = Platform.OS === "android" 
-          ? Math.min(kbHeight * 0.6, kbHeight - 50)  // Android: move 60% of keyboard height
-          : kbHeight;  // iOS handles this better
+          ? Math.min(kbHeight * 0.35, 120)  // Android: max 120px or 35% of keyboard
+          : kbHeight;  // iOS handles this better natively
         RNAnimated.timing(translateY, {
           toValue: -moveAmount,
-          duration: Platform.OS === "ios" ? 250 : 150,
+          duration: Platform.OS === "ios" ? 250 : 100,
           useNativeDriver: true,
         }).start();
       }
@@ -60,10 +59,9 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
       () => {
         setKeyboardHeight(0);
-        // Animate sheet back down when keyboard hides
         RNAnimated.timing(translateY, {
           toValue: 0,
-          duration: Platform.OS === "ios" ? 250 : 150,
+          duration: Platform.OS === "ios" ? 250 : 100,
           useNativeDriver: true,
         }).start();
       }
