@@ -51,8 +51,18 @@ function TabsNavigator() {
           },
         }}
       >
+        {/* Welcome/Role Selection Screen - No tab bar */}
         <Tabs.Screen
           name="index"
+          options={{
+            href: null,
+            tabBarStyle: { display: "none" },
+          }}
+        />
+        
+        {/* Driver App Screens */}
+        <Tabs.Screen
+          name="driver-home"
           options={{
             title: "Home",
             tabBarIcon: ({ color, size }) => (
