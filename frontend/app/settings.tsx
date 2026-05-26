@@ -19,18 +19,48 @@ import * as Haptics from "expo-haptics";
 
 import { api } from "../src/api";
 import { useAuth } from "../src/contexts/AuthContext";
-import type { Driver, NotificationPrefs } from "../src/types";
+import { Driver, NotificationPrefs } from "../src/types";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme, ThemeMode } from "../src/contexts/ThemeContext";
 
-const VEHICLE_OPTIONS: Array<{ id: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { id: "bicycle", label: "Bicycle", icon: "bicycle-outline" },
-  { id: "scooter", label: "Scooter", icon: "rocket-outline" },
-  { id: "motorbike", label: "Motorbike", icon: "speedometer-outline" },
-  { id: "car", label: "Car", icon: "car-outline" },
+const VEHICLE_CATEGORIES = [
+  {
+    category: "Medium Vehicles",
+    vehicles: [
+      { id: "cargo_van", label: "Cargo Van", icon: "car-outline", capacity: 1500 },
+      { id: "box_truck", label: "Box Truck", icon: "bus-outline", capacity: 5000 },
+      { id: "flatbed_truck", label: "Flatbed Truck", icon: "train-outline", capacity: 8000 },
+    ],
+  },
+  {
+    category: "Heavy Vehicles",
+    vehicles: [
+      { id: "semi_truck", label: "Semi-Truck", icon: "bus-outline", capacity: 20000 },
+      { id: "trailer_truck", label: "Trailer Truck", icon: "train-outline", capacity: 25000 },
+      { id: "container_truck", label: "Container Truck", icon: "cube-outline", capacity: 30000 },
+      { id: "tanker", label: "Tanker", icon: "water-outline", capacity: 35000 },
+    ],
+  },
+  {
+    category: "Specialized",
+    vehicles: [
+      { id: "refrigerated", label: "Refrigerated", icon: "snow-outline", capacity: 15000 },
+      { id: "crane_truck", label: "Crane Truck", icon: "construct-outline", capacity: 12000 },
+      { id: "hazmat", label: "Hazmat Vehicle", icon: "warning-outline", capacity: 18000 },
+    ],
+  },
+  {
+    category: "Other",
+    vehicles: [
+      { id: "other", label: "Other", icon: "ellipsis-horizontal-outline", capacity: 10000 },
+    ],
+  },
 ];
 
-const THEME_OPTIONS: Array<{ id: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+// Flatten for easy lookup
+const ALL_VEHICLES = VEHICLE_CATEGORIES.flatMap(cat => cat.vehicles);
+
+const THEME_OPTIONS = [
   { id: "light", label: "Light", icon: "sunny-outline" },
   { id: "dark", label: "Dark", icon: "moon-outline" },
   { id: "system", label: "System", icon: "phone-portrait-outline" },
@@ -41,16 +71,17 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme, mode, setMode, isDark } = useTheme();
   const { logout } = useAuth();
-  const [driver, setDriver] = useState<Driver | null>(null);
+  const [driver, setDriver] = useState(null);
   const [name, setName] = useState("");
   const [plate, setPlate] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [vehicleType, setVehicleType] = useState("bicycle");
-  const [notifications, setNotifications] = useState<NotificationPrefs>({
+  const [vehicleType, setVehicleType] = useState("cargo_van");
+  const [vehicleCapacity, setVehicleCapacity] = useState(1500);
+  const [notifications, setNotifications] = useState({
     push: true, sound: true, new_orders: true, earnings_summary: true,
   });
-  const [savingField, setSavingField] = useState<string | null>(null);
+  const [savingField, setSavingField] = useState(null);
 
   const handleSignOut = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
@@ -82,13 +113,14 @@ export default function SettingsScreen() {
     setPlate(d.plate);
     setEmail(d.email);
     setPhone(d.phone);
-    setVehicleType(d.vehicle_type || "bicycle");
+    setVehicleType(d.vehicle_type || "cargo_van");
+    setVehicleCapacity(d.vehicle_capacity_kg || 1500);
     setNotifications(d.notifications);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const saveField = async (patch: Partial<Driver> & { notifications?: NotificationPrefs }, marker: string) => {
+  const saveField = async (patch, marker) => {
     setSavingField(marker);
     try {
       const updated = await api.updateDriver(patch);
@@ -98,21 +130,28 @@ export default function SettingsScreen() {
     }
   };
 
-  const toggleNotification = (key: keyof NotificationPrefs) => {
+  const toggleNotification = (key) => {
     Haptics.selectionAsync().catch(() => {});
     const next = { ...notifications, [key]: !notifications[key] };
     setNotifications(next);
     saveField({ notifications: next }, `notif-${key}`);
   };
 
-  const selectVehicle = (id: string) => {
-    const label = VEHICLE_OPTIONS.find((v) => v.id === id)?.label || "Bicycle";
+  const selectVehicle = (id) => {
+    const vehicle = ALL_VEHICLES.find((v) => v.id === id);
+    const label = vehicle?.label || "Cargo Van";
+    const capacity = vehicle?.capacity || 1500;
     setVehicleType(id);
-    saveField({ vehicle_type: id, vehicle: `${label} • ${plate || "—"}` }, "vehicle");
+    setVehicleCapacity(capacity);
+    saveField({ 
+      vehicle_type: id, 
+      vehicle_capacity_kg: capacity,
+      vehicle: `${label} • ${plate || "—"}` 
+    }, "vehicle");
     Haptics.selectionAsync().catch(() => {});
   };
 
-  const selectTheme = (newMode: ThemeMode) => {
+  const selectTheme = (newMode) => {
     setMode(newMode);
     Haptics.selectionAsync().catch(() => {});
   };
@@ -228,22 +267,58 @@ export default function SettingsScreen() {
         {/* Vehicle */}
         <SectionTitle title="Vehicle" theme={theme} />
         <Animated.View entering={FadeInUp.delay(200)} style={[styles.card, shadows.sm]}>
-          <View style={styles.vehicleGrid}>
-            {VEHICLE_OPTIONS.map((v) => {
-              const selected = v.id === vehicleType;
-              return (
-                <TouchableOpacity
-                  key={v.id}
-                  style={[styles.vehicleTile, selected && { backgroundColor: theme.primary, borderColor: theme.primary }]}
-                  onPress={() => selectVehicle(v.id)}
-                  testID={`vehicle-${v.id}`}
-                >
-                  <Ionicons name={v.icon} size={22} color={selected ? "#fff" : theme.textPrimary} />
-                  <Text style={[styles.vehicleLabel, selected && { color: "#fff" }]}>{v.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
+          {/* Current Vehicle Info */}
+          <View style={styles.currentVehicleInfo}>
+            <View style={styles.vehicleIconWrap}>
+              <Ionicons 
+                name={ALL_VEHICLES.find(v => v.id === vehicleType)?.icon || "bus-outline"} 
+                size={24} 
+                color={theme.primary} 
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.currentVehicleLabel}>
+                {ALL_VEHICLES.find(v => v.id === vehicleType)?.label || "Select Vehicle"}
+              </Text>
+              <Text style={styles.currentVehicleCapacity}>
+                Capacity: {vehicleCapacity.toLocaleString()} kg
+              </Text>
+            </View>
+            {savingField === "vehicle" && <ActivityIndicator size="small" color={theme.primary} />}
           </View>
+          
+          <Divider theme={theme} />
+          
+          {/* Vehicle Selection by Category */}
+          <ScrollView 
+            horizontal={false} 
+            nestedScrollEnabled 
+            style={{ maxHeight: 200 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {VEHICLE_CATEGORIES.map((category) => (
+              <View key={category.category} style={styles.vehicleCategory}>
+                <Text style={styles.vehicleCategoryTitle}>{category.category}</Text>
+                <View style={styles.vehicleGrid}>
+                  {category.vehicles.map((v) => {
+                    const selected = v.id === vehicleType;
+                    return (
+                      <TouchableOpacity
+                        key={v.id}
+                        style={[styles.vehicleTile, selected && { backgroundColor: theme.primary, borderColor: theme.primary }]}
+                        onPress={() => selectVehicle(v.id)}
+                        testID={`vehicle-${v.id}`}
+                      >
+                        <Ionicons name={v.icon} size={18} color={selected ? "#fff" : theme.textPrimary} />
+                        <Text style={[styles.vehicleLabel, selected && { color: "#fff" }]} numberOfLines={1}>{v.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+          
           <Divider theme={theme} />
           <InputRow
             icon="card-outline"
@@ -251,7 +326,7 @@ export default function SettingsScreen() {
             value={plate}
             onChangeText={setPlate}
             onBlur={() => {
-              const label = VEHICLE_OPTIONS.find((v) => v.id === vehicleType)?.label || "Bicycle";
+              const label = ALL_VEHICLES.find((v) => v.id === vehicleType)?.label || "Cargo Van";
               saveField({ plate, vehicle: `${label} • ${plate || "—"}` }, "plate");
             }}
             saving={savingField === "plate"}
@@ -343,26 +418,15 @@ export default function SettingsScreen() {
   );
 }
 
-function SectionTitle({ title, theme }: { title: string; theme: any }) {
+function SectionTitle({ title, theme }) {
   return <Text style={{ fontSize: 11, fontWeight: "800", color: theme.textSecondary, letterSpacing: 1.2, marginTop: spacing.xxl, marginBottom: spacing.md, paddingHorizontal: 4 }}>{title.toUpperCase()}</Text>;
 }
 
-function Divider({ theme }: { theme: any }) {
+function Divider({ theme }) {
   return <View style={{ height: 1, backgroundColor: theme.border, marginLeft: 32 }} />;
 }
 
-function InputRow(props: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  onBlur?: () => void;
-  saving?: boolean;
-  keyboardType?: "default" | "email-address" | "phone-pad";
-  autoCapitalize?: "none" | "sentences" | "words" | "characters";
-  testID?: string;
-  theme: any;
-}) {
+function InputRow(props) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.md }}>
       <Ionicons name={props.icon} size={20} color={props.theme.textSecondary} />
@@ -384,14 +448,7 @@ function InputRow(props: {
   );
 }
 
-function ToggleRow(props: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: boolean;
-  onToggle: () => void;
-  testID?: string;
-  theme: any;
-}) {
+function ToggleRow(props) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.md }}>
       <Ionicons name={props.icon} size={20} color={props.theme.textSecondary} />
@@ -409,15 +466,7 @@ function ToggleRow(props: {
   );
 }
 
-function LinkRow(props: { 
-  icon: keyof typeof Ionicons.glyphMap; 
-  label: string; 
-  badge?: string; 
-  badgeColor?: string;
-  testID?: string; 
-  onPress?: () => void;
-  theme: any;
-}) {
+function LinkRow(props) {
   return (
     <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.md }} testID={props.testID} onPress={props.onPress}>
       <Ionicons name={props.icon} size={20} color={props.theme.textSecondary} />
@@ -434,7 +483,7 @@ function LinkRow(props: {
   );
 }
 
-const createStyles = (theme: any) => StyleSheet.create({
+const createStyles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.background },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
@@ -450,9 +499,16 @@ const createStyles = (theme: any) => StyleSheet.create({
   themeGrid: { flexDirection: "row", gap: 8, paddingVertical: spacing.md },
   themeTile: { flex: 1, paddingVertical: 14, borderRadius: radius.lg, backgroundColor: theme.surfaceMuted, alignItems: "center", gap: 6, borderWidth: 1.5, borderColor: "transparent" },
   themeLabel: { fontSize: 12, color: theme.textPrimary, fontWeight: "600" },
-  vehicleGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: spacing.md },
-  vehicleTile: { flexGrow: 1, flexBasis: "47%", paddingVertical: 14, paddingHorizontal: 10, borderRadius: radius.lg, backgroundColor: theme.surfaceMuted, alignItems: "center", flexDirection: "row", gap: 10, borderWidth: 1.5, borderColor: "transparent" },
-  vehicleLabel: { fontSize: 14, color: theme.textPrimary, fontWeight: "600" },
+  // Vehicle styles
+  currentVehicleInfo: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.md, gap: 12 },
+  vehicleIconWrap: { width: 48, height: 48, borderRadius: 12, backgroundColor: theme.primaryLight, alignItems: "center", justifyContent: "center" },
+  currentVehicleLabel: { fontSize: 16, fontWeight: "700", color: theme.textPrimary },
+  currentVehicleCapacity: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
+  vehicleCategory: { marginBottom: spacing.sm },
+  vehicleCategoryTitle: { fontSize: 11, fontWeight: "700", color: theme.textSecondary, marginBottom: spacing.xs, textTransform: "uppercase", letterSpacing: 0.5 },
+  vehicleGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  vehicleTile: { flexGrow: 1, flexBasis: "30%", paddingVertical: 10, paddingHorizontal: 8, borderRadius: radius.md, backgroundColor: theme.surfaceMuted, alignItems: "center", flexDirection: "row", gap: 6, borderWidth: 1.5, borderColor: "transparent" },
+  vehicleLabel: { fontSize: 11, color: theme.textPrimary, fontWeight: "600", flexShrink: 1 },
   signOutBtn: { marginTop: spacing.xxl, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: theme.surface, paddingVertical: 16, borderRadius: radius.lg, gap: 8 },
   signOutText: { color: theme.error, fontWeight: "700", fontSize: 16 },
   versionText: { textAlign: "center", color: theme.textSecondary, fontSize: 12, marginTop: spacing.xl },

@@ -199,9 +199,11 @@ class Order(BaseModel):
 # ===================== Logistics Vehicle Types =====================
 
 VEHICLE_TYPES = {
-    "sprinter_van": {
-        "id": "sprinter_van",
-        "name": "Sprinter Van",
+    # Medium Vehicles
+    "cargo_van": {
+        "id": "cargo_van",
+        "name": "Cargo Van",
+        "category": "Medium Vehicles",
         "icon": "🚐",
         "max_weight_kg": 1500,
         "description": "Small cargo, quick deliveries",
@@ -210,50 +212,95 @@ VEHICLE_TYPES = {
     "box_truck": {
         "id": "box_truck",
         "name": "Box Truck",
+        "category": "Medium Vehicles",
         "icon": "📦",
         "max_weight_kg": 5000,
         "description": "Medium cargo, palletized goods",
         "base_rate_per_km": 1.80,
     },
-    "flatbed": {
-        "id": "flatbed",
+    "flatbed_truck": {
+        "id": "flatbed_truck",
         "name": "Flatbed Truck",
+        "category": "Medium Vehicles",
         "icon": "🚚",
-        "max_weight_kg": 15000,
-        "description": "Heavy equipment, construction materials",
+        "max_weight_kg": 8000,
+        "description": "Open cargo bed",
+        "base_rate_per_km": 2.00,
+    },
+    # Heavy Vehicles
+    "semi_truck": {
+        "id": "semi_truck",
+        "name": "Semi-Truck",
+        "category": "Heavy Vehicles",
+        "icon": "🚛",
+        "max_weight_kg": 20000,
+        "description": "Long haul freight",
         "base_rate_per_km": 2.50,
     },
-    "refrigerated": {
-        "id": "refrigerated",
-        "name": "Refrigerated Truck",
-        "icon": "❄️",
-        "max_weight_kg": 10000,
-        "description": "Temperature controlled, perishables",
+    "trailer_truck": {
+        "id": "trailer_truck",
+        "name": "Trailer Truck",
+        "category": "Heavy Vehicles",
+        "icon": "🚜",
+        "max_weight_kg": 25000,
+        "description": "Large cargo transport",
+        "base_rate_per_km": 2.80,
+    },
+    "container_truck": {
+        "id": "container_truck",
+        "name": "Container Truck",
+        "category": "Heavy Vehicles",
+        "icon": "📦",
+        "max_weight_kg": 30000,
+        "description": "Container shipping",
         "base_rate_per_km": 3.00,
     },
     "tanker": {
         "id": "tanker",
         "name": "Tanker",
+        "category": "Heavy Vehicles",
         "icon": "🛢️",
-        "max_weight_kg": 20000,
+        "max_weight_kg": 35000,
         "description": "Liquid cargo, chemicals",
         "base_rate_per_km": 3.50,
     },
-    "container": {
-        "id": "container",
-        "name": "Container Truck",
-        "icon": "📦",
-        "max_weight_kg": 20000,
-        "description": "20ft/40ft containers",
+    # Specialized Vehicles
+    "refrigerated": {
+        "id": "refrigerated",
+        "name": "Refrigerated Vehicle",
+        "category": "Specialized",
+        "icon": "❄️",
+        "max_weight_kg": 15000,
+        "description": "Temperature controlled",
         "base_rate_per_km": 3.20,
     },
-    "semi_trailer": {
-        "id": "semi_trailer",
-        "name": "Semi-Trailer",
-        "icon": "🚜",
-        "max_weight_kg": 25000,
-        "description": "Heavy freight, long haul",
-        "base_rate_per_km": 2.80,
+    "crane_truck": {
+        "id": "crane_truck",
+        "name": "Crane Truck",
+        "category": "Specialized",
+        "icon": "🏗️",
+        "max_weight_kg": 12000,
+        "description": "Heavy lifting",
+        "base_rate_per_km": 4.00,
+    },
+    "hazmat": {
+        "id": "hazmat",
+        "name": "Hazardous Goods Vehicle",
+        "category": "Specialized",
+        "icon": "⚠️",
+        "max_weight_kg": 18000,
+        "description": "Dangerous goods transport",
+        "base_rate_per_km": 4.50,
+    },
+    # Other
+    "other": {
+        "id": "other",
+        "name": "Other",
+        "category": "Other",
+        "icon": "🚚",
+        "max_weight_kg": 10000,
+        "description": "Custom vehicle type",
+        "base_rate_per_km": 2.00,
     },
 }
 
@@ -274,6 +321,7 @@ class Shipper(BaseModel):
     tax_id: Optional[str] = None
     address: Optional[str] = None
     avatar: Optional[str] = None
+    preferred_vehicle_type: Optional[str] = None  # Preferred vehicle type for shipments
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     is_verified: bool = False
     total_shipments: int = 0
@@ -373,7 +421,8 @@ class Driver(BaseModel):
     rating: float
     avatar: str
     vehicle: str
-    vehicle_type: str = "bicycle"  # bicycle | scooter | car | motorbike
+    vehicle_type: str = "cargo_van"  # Logistics vehicle type ID
+    vehicle_capacity_kg: int = 1500  # Vehicle capacity in kg
     plate: str = ""
     email: str = ""
     phone: str = ""
@@ -389,6 +438,7 @@ class DriverUpdate(BaseModel):
     name: Optional[str] = None
     vehicle: Optional[str] = None
     vehicle_type: Optional[str] = None
+    vehicle_capacity_kg: Optional[int] = None
     plate: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -496,8 +546,9 @@ SEED_DRIVER = {
     "name": "Eero Virtanen",
     "rating": 4.92,
     "avatar": "https://images.unsplash.com/photo-1551825687-f9de1603ed8b?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
-    "vehicle": "Bicycle • Black",
-    "vehicle_type": "bicycle",
+    "vehicle": "Cargo Van • HKI-2841",
+    "vehicle_type": "cargo_van",
+    "vehicle_capacity_kg": 1500,
     "plate": "HKI-2841",
     "email": "eero.virtanen@driver.app",
     "phone": "+358 41 911 4422",
@@ -1182,6 +1233,49 @@ async def get_shipper_profile(credentials: HTTPAuthorizationCredentials = Depend
     shipper = await db.shippers.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not shipper:
         raise HTTPException(404, "Shipper not found")
+    
+    return shipper
+
+
+class ShipperUpdate(BaseModel):
+    company_name: Optional[str] = None
+    contact_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    tax_id: Optional[str] = None
+    preferred_vehicle_type: Optional[str] = None
+
+
+@api_router.patch("/shipper/me")
+async def update_shipper_profile(
+    update: ShipperUpdate,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Update shipper profile."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "shipper":
+        raise HTTPException(403, "Shipper access required")
+    
+    shipper_id = payload["sub"]
+    
+    # Build update payload (only include non-None fields)
+    update_data = {k: v for k, v in update.model_dump(exclude_unset=True).items() if v is not None}
+    
+    # Validate vehicle type if provided
+    if update_data.get("preferred_vehicle_type") and update_data["preferred_vehicle_type"] not in VEHICLE_TYPES:
+        raise HTTPException(400, f"Invalid vehicle type: {update_data['preferred_vehicle_type']}")
+    
+    if update_data:
+        await db.shippers.update_one({"id": shipper_id}, {"$set": update_data})
+    
+    shipper = await db.shippers.find_one({"id": shipper_id}, {"_id": 0, "password_hash": 0})
+    if not shipper:
+        raise HTTPException(404, "Shipper not found")
+    
+    logger.info(f"Updated shipper profile: {shipper_id}")
     
     return shipper
 

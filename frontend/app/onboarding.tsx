@@ -367,17 +367,9 @@ export default function OnboardingScreen() {
             </View>
           </Animated.View>
         );
-                        {city}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </Animated.View>
-        );
 
       case 4:
+        const selectedVehicle = ALL_VEHICLES.find(v => v.id === formData.vehicleType);
         return (
           <Animated.View entering={FadeInRight.duration(300)} key="step4" style={styles.stepContent}>
             <View style={styles.stepHeader}>
@@ -415,15 +407,28 @@ export default function OnboardingScreen() {
               
               <View style={styles.summaryRow}>
                 <Ionicons 
-                  name={VEHICLE_OPTIONS.find(v => v.id === formData.vehicleType)?.icon || "bicycle-outline"} 
+                  name={selectedVehicle?.icon || "bus-outline"} 
                   size={20} 
                   color={theme.textSecondary} 
                 />
                 <Text style={styles.summaryLabel}>Vehicle</Text>
                 <Text style={styles.summaryValue}>
-                  {VEHICLE_OPTIONS.find(v => v.id === formData.vehicleType)?.label || "—"}
+                  {selectedVehicle?.label || "—"}
                 </Text>
               </View>
+              
+              {formData.vehicleCapacity && (
+                <>
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryRow}>
+                    <Ionicons name="cube" size={20} color={theme.textSecondary} />
+                    <Text style={styles.summaryLabel}>Capacity</Text>
+                    <Text style={styles.summaryValue}>
+                      {parseInt(formData.vehicleCapacity).toLocaleString()} kg
+                    </Text>
+                  </View>
+                </>
+              )}
               
               <View style={styles.summaryDivider} />
               

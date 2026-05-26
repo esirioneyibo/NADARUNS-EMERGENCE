@@ -49,6 +49,7 @@ interface ShipperProfile {
   email: string;
   total_shipments: number;
   avatar: string;
+  preferred_vehicle_type?: string;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
@@ -64,13 +65,17 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
 };
 
 const VEHICLE_ICONS: Record<string, string> = {
-  sprinter_van: "🚐",
+  cargo_van: "🚐",
   box_truck: "📦",
-  flatbed: "🚚",
-  refrigerated: "❄️",
+  flatbed_truck: "🚚",
+  semi_truck: "🚛",
+  trailer_truck: "🚜",
+  container_truck: "📦",
   tanker: "🛢️",
-  container: "📦",
-  semi_trailer: "🚜",
+  refrigerated: "❄️",
+  crane_truck: "🏗️",
+  hazmat: "⚠️",
+  other: "🚚",
 };
 
 export default function ShipperHomeScreen() {
@@ -256,9 +261,17 @@ export default function ShipperHomeScreen() {
             <Text style={styles.companyName}>{profile?.company_name || "Business"}</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={22} color={theme.textSecondary} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity 
+            style={styles.logoutBtn} 
+            onPress={() => router.push("/shipper-settings")}
+          >
+            <Ionicons name="settings-outline" size={22} color={theme.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={22} color={theme.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
       <ScrollView

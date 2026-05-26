@@ -25,21 +25,43 @@ import { useTheme } from "../src/contexts/ThemeContext";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-interface VehicleType {
-  id: string;
-  name: string;
-  icon: string;
-  capacity: string;
-  base_price: number;
-}
-
-const VEHICLE_TYPES: VehicleType[] = [
-  { id: "bicycle", name: "Bicycle", icon: "bicycle", capacity: "Up to 5 kg", base_price: 5 },
-  { id: "motorcycle", name: "Motorcycle", icon: "bicycle", capacity: "Up to 20 kg", base_price: 8 },
-  { id: "car", name: "Car", icon: "car", capacity: "Up to 100 kg", base_price: 15 },
-  { id: "sprinter_van", name: "Sprinter Van", icon: "bus", capacity: "Up to 500 kg", base_price: 35 },
-  { id: "box_truck", name: "Box Truck", icon: "cube", capacity: "Up to 2000 kg", base_price: 75 },
+// Logistics Vehicle Types for Shippers
+const VEHICLE_CATEGORIES = [
+  {
+    category: "Medium Vehicles",
+    vehicles: [
+      { id: "cargo_van", name: "Cargo Van", icon: "car", capacity: "Up to 1,500 kg", maxWeight: 1500 },
+      { id: "box_truck", name: "Box Truck", icon: "bus", capacity: "Up to 5,000 kg", maxWeight: 5000 },
+      { id: "flatbed_truck", name: "Flatbed", icon: "train", capacity: "Up to 8,000 kg", maxWeight: 8000 },
+    ],
+  },
+  {
+    category: "Heavy Vehicles",
+    vehicles: [
+      { id: "semi_truck", name: "Semi-Truck", icon: "bus", capacity: "Up to 20,000 kg", maxWeight: 20000 },
+      { id: "trailer_truck", name: "Trailer Truck", icon: "train", capacity: "Up to 25,000 kg", maxWeight: 25000 },
+      { id: "container_truck", name: "Container", icon: "cube", capacity: "Up to 30,000 kg", maxWeight: 30000 },
+      { id: "tanker", name: "Tanker", icon: "water", capacity: "Up to 35,000 kg", maxWeight: 35000 },
+    ],
+  },
+  {
+    category: "Specialized",
+    vehicles: [
+      { id: "refrigerated", name: "Refrigerated", icon: "snow", capacity: "Up to 15,000 kg", maxWeight: 15000 },
+      { id: "crane_truck", name: "Crane Truck", icon: "construct", capacity: "Up to 12,000 kg", maxWeight: 12000 },
+      { id: "hazmat", name: "Hazmat", icon: "warning", capacity: "Up to 18,000 kg", maxWeight: 18000 },
+    ],
+  },
+  {
+    category: "Other",
+    vehicles: [
+      { id: "other", name: "Other", icon: "ellipsis-horizontal", capacity: "Custom", maxWeight: 10000 },
+    ],
+  },
 ];
+
+// Flatten for easy lookup
+const ALL_VEHICLES = VEHICLE_CATEGORIES.flatMap(cat => cat.vehicles);
 
 export default function ShipperCreateScreen() {
   const router = useRouter();
@@ -384,40 +406,51 @@ export default function ShipperCreateScreen() {
       <Text style={styles.stepDescription}>Tell us about what you're shipping</Text>
       
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Vehicle Type *</Text>
-        <View style={styles.vehicleGrid}>
-          {VEHICLE_TYPES.map((v) => (
-            <TouchableOpacity
-              key={v.id}
-              style={[
-                styles.vehicleCard,
-                vehicleType === v.id && styles.vehicleCardSelected,
-              ]}
-              onPress={() => {
-                setVehicleType(v.id);
-                Haptics.selectionAsync().catch(() => {});
-              }}
-            >
-              <Ionicons 
-                name={v.icon as any} 
-                size={24} 
-                color={vehicleType === v.id ? "#fff" : theme.textSecondary} 
-              />
-              <Text style={[
-                styles.vehicleName,
-                vehicleType === v.id && styles.vehicleNameSelected,
-              ]}>
-                {v.name}
-              </Text>
-              <Text style={[
-                styles.vehicleCapacity,
-                vehicleType === v.id && styles.vehicleCapacitySelected,
-              ]}>
-                {v.capacity}
-              </Text>
-            </TouchableOpacity>
+        <Text style={styles.inputLabel}>Required Vehicle Type *</Text>
+        <ScrollView 
+          style={{ maxHeight: 260 }} 
+          nestedScrollEnabled 
+          showsVerticalScrollIndicator={false}
+        >
+          {VEHICLE_CATEGORIES.map((category) => (
+            <View key={category.category} style={styles.vehicleCategory}>
+              <Text style={styles.vehicleCategoryTitle}>{category.category}</Text>
+              <View style={styles.vehicleGrid}>
+                {category.vehicles.map((v) => (
+                  <TouchableOpacity
+                    key={v.id}
+                    style={[
+                      styles.vehicleCard,
+                      vehicleType === v.id && styles.vehicleCardSelected,
+                    ]}
+                    onPress={() => {
+                      setVehicleType(v.id);
+                      Haptics.selectionAsync().catch(() => {});
+                    }}
+                  >
+                    <Ionicons 
+                      name={`${v.icon}-outline` as any} 
+                      size={22} 
+                      color={vehicleType === v.id ? "#fff" : theme.textSecondary} 
+                    />
+                    <Text style={[
+                      styles.vehicleName,
+                      vehicleType === v.id && styles.vehicleNameSelected,
+                    ]} numberOfLines={1}>
+                      {v.name}
+                    </Text>
+                    <Text style={[
+                      styles.vehicleCapacity,
+                      vehicleType === v.id && styles.vehicleCapacitySelected,
+                    ]}>
+                      {v.capacity}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           ))}
-        </View>
+        </ScrollView>
       </View>
       
       <View style={styles.inputGroup}>
@@ -1204,15 +1237,26 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.textSecondary,
   },
   
+  vehicleCategory: {
+    marginBottom: spacing.md,
+  },
+  vehicleCategoryTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: theme.textSecondary,
+    marginBottom: spacing.xs,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
   vehicleGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 8,
   },
   vehicleCard: {
     width: "31%",
-    padding: spacing.md,
-    borderRadius: radius.lg,
+    padding: spacing.sm,
+    borderRadius: radius.md,
     backgroundColor: theme.surface,
     borderWidth: 1.5,
     borderColor: theme.border,
