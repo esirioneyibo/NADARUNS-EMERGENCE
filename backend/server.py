@@ -1000,6 +1000,110 @@ async def get_me(user: dict = Depends(get_current_user)):
 
 # ===================== Shipper Registration & Auth =====================
 
+class SimpleDriverRegistration(BaseModel):
+    name: str
+    email: str
+    password: str
+    phone: Optional[str] = None
+
+
+class SimpleShipperRegistration(BaseModel):
+    business_name: str
+    email: str
+    password: str
+    phone: Optional[str] = None
+
+
+@api_router.post("/auth/driver-register")
+async def simple_driver_register(registration: SimpleDriverRegistration):
+    """Simple driver registration endpoint."""
+    # Check if email already exists
+    existing = await db.drivers.find_one({"email": registration.email})
+    if existing:
+        raise HTTPException(400, "A driver with this email already exists")
+    
+    driver_id = str(uuid.uuid4())
+    password_hash = hash_password(registration.password)
+    
+    new_driver = Driver(
+        id=driver_id,
+        name=registration.name,
+        rating=5.0,
+        avatar="https://api.dicebear.com/7.x/avataaars/png?seed=" + driver_id,
+        vehicle="Bicycle • —",
+        vehicle_type="bicycle",
+        plate="",
+        email=registration.email,
+        phone=registration.phone or "",
+        password_hash=password_hash,
+        is_online=False,
+        earnings_today=0.0,
+        deliveries_today=0,
+        acceptance_rate=100.0,
+    )
+    
+    await db.drivers.insert_one(new_driver.model_dump())
+    
+    # Initialize KYC status
+    kyc_status = {
+        "driver_id": driver_id,
+        "license_front": None,
+        "license_back": None,
+        "selfie": None,
+        "overall_status": "incomplete",
+        "submitted_at": None,
+        "reviewed_at": None,
+    }
+    await db.kyc_status.insert_one(kyc_status)
+    
+    token = create_token(driver_id, "driver")
+    
+    logger.info(f"Registered new driver: {registration.email} ({driver_id})")
+    
+    return {
+        "driver_id": driver_id,
+        "name": registration.name,
+        "message": "Registration successful! Please complete KYC verification.",
+        "token": token,
+        "kyc_required": True
+    }
+
+
+@api_router.post("/auth/shipper-register")
+async def simple_shipper_register(registration: SimpleShipperRegistration):
+    """Simple shipper/business registration endpoint."""
+    # Check if email already exists
+    existing = await db.shippers.find_one({"email": registration.email})
+    if existing:
+        raise HTTPException(400, "A business with this email already exists")
+    
+    shipper_id = str(uuid.uuid4())
+    password_hash = hash_password(registration.password)
+    
+    new_shipper = Shipper(
+        id=shipper_id,
+        company_name=registration.business_name,
+        contact_name=registration.business_name,
+        email=registration.email,
+        phone=registration.phone or "",
+        password_hash=password_hash,
+        avatar=f"https://api.dicebear.com/7.x/initials/png?seed={registration.business_name}",
+    )
+    
+    await db.shippers.insert_one(new_shipper.model_dump())
+    
+    token = create_token(shipper_id, "shipper")
+    
+    logger.info(f"Registered new shipper: {registration.email} ({shipper_id})")
+    
+    return {
+        "shipper_id": shipper_id,
+        "business_name": registration.business_name,
+        "token": token,
+        "message": "Business registration successful!"
+    }
+
+
 @api_router.post("/shipper/register")
 async def register_shipper(registration: ShipperRegistration):
     """Register a new shipper/business account."""
@@ -1765,6 +1869,69 @@ async def reject_kyc(driver_id: str, reason: str = "Documents not clear", user: 
     logger.info(f"Admin rejected KYC for driver {driver_id}: {reason}")
     
     return {"message": "KYC rejected"}
+
+
+@api_router.get("/admin/stats")
+async def get_admin_stats(user: dict = Depends(get_admin_user)):
+    """Get platform statistics for admin dashboard."""
+    total_drivers = await db.drivers.count_documents({})
+    active_drivers = await db.drivers.count_documents({"is_online": True})
+    total_shippers = await db.shippers.count_documents({})
+    total_orders = await db.orders.count_documents({})
+    pending_orders = await db.orders.count_documents({"status": "pending"})
+    completed_orders = await db.orders.count_documents({"status": "delivered"})
+    pending_kyc = await db.kyc_status.count_documents({"overall_status": "pending"})
+    
+    # Calculate total revenue from completed orders
+    pipeline = [
+        {"$match": {"status": "delivered"}},
+        {"$group": {"_id": None, "total": {"$sum": "$earnings"}}}
+    ]
+    revenue_result = await db.orders.aggregate(pipeline).to_list(1)
+    total_revenue = revenue_result[0]["total"] if revenue_result else 0
+    
+    return {
+        "total_drivers": total_drivers,
+        "active_drivers": active_drivers,
+        "total_shippers": total_shippers,
+        "total_orders": total_orders,
+        "pending_orders": pending_orders,
+        "completed_orders": completed_orders,
+        "total_revenue": total_revenue,
+        "pending_kyc": pending_kyc,
+    }
+
+
+@api_router.get("/admin/drivers")
+async def get_admin_drivers(user: dict = Depends(get_admin_user)):
+    """Get all drivers for admin dashboard."""
+    drivers = []
+    async for driver in db.drivers.find({}, {"_id": 0, "password_hash": 0}):
+        drivers.append({
+            "id": driver["id"],
+            "name": driver["name"],
+            "email": driver["email"],
+            "is_online": driver.get("is_online", False),
+            "rating": driver.get("rating", 5.0),
+            "deliveries_today": driver.get("deliveries_today", 0),
+        })
+    return drivers
+
+
+@api_router.get("/admin/shippers")
+async def get_admin_shippers(user: dict = Depends(get_admin_user)):
+    """Get all shippers for admin dashboard."""
+    shippers = []
+    async for shipper in db.shippers.find({}, {"_id": 0, "password_hash": 0}):
+        # Count orders for this shipper
+        order_count = await db.orders.count_documents({"shipper_id": shipper["id"]})
+        shippers.append({
+            "id": shipper["id"],
+            "company_name": shipper.get("company_name", "Unknown"),
+            "email": shipper["email"],
+            "total_orders": order_count,
+        })
+    return shippers
 
 
 # ===================== Admin Dashboard HTML =====================

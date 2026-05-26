@@ -51,11 +51,25 @@ export interface LoginResponse {
   is_admin: boolean;
 }
 
+export interface ShipperLoginResponse {
+  token: string;
+  shipper_id: string;
+  business_name: string;
+}
+
 export interface RegisterResponse {
   driver_id: string;
   message: string;
   token: string;
   kyc_required: boolean;
+  name: string;
+}
+
+export interface ShipperRegisterResponse {
+  shipper_id: string;
+  message: string;
+  token: string;
+  business_name: string;
 }
 
 export const api = {
@@ -72,9 +86,35 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   
+  shipperLogin: (email: string, password: string) =>
+    request<ShipperLoginResponse>("/auth/shipper-login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  
   getMe: () => request<{ id: string; type: string; email?: string; driver?: Driver }>("/auth/me"),
   
   // Registration
+  driverRegister: (data: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+  }) => request<RegisterResponse>("/auth/driver-register", {
+    method: "POST",
+    body: JSON.stringify(data),
+  }),
+  
+  shipperRegister: (data: {
+    business_name: string;
+    email: string;
+    password: string;
+    phone?: string;
+  }) => request<ShipperRegisterResponse>("/auth/shipper-register", {
+    method: "POST",
+    body: JSON.stringify(data),
+  }),
+  
   registerDriver: (data: {
     first_name: string;
     last_name: string;

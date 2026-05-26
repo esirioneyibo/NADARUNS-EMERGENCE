@@ -131,6 +131,13 @@ function TabsNavigator() {
           }}
         />
         <Tabs.Screen
+          name="admin"
+          options={{
+            href: null,
+            tabBarStyle: { display: "none" },
+          }}
+        />
+        <Tabs.Screen
           name="+html"
           options={{
             href: null,

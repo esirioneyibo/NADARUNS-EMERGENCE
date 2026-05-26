@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,11 +10,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeInUp, FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 import { api, setAuthToken } from "../src/api";
@@ -22,18 +23,68 @@ import { useAuth } from "../src/contexts/AuthContext";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 
+type UserRole = "driver" | "shipper" | "admin";
+
+interface RoleOption {
+  id: UserRole;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  description: string;
+  color: string;
+}
+
+const ROLE_OPTIONS: RoleOption[] = [
+  {
+    id: "driver",
+    label: "Driver",
+    icon: "bicycle",
+    description: "Deliver orders and earn money",
+    color: "#10B981",
+  },
+  {
+    id: "shipper",
+    label: "Business",
+    icon: "storefront",
+    description: "Ship your products",
+    color: "#6366F1",
+  },
+  {
+    id: "admin",
+    label: "Admin",
+    icon: "shield-checkmark",
+    description: "Manage the platform",
+    color: "#F59E0B",
+  },
+];
+
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   
+  const [selectedRole, setSelectedRole] = useState<UserRole>("driver");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isRegister, setIsRegister] = useState(false);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
 
   const styles = createStyles(theme);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace("/");
+    }
+  }, [isAuthenticated]);
+
+  const handleDemoMode = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    router.replace("/");
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -45,23 +96,41 @@ export default function LoginScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     
     try {
-      const response = await api.login(email.trim(), password);
+      let response;
       
-      // Set token for API calls
-      setAuthToken(response.token);
-      
-      // Save auth state
-      await login(response.token, {
-        id: response.driver_id,
-        name: response.name,
-        email: email.trim(),
-        type: "driver",
-      });
+      if (selectedRole === "admin") {
+        response = await api.adminLogin(email.trim(), password);
+        setAuthToken(response.token);
+        await login(response.token, {
+          id: "admin",
+          name: "Administrator",
+          email: email.trim(),
+          type: "admin",
+        });
+        router.replace("/admin");
+      } else if (selectedRole === "shipper") {
+        response = await api.shipperLogin(email.trim(), password);
+        setAuthToken(response.token);
+        await login(response.token, {
+          id: response.shipper_id,
+          name: response.business_name,
+          email: email.trim(),
+          type: "shipper",
+        });
+        router.replace("/shipper-home");
+      } else {
+        response = await api.login(email.trim(), password);
+        setAuthToken(response.token);
+        await login(response.token, {
+          id: response.driver_id,
+          name: response.name,
+          email: email.trim(),
+          type: "driver",
+        });
+        router.replace("/");
+      }
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      
-      // Navigate to home
-      router.replace("/");
     } catch (error: any) {
       const message = error?.message || "Login failed. Please check your credentials.";
       Alert.alert("Login Failed", message);
@@ -69,6 +138,67 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
+
+  const handleRegister = async () => {
+    if (!email.trim() || !password.trim() || !name.trim()) {
+      Alert.alert("Error", "Please fill in all required fields");
+      return;
+    }
+    
+    if (password.length < 6) {
+      Alert.alert("Error", "Password must be at least 6 characters");
+      return;
+    }
+    
+    setLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    
+    try {
+      let response;
+      
+      if (selectedRole === "shipper") {
+        response = await api.shipperRegister({
+          business_name: name.trim(),
+          email: email.trim(),
+          password: password,
+          phone: phone.trim(),
+        });
+        setAuthToken(response.token);
+        await login(response.token, {
+          id: response.shipper_id,
+          name: response.business_name,
+          email: email.trim(),
+          type: "shipper",
+        });
+        router.replace("/shipper-home");
+      } else {
+        response = await api.driverRegister({
+          name: name.trim(),
+          email: email.trim(),
+          password: password,
+          phone: phone.trim(),
+        });
+        setAuthToken(response.token);
+        await login(response.token, {
+          id: response.driver_id,
+          name: response.name,
+          email: email.trim(),
+          type: "driver",
+        });
+        router.replace("/onboarding");
+      }
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert("Welcome!", "Your account has been created successfully.");
+    } catch (error: any) {
+      const message = error?.message || "Registration failed. Please try again.";
+      Alert.alert("Registration Failed", message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectedRoleData = ROLE_OPTIONS.find(r => r.id === selectedRole)!;
 
   return (
     <KeyboardAvoidingView 
@@ -84,33 +214,103 @@ export default function LoginScreen() {
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
           <View style={styles.logoContainer}>
-            <View style={styles.logoIcon}>
+            <View style={[styles.logoIcon, { backgroundColor: selectedRoleData.color }]}>
               <Ionicons name="flash" size={32} color="#fff" />
             </View>
           </View>
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>Sign in to continue delivering with NadaRuns</Text>
+          <Text style={styles.title}>NadaRuns</Text>
+          <Text style={styles.subtitle}>
+            {isRegister ? "Create your account" : "Sign in to continue"}
+          </Text>
+        </Animated.View>
+
+        {/* Role Selector */}
+        <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.roleSection}>
+          <Text style={styles.roleSectionTitle}>I am a...</Text>
+          <View style={styles.roleGrid}>
+            {ROLE_OPTIONS.filter(r => isRegister ? r.id !== "admin" : true).map((role) => {
+              const isSelected = selectedRole === role.id;
+              return (
+                <TouchableOpacity
+                  key={role.id}
+                  style={[
+                    styles.roleCard,
+                    isSelected && { borderColor: role.color, backgroundColor: `${role.color}10` },
+                  ]}
+                  onPress={() => {
+                    setSelectedRole(role.id);
+                    Haptics.selectionAsync().catch(() => {});
+                  }}
+                  testID={`role-${role.id}`}
+                >
+                  <View style={[styles.roleIconWrap, { backgroundColor: isSelected ? role.color : theme.surfaceMuted }]}>
+                    <Ionicons name={role.icon} size={24} color={isSelected ? "#fff" : theme.textSecondary} />
+                  </View>
+                  <Text style={[styles.roleLabel, isSelected && { color: role.color }]}>{role.label}</Text>
+                  <Text style={styles.roleDesc}>{role.description}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </Animated.View>
 
         {/* Form */}
         <Animated.View entering={FadeInUp.delay(200).duration(400)} style={styles.form}>
+          {isRegister && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                {selectedRole === "shipper" ? "Business Name" : "Full Name"}
+              </Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={20} color={theme.textSecondary} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={selectedRole === "shipper" ? "Your business name" : "Your full name"}
+                  placeholderTextColor={theme.textSecondary}
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                  testID="name-input"
+                />
+              </View>
+            </View>
+          )}
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Email</Text>
             <View style={styles.inputContainer}>
               <Ionicons name="mail-outline" size={20} color={theme.textSecondary} />
               <TextInput
                 style={styles.input}
+                placeholder="your@email.com"
+                placeholderTextColor={theme.textSecondary}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={theme.textSecondary}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-                testID="login-email-input"
+                testID="email-input"
               />
             </View>
           </View>
+
+          {isRegister && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Phone (optional)</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="call-outline" size={20} color={theme.textSecondary} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="+358 40 123 4567"
+                  placeholderTextColor={theme.textSecondary}
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  testID="phone-input"
+                />
+              </View>
+            </View>
+          )}
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Password</Text>
@@ -118,13 +318,12 @@ export default function LoginScreen() {
               <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} />
               <TextInput
                 style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor={theme.textSecondary}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor={theme.textSecondary}
                 secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                testID="login-password-input"
+                testID="password-input"
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons 
@@ -136,40 +335,68 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.forgotBtn}>
-            <Text style={styles.forgotText}>Forgot password?</Text>
-          </TouchableOpacity>
+          {!isRegister && (
+            <TouchableOpacity style={styles.forgotBtn} testID="forgot-password">
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
-            style={[styles.loginBtn, loading && { opacity: 0.7 }]}
-            onPress={handleLogin}
+            style={[styles.submitBtn, { backgroundColor: selectedRoleData.color }, loading && styles.submitBtnDisabled]}
+            onPress={isRegister ? handleRegister : handleLogin}
             disabled={loading}
-            testID="login-submit-button"
+            testID="submit-button"
           >
             {loading ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <>
-                <Text style={styles.loginBtnText}>Sign In</Text>
+                <Text style={styles.submitBtnText}>
+                  {isRegister ? "Create Account" : "Sign In"}
+                </Text>
                 <Ionicons name="arrow-forward" size={20} color="#fff" />
               </>
             )}
           </TouchableOpacity>
-        </Animated.View>
 
-        {/* Footer */}
-        <Animated.View entering={FadeInUp.delay(400).duration(400)} style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account?</Text>
-          <TouchableOpacity onPress={() => router.push("/onboarding")} testID="signup-link">
-            <Text style={styles.signupLink}>Sign up</Text>
+          <TouchableOpacity
+            style={styles.switchModeBtn}
+            onPress={() => {
+              setIsRegister(!isRegister);
+              setName("");
+              setPhone("");
+              if (selectedRole === "admin") setSelectedRole("driver");
+              Haptics.selectionAsync().catch(() => {});
+            }}
+            testID="switch-mode"
+          >
+            <Text style={styles.switchModeText}>
+              {isRegister ? "Already have an account? " : "Don't have an account? "}
+              <Text style={[styles.switchModeHighlight, { color: selectedRoleData.color }]}>
+                {isRegister ? "Sign In" : "Register"}
+              </Text>
+            </Text>
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Demo hint */}
-        <Animated.View entering={FadeInUp.delay(500).duration(400)} style={styles.demoHint}>
-          <Ionicons name="information-circle-outline" size={16} color={theme.textSecondary} />
-          <Text style={styles.demoText}>
-            Demo: Register a new account to test authentication
+        {/* Demo Mode */}
+        <Animated.View entering={FadeIn.delay(400).duration(400)} style={styles.demoSection}>
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.demoBtn}
+            onPress={handleDemoMode}
+            testID="demo-mode-button"
+          >
+            <Ionicons name="play-circle-outline" size={22} color={theme.primary} />
+            <Text style={styles.demoBtnText}>Continue in Demo Mode</Text>
+          </TouchableOpacity>
+          <Text style={styles.demoNote}>
+            Try the app without signing in. Your data won't be saved.
           </Text>
         </Animated.View>
       </ScrollView>
@@ -179,18 +406,10 @@ export default function LoginScreen() {
 
 const createStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  content: { 
-    flexGrow: 1, 
-    paddingHorizontal: spacing.xl,
-    justifyContent: "center",
-  },
-  header: {
-    alignItems: "center",
-    marginBottom: spacing.xxl,
-  },
-  logoContainer: {
-    marginBottom: spacing.xl,
-  },
+  content: { padding: spacing.xl },
+  
+  header: { alignItems: "center", marginBottom: spacing.xl },
+  logoContainer: { marginBottom: spacing.lg },
   logoIcon: {
     width: 72,
     height: 72,
@@ -198,7 +417,6 @@ const createStyles = (theme: any) => StyleSheet.create({
     backgroundColor: theme.primary,
     alignItems: "center",
     justifyContent: "center",
-    ...shadows.lg,
   },
   title: {
     fontSize: 28,
@@ -209,91 +427,121 @@ const createStyles = (theme: any) => StyleSheet.create({
   subtitle: {
     fontSize: 15,
     color: theme.textSecondary,
-    marginTop: 8,
-    textAlign: "center",
+    marginTop: 6,
   },
-  form: {
-    marginBottom: spacing.xl,
-  },
-  inputGroup: {
-    marginBottom: spacing.lg,
-  },
-  inputLabel: {
-    fontSize: 12,
+
+  roleSection: { marginBottom: spacing.xl },
+  roleSectionTitle: {
+    fontSize: 13,
     fontWeight: "700",
     color: theme.textSecondary,
-    marginBottom: 8,
     textTransform: "uppercase",
-    letterSpacing: 0.6,
+    letterSpacing: 1,
+    marginBottom: spacing.md,
+  },
+  roleGrid: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  roleCard: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
+    alignItems: "center",
+  },
+  roleIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  roleLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: theme.textPrimary,
+  },
+  roleDesc: {
+    fontSize: 10,
+    color: theme.textSecondary,
+    textAlign: "center",
+    marginTop: 2,
+  },
+
+  form: {},
+  inputGroup: { marginBottom: spacing.lg },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: theme.textPrimary,
+    marginBottom: 8,
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: theme.surface,
     borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
     borderWidth: 1.5,
     borderColor: theme.border,
-    gap: 12,
+    paddingHorizontal: spacing.md,
+    height: 52,
+    gap: 10,
   },
   input: {
     flex: 1,
-    paddingVertical: 16,
     fontSize: 16,
-    fontWeight: "600",
     color: theme.textPrimary,
   },
-  forgotBtn: {
-    alignSelf: "flex-end",
-    marginBottom: spacing.xl,
-  },
-  forgotText: {
-    fontSize: 14,
-    color: theme.primary,
-    fontWeight: "600",
-  },
-  loginBtn: {
+
+  forgotBtn: { alignSelf: "flex-end", marginBottom: spacing.lg },
+  forgotText: { color: theme.primary, fontSize: 13, fontWeight: "600" },
+
+  submitBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: theme.primary,
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderRadius: radius.lg,
     gap: 8,
-    ...shadows.md,
   },
-  loginBtnText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 17,
-  },
-  footer: {
+  submitBtnDisabled: { opacity: 0.6 },
+  submitBtnText: { color: "#fff", fontWeight: "800", fontSize: 16 },
+
+  switchModeBtn: { alignItems: "center", marginTop: spacing.lg },
+  switchModeText: { fontSize: 14, color: theme.textSecondary },
+  switchModeHighlight: { fontWeight: "700" },
+
+  demoSection: { marginTop: spacing.xl },
+  divider: {
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "center",
-    gap: 6,
-    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  footerText: {
-    fontSize: 14,
+  dividerLine: { flex: 1, height: 1, backgroundColor: theme.border },
+  dividerText: {
+    paddingHorizontal: spacing.md,
     color: theme.textSecondary,
+    fontSize: 13,
   },
-  signupLink: {
-    fontSize: 14,
-    color: theme.primary,
-    fontWeight: "700",
-  },
-  demoHint: {
+  demoBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    marginTop: spacing.xl,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: theme.primary,
+    gap: 8,
   },
-  demoText: {
+  demoBtnText: { color: theme.primary, fontWeight: "700", fontSize: 15 },
+  demoNote: {
     fontSize: 12,
     color: theme.textSecondary,
     textAlign: "center",
+    marginTop: spacing.sm,
   },
 });
