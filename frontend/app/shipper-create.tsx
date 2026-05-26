@@ -20,6 +20,7 @@ import * as Haptics from "expo-haptics";
 import { getAuthToken } from "../src/api";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
+import LocationPicker from "../src/components/LocationPicker";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -51,11 +52,13 @@ export default function ShipperCreateScreen() {
   
   // Form data
   const [pickupAddress, setPickupAddress] = useState("");
+  const [pickupCoords, setPickupCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [pickupName, setPickupName] = useState("");
   const [pickupPhone, setPickupPhone] = useState("");
   const [pickupNotes, setPickupNotes] = useState("");
   
   const [dropoffAddress, setDropoffAddress] = useState("");
+  const [dropoffCoords, setDropoffCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [dropoffName, setDropoffName] = useState("");
   const [dropoffPhone, setDropoffPhone] = useState("");
   const [dropoffNotes, setDropoffNotes] = useState("");
@@ -63,6 +66,10 @@ export default function ShipperCreateScreen() {
   const [vehicleType, setVehicleType] = useState("car");
   const [cargoWeight, setCargoWeight] = useState("");
   const [cargoDescription, setCargoDescription] = useState("");
+  
+  // Location picker modals
+  const [showPickupPicker, setShowPickupPicker] = useState(false);
+  const [showDropoffPicker, setShowDropoffPicker] = useState(false);
   
   const styles = createStyles(theme);
 
@@ -177,11 +184,39 @@ export default function ShipperCreateScreen() {
       
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Pickup Address *</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="location" size={20} color={theme.primary} />
+        <TouchableOpacity 
+          style={styles.addressSelectButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowPickupPicker(true);
+          }}
+        >
+          <View style={styles.addressSelectIcon}>
+            <Ionicons name="location" size={20} color="#fff" />
+          </View>
+          <View style={styles.addressSelectContent}>
+            {pickupAddress ? (
+              <>
+                <Text style={styles.addressSelectText} numberOfLines={2}>{pickupAddress}</Text>
+                {pickupCoords && (
+                  <Text style={styles.addressSelectCoords}>
+                    📍 {pickupCoords.latitude.toFixed(5)}, {pickupCoords.longitude.toFixed(5)}
+                  </Text>
+                )}
+              </>
+            ) : (
+              <Text style={styles.addressSelectPlaceholder}>Tap to select on map</Text>
+            )}
+          </View>
+          <Ionicons name="map" size={24} color={theme.primary} />
+        </TouchableOpacity>
+        
+        {/* Manual entry option */}
+        <View style={[styles.inputContainer, { marginTop: spacing.sm }]}>
+          <Ionicons name="create-outline" size={18} color={theme.textSecondary} />
           <TextInput
             style={styles.input}
-            placeholder="Enter pickup address"
+            placeholder="Or type address manually..."
             placeholderTextColor={theme.textSecondary}
             value={pickupAddress}
             onChangeText={setPickupAddress}
@@ -243,11 +278,39 @@ export default function ShipperCreateScreen() {
       
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Dropoff Address *</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="flag" size={20} color="#10B981" />
+        <TouchableOpacity 
+          style={styles.addressSelectButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowDropoffPicker(true);
+          }}
+        >
+          <View style={[styles.addressSelectIcon, { backgroundColor: "#10B981" }]}>
+            <Ionicons name="flag" size={20} color="#fff" />
+          </View>
+          <View style={styles.addressSelectContent}>
+            {dropoffAddress ? (
+              <>
+                <Text style={styles.addressSelectText} numberOfLines={2}>{dropoffAddress}</Text>
+                {dropoffCoords && (
+                  <Text style={styles.addressSelectCoords}>
+                    📍 {dropoffCoords.latitude.toFixed(5)}, {dropoffCoords.longitude.toFixed(5)}
+                  </Text>
+                )}
+              </>
+            ) : (
+              <Text style={styles.addressSelectPlaceholder}>Tap to select on map</Text>
+            )}
+          </View>
+          <Ionicons name="map" size={24} color="#10B981" />
+        </TouchableOpacity>
+        
+        {/* Manual entry option */}
+        <View style={[styles.inputContainer, { marginTop: spacing.sm }]}>
+          <Ionicons name="create-outline" size={18} color={theme.textSecondary} />
           <TextInput
             style={styles.input}
-            placeholder="Enter delivery address"
+            placeholder="Or type address manually..."
             placeholderTextColor={theme.textSecondary}
             value={dropoffAddress}
             onChangeText={setDropoffAddress}
@@ -490,6 +553,31 @@ export default function ShipperCreateScreen() {
           </TouchableOpacity>
         )}
       </View>
+      
+      {/* Location Picker Modals */}
+      <LocationPicker
+        visible={showPickupPicker}
+        onClose={() => setShowPickupPicker(false)}
+        onSelectLocation={(address, coords) => {
+          setPickupAddress(address);
+          setPickupCoords(coords);
+        }}
+        title="Select Pickup Location"
+        initialAddress={pickupAddress}
+        theme={theme}
+      />
+      
+      <LocationPicker
+        visible={showDropoffPicker}
+        onClose={() => setShowDropoffPicker(false)}
+        onSelectLocation={(address, coords) => {
+          setDropoffAddress(address);
+          setDropoffCoords(coords);
+        }}
+        title="Select Dropoff Location"
+        initialAddress={dropoffAddress}
+        theme={theme}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -601,6 +689,45 @@ const createStyles = (theme: any) => StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: theme.textPrimary,
+  },
+  
+  // Address select button styles
+  addressSelectButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: theme.surface,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: theme.primary,
+    borderStyle: "dashed",
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  addressSelectIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: theme.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addressSelectContent: {
+    flex: 1,
+  },
+  addressSelectText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: theme.textPrimary,
+    lineHeight: 20,
+  },
+  addressSelectCoords: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 4,
+  },
+  addressSelectPlaceholder: {
+    fontSize: 15,
+    color: theme.textSecondary,
   },
   
   vehicleGrid: {
