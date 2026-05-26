@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInUp, Layout, SlideInDown } from "react-native-reanimated";
@@ -46,6 +47,9 @@ export default function OrderFlowScreen() {
   const [photoUploading, setPhotoUploading] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setOrder(null); // Clear previous order first
+    setRoutePoints([]);
     try {
       const a = await api.getActive();
       setOrder(a);
@@ -62,9 +66,12 @@ export default function OrderFlowScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Reload order data every time screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const advance = async () => {
     if (!order || busy) return;

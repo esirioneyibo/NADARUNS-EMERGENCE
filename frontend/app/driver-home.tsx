@@ -131,13 +131,14 @@ export default function HomeScreen() {
     }, [load])
   );
 
-  // Auto-poll for pending order while online
+  // Auto-poll for pending order AND active order while online
   useEffect(() => {
     if (!driver?.is_online) return;
     const id = setInterval(async () => {
       try {
-        const p = await api.getPending();
+        const [p, a] = await Promise.all([api.getPending(), api.getActive()]);
         setPending(p);
+        setActive(a);
       } catch {}
     }, 4000);
     return () => clearInterval(id);
