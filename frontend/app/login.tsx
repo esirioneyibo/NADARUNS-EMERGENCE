@@ -77,13 +77,15 @@ export default function LoginScreen() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace("/");
+      // Redirect to appropriate home based on user type
+      router.replace("/driver-home");
     }
   }, [isAuthenticated]);
 
   const handleDemoMode = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    router.replace("/");
+    // Demo mode goes to driver home by default
+    router.replace("/driver-home");
   };
 
   const handleLogin = async () => {
@@ -127,7 +129,7 @@ export default function LoginScreen() {
           email: email.trim(),
           type: "driver",
         });
-        router.replace("/");
+        router.replace("/driver-home");
       }
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

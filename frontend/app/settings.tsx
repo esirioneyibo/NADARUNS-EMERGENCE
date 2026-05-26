@@ -40,6 +40,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, mode, setMode, isDark } = useTheme();
+  const { logout } = useAuth();
   const [driver, setDriver] = useState<Driver | null>(null);
   const [name, setName] = useState("");
   const [plate, setPlate] = useState("");
@@ -50,6 +51,29 @@ export default function SettingsScreen() {
     push: true, sound: true, new_orders: true, earnings_summary: true,
   });
   const [savingField, setSavingField] = useState<string | null>(null);
+
+  const handleSignOut = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await logout();
+            } catch (e) {
+              // Ignore errors
+            }
+            router.replace("/login");
+          },
+        },
+      ]
+    );
+  };
 
   const load = useCallback(async () => {
     const d = await api.getDriver();
@@ -307,7 +331,7 @@ export default function SettingsScreen() {
         <TouchableOpacity
           style={[styles.signOutBtn, shadows.sm]}
           testID="sign-out-button"
-          onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {})}
+          onPress={handleSignOut}
         >
           <Ionicons name="log-out-outline" size={20} color={theme.error} />
           <Text style={styles.signOutText}>Sign out</Text>
