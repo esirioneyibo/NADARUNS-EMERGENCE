@@ -1,87 +1,98 @@
 import Link from "next/link";
-import { Zap, Mail, Phone, MapPin } from "lucide-react";
 
 export default function Footer() {
   return (
-    <footer className="bg-gray-900 text-gray-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+    <footer className="footer">
+      <div className="container">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '48px', marginBottom: '60px' }}>
           {/* Brand */}
           <div>
-            <Link href="/" className="flex items-center gap-2 mb-6">
-              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-indigo-500 rounded-xl flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
+            <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', marginBottom: '20px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                background: 'linear-gradient(135deg, #10B981 0%, #6366F1 100%)',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '20px'
+              }}>
+                ⚡
               </div>
-              <span className="text-xl font-bold text-white">NadaRuns</span>
+              <span style={{ fontSize: '22px', fontWeight: '700', color: 'white' }}>NadaRuns</span>
             </Link>
-            <p className="text-gray-400 mb-6">
+            <p style={{ color: '#9CA3AF', lineHeight: 1.7, marginBottom: '24px' }}>
               Fast & reliable delivery connecting drivers with businesses across Finland.
             </p>
-            <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors text-sm font-bold">
-                f
-              </a>
-              <a href="#" className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors text-sm font-bold">
-                X
-              </a>
-              <a href="#" className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors text-sm font-bold">
-                in
-              </a>
-              <a href="#" className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors text-sm font-bold">
-                ig
-              </a>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              {['f', 'X', 'in', 'ig'].map((icon, i) => (
+                <a key={i} href="#" style={{
+                  width: '40px',
+                  height: '40px',
+                  background: '#374151',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#9CA3AF',
+                  textDecoration: 'none',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  transition: 'all 0.2s'
+                }}>
+                  {icon}
+                </a>
+              ))}
             </div>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h3 className="text-white font-semibold mb-6">Quick Links</h3>
-            <ul className="space-y-4">
-              <li><Link href="/about" className="hover:text-white transition-colors">About Us</Link></li>
-              <li><Link href="/drivers" className="hover:text-white transition-colors">For Drivers</Link></li>
-              <li><Link href="/business" className="hover:text-white transition-colors">For Business</Link></li>
-              <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
-            </ul>
+            <h3 className="footer-title">Company</h3>
+            <Link href="/about" className="footer-link">About Us</Link>
+            <Link href="/drivers" className="footer-link">Careers</Link>
+            <Link href="#" className="footer-link">Blog</Link>
+            <Link href="/contact" className="footer-link">Press</Link>
+          </div>
+
+          {/* Products */}
+          <div>
+            <h3 className="footer-title">Products</h3>
+            <Link href="/drivers" className="footer-link">Drive with NadaRuns</Link>
+            <Link href="/business" className="footer-link">NadaRuns for Business</Link>
+            <Link href="#" className="footer-link">API Access</Link>
+            <Link href="#" className="footer-link">Enterprise</Link>
           </div>
 
           {/* Legal */}
           <div>
-            <h3 className="text-white font-semibold mb-6">Legal</h3>
-            <ul className="space-y-4">
-              <li><Link href="#" className="hover:text-white transition-colors">Terms of Service</Link></li>
-              <li><Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-              <li><Link href="#" className="hover:text-white transition-colors">Cookie Policy</Link></li>
-              <li><Link href="#" className="hover:text-white transition-colors">GDPR</Link></li>
-            </ul>
+            <h3 className="footer-title">Legal</h3>
+            <Link href="#" className="footer-link">Terms of Service</Link>
+            <Link href="#" className="footer-link">Privacy Policy</Link>
+            <Link href="#" className="footer-link">Cookie Policy</Link>
+            <Link href="#" className="footer-link">GDPR</Link>
           </div>
 
           {/* Contact */}
           <div>
-            <h3 className="text-white font-semibold mb-6">Contact Us</h3>
-            <ul className="space-y-4">
-              <li className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-emerald-500" />
-                <span>Helsinki, Finland</span>
-              </li>
-              <li className="flex items-center gap-3">
-                <Mail className="w-5 h-5 text-emerald-500" />
-                <a href="mailto:hello@nadaruns.com" className="hover:text-white transition-colors">hello@nadaruns.com</a>
-              </li>
-              <li className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-emerald-500" />
-                <a href="tel:+358401234567" className="hover:text-white transition-colors">+358 40 123 4567</a>
-              </li>
-            </ul>
+            <h3 className="footer-title">Contact</h3>
+            <p style={{ color: '#9CA3AF', marginBottom: '12px' }}>
+              📍 Helsinki, Finland
+            </p>
+            <a href="mailto:hello@nadaruns.com" className="footer-link">✉️ hello@nadaruns.com</a>
+            <a href="tel:+358401234567" className="footer-link">📞 +358 40 123 4567</a>
           </div>
         </div>
 
-        <div className="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-gray-500 text-sm">
+        <div style={{ borderTop: '1px solid #374151', paddingTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <p style={{ color: '#6B7280', fontSize: '14px' }}>
             © {new Date().getFullYear()} NadaRuns. All rights reserved.
           </p>
-          <div className="flex gap-6 text-sm">
-            <Link href="#" className="text-gray-500 hover:text-gray-300 transition-colors">Sitemap</Link>
-            <Link href="#" className="text-gray-500 hover:text-gray-300 transition-colors">Accessibility</Link>
+          <div style={{ display: 'flex', gap: '24px' }}>
+            <a href="#" style={{ color: '#6B7280', fontSize: '14px', textDecoration: 'none' }}>Sitemap</a>
+            <a href="#" style={{ color: '#6B7280', fontSize: '14px', textDecoration: 'none' }}>Accessibility</a>
           </div>
         </div>
       </div>

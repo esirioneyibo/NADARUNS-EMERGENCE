@@ -1,89 +1,100 @@
 import Link from "next/link";
-import { Zap, Truck, Clock, Shield, Star, ArrowRight, Bike, Building2, CheckCircle, Users, Package, MapPin } from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="pt-16">
+    <div style={{ paddingTop: '72px' }}>
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-gray-50 to-white">
-        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+      <section className="hero-gradient" style={{ padding: '80px 0 100px', position: 'relative', overflow: 'hidden' }}>
+        {/* Background decorations */}
+        <div style={{ position: 'absolute', top: '-100px', right: '-100px', width: '400px', height: '400px', background: 'radial-gradient(circle, rgba(16,185,129,0.1) 0%, transparent 70%)', borderRadius: '50%' }} />
+        <div style={{ position: 'absolute', bottom: '-100px', left: '-100px', width: '400px', height: '400px', background: 'radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%)', borderRadius: '50%' }} />
+        
+        <div className="container">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
             <div>
-              <div className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
-                <Zap className="w-4 h-4" />
-                #1 Delivery Platform in Finland
+              <div className="badge badge-green" style={{ marginBottom: '24px' }}>
+                ⚡ #1 Delivery Platform in Finland
               </div>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6">
-                Fast & Reliable
-                <span className="gradient-text"> Delivery</span>
-                <br />For Everyone
+              <h1 style={{ fontSize: '56px', fontWeight: '800', lineHeight: 1.1, marginBottom: '24px', color: '#111827' }}>
+                Fast & Reliable<br/>
+                <span className="gradient-text">Delivery</span> For<br/>
+                Everyone
               </h1>
-              <p className="text-xl text-gray-600 mb-8 max-w-lg">
+              <p style={{ fontSize: '20px', color: '#6B7280', lineHeight: 1.7, marginBottom: '40px', maxWidth: '500px' }}>
                 Connect with professional drivers for quick deliveries or join our fleet to earn money on your own schedule.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Link
-                  href="/drivers"
-                  className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 transition-all btn-hover"
-                >
-                  <Bike className="w-5 h-5" />
-                  Become a Driver
+              <div style={{ display: 'flex', gap: '16px', marginBottom: '60px' }}>
+                <Link href="/drivers" className="btn-primary">
+                  🚴 Become a Driver
                 </Link>
-                <Link
-                  href="/business"
-                  className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-all btn-hover"
-                >
-                  <Building2 className="w-5 h-5" />
-                  Ship with Us
+                <Link href="/business" className="btn-secondary">
+                  🏢 Ship with Us
                 </Link>
               </div>
               
               {/* Stats */}
-              <div className="grid grid-cols-3 gap-8 mt-12 pt-8 border-t border-gray-200">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px', borderTop: '1px solid #E5E7EB', paddingTop: '32px' }}>
                 <div>
-                  <div className="text-3xl font-bold text-gray-900">10K+</div>
-                  <div className="text-gray-600">Active Drivers</div>
+                  <div className="stat-number">10K+</div>
+                  <div className="stat-label">Active Drivers</div>
                 </div>
                 <div>
-                  <div className="text-3xl font-bold text-gray-900">500K+</div>
-                  <div className="text-gray-600">Deliveries</div>
+                  <div className="stat-number">500K+</div>
+                  <div className="stat-label">Deliveries</div>
                 </div>
                 <div>
-                  <div className="text-3xl font-bold text-gray-900">4.9</div>
-                  <div className="text-gray-600">App Rating</div>
+                  <div className="stat-number">4.9★</div>
+                  <div className="stat-label">App Rating</div>
                 </div>
               </div>
             </div>
             
-            {/* Hero Image/Illustration */}
-            <div className="relative">
-              <div className="absolute -top-20 -right-20 w-72 h-72 bg-emerald-200 rounded-full blur-3xl opacity-30"></div>
-              <div className="absolute -bottom-20 -left-20 w-72 h-72 bg-indigo-200 rounded-full blur-3xl opacity-30"></div>
-              <div className="relative bg-gradient-to-br from-emerald-500 to-indigo-600 rounded-3xl p-8 shadow-2xl">
-                <div className="bg-white rounded-2xl p-6 shadow-lg mb-4">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                      <Package className="w-6 h-6 text-emerald-600" />
+            {/* Hero Visual */}
+            <div style={{ position: 'relative' }}>
+              <div className="float-animation" style={{
+                background: 'linear-gradient(135deg, #10B981 0%, #6366F1 100%)',
+                borderRadius: '32px',
+                padding: '32px',
+                boxShadow: '0 40px 80px -20px rgba(16,185,129,0.3)'
+              }}>
+                {/* Order Card */}
+                <div style={{
+                  background: 'white',
+                  borderRadius: '20px',
+                  padding: '24px',
+                  marginBottom: '16px',
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+                    <div style={{ width: '48px', height: '48px', background: '#D1FAE5', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>
+                      📦
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900">Order #A249K</div>
-                      <div className="text-sm text-gray-500">In transit</div>
+                      <div style={{ fontWeight: '700', color: '#111827' }}>Order #A249K</div>
+                      <div style={{ fontSize: '14px', color: '#10B981', fontWeight: '500' }}>● In transit</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MapPin className="w-4 h-4 text-emerald-500" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#6B7280' }}>
+                    <span>📍</span>
                     <span>Karl Fazer Café → Mannerheimintie 15</span>
                   </div>
                 </div>
-                <div className="bg-white/10 backdrop-blur rounded-xl p-4 text-white">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                      <Bike className="w-5 h-5" />
+                
+                {/* Driver Card */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  backdropFilter: 'blur(10px)',
+                  borderRadius: '16px',
+                  padding: '20px',
+                  color: 'white'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.2)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                      🚴
                     </div>
                     <div>
-                      <div className="font-medium">Eero V. is delivering</div>
-                      <div className="text-sm text-white/70">Arriving in 8 mins</div>
+                      <div style={{ fontWeight: '600' }}>Eero V. is delivering</div>
+                      <div style={{ fontSize: '14px', opacity: 0.8 }}>Arriving in 8 mins</div>
                     </div>
                   </div>
                 </div>
@@ -94,104 +105,98 @@ export default function Home() {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Why Choose NadaRuns?
-            </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+      <section className="section" style={{ background: 'white' }}>
+        <div className="container">
+          <div style={{ textAlign: 'center', marginBottom: '60px' }}>
+            <h2 className="section-title">Why Choose NadaRuns?</h2>
+            <p className="section-subtitle">
               We're revolutionizing delivery with technology, reliability, and care.
             </p>
           </div>
           
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px' }}>
             {[
-              { icon: Clock, title: "Fast Delivery", desc: "Average delivery time under 30 minutes", color: "emerald" },
-              { icon: Shield, title: "Secure & Insured", desc: "All deliveries are tracked and insured", color: "indigo" },
-              { icon: Star, title: "Top Rated", desc: "4.9 star rating from 100K+ reviews", color: "amber" },
-              { icon: Users, title: "24/7 Support", desc: "Round-the-clock customer support", color: "rose" },
+              { icon: '⚡', title: 'Fast Delivery', desc: 'Average delivery time under 30 minutes', color: 'green' },
+              { icon: '🛡️', title: 'Secure & Insured', desc: 'All deliveries are tracked and insured', color: 'purple' },
+              { icon: '⭐', title: 'Top Rated', desc: '4.9 star rating from 100K+ reviews', color: 'amber' },
+              { icon: '💬', title: '24/7 Support', desc: 'Round-the-clock customer support', color: 'rose' },
             ].map((feature, i) => (
-              <div key={i} className="p-6 rounded-2xl border border-gray-100 hover:border-gray-200 hover:shadow-lg transition-all">
-                <div className={`w-14 h-14 bg-${feature.color}-100 rounded-xl flex items-center justify-center mb-4`}>
-                  <feature.icon className={`w-7 h-7 text-${feature.color}-600`} />
+              <div key={i} className="feature-card">
+                <div className={`feature-icon feature-icon-${feature.color}`}>
+                  <span style={{ fontSize: '28px' }}>{feature.icon}</span>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">{feature.title}</h3>
-                <p className="text-gray-600">{feature.desc}</p>
+                <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '12px', color: '#111827' }}>{feature.title}</h3>
+                <p style={{ color: '#6B7280', lineHeight: 1.6 }}>{feature.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              How It Works
-            </h2>
-            <p className="text-xl text-gray-600">
+      {/* How It Works Section */}
+      <section className="section" style={{ background: '#F9FAFB' }}>
+        <div className="container">
+          <div style={{ textAlign: 'center', marginBottom: '60px' }}>
+            <h2 className="section-title">How It Works</h2>
+            <p className="section-subtitle">
               Getting started is easy, whether you're a driver or a business.
             </p>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-16">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
             {/* For Drivers */}
-            <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-              <div className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
-                <Bike className="w-4 h-4" />
-                For Drivers
+            <div className="card" style={{ background: 'linear-gradient(135deg, #F0FDF4 0%, white 100%)' }}>
+              <div className="badge badge-green" style={{ marginBottom: '24px' }}>
+                🚴 For Drivers
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-8">Start earning today</h3>
-              <div className="space-y-6">
+              <h3 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '32px', color: '#111827' }}>Start earning today</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 {[
-                  { step: "1", title: "Sign Up", desc: "Download the app and create your account" },
-                  { step: "2", title: "Get Verified", desc: "Complete KYC verification in minutes" },
-                  { step: "3", title: "Start Delivering", desc: "Accept orders and earn money" },
+                  { step: '1', title: 'Sign Up', desc: 'Download the app and create your account' },
+                  { step: '2', title: 'Get Verified', desc: 'Complete KYC verification in minutes' },
+                  { step: '3', title: 'Start Delivering', desc: 'Accept orders and earn money' },
                 ].map((item, i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="w-10 h-10 bg-emerald-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">
+                  <div key={i} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                    <div style={{ width: '40px', height: '40px', background: '#10B981', color: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', flexShrink: 0 }}>
                       {item.step}
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900">{item.title}</div>
-                      <div className="text-gray-600">{item.desc}</div>
+                      <div style={{ fontWeight: '600', color: '#111827', marginBottom: '4px' }}>{item.title}</div>
+                      <div style={{ color: '#6B7280', fontSize: '14px' }}>{item.desc}</div>
                     </div>
                   </div>
                 ))}
               </div>
-              <Link href="/drivers" className="inline-flex items-center gap-2 mt-8 text-emerald-600 font-semibold hover:gap-3 transition-all">
-                Learn more <ArrowRight className="w-4 h-4" />
+              <Link href="/drivers" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '32px', color: '#10B981', fontWeight: '600', textDecoration: 'none' }}>
+                Learn more →
               </Link>
             </div>
 
             {/* For Business */}
-            <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-              <div className="inline-flex items-center gap-2 bg-indigo-100 text-indigo-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
-                <Building2 className="w-4 h-4" />
-                For Business
+            <div className="card" style={{ background: 'linear-gradient(135deg, #EEF2FF 0%, white 100%)' }}>
+              <div className="badge badge-purple" style={{ marginBottom: '24px' }}>
+                🏢 For Business
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-8">Ship with confidence</h3>
-              <div className="space-y-6">
+              <h3 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '32px', color: '#111827' }}>Ship with confidence</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 {[
-                  { step: "1", title: "Create Account", desc: "Register your business in minutes" },
-                  { step: "2", title: "Book Delivery", desc: "Enter pickup and delivery details" },
-                  { step: "3", title: "Track & Receive", desc: "Monitor in real-time until delivery" },
+                  { step: '1', title: 'Create Account', desc: 'Register your business in minutes' },
+                  { step: '2', title: 'Book Delivery', desc: 'Enter pickup and delivery details' },
+                  { step: '3', title: 'Track & Receive', desc: 'Monitor in real-time until delivery' },
                 ].map((item, i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">
+                  <div key={i} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                    <div style={{ width: '40px', height: '40px', background: '#6366F1', color: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', flexShrink: 0 }}>
                       {item.step}
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900">{item.title}</div>
-                      <div className="text-gray-600">{item.desc}</div>
+                      <div style={{ fontWeight: '600', color: '#111827', marginBottom: '4px' }}>{item.title}</div>
+                      <div style={{ color: '#6B7280', fontSize: '14px' }}>{item.desc}</div>
                     </div>
                   </div>
                 ))}
               </div>
-              <Link href="/business" className="inline-flex items-center gap-2 mt-8 text-indigo-600 font-semibold hover:gap-3 transition-all">
-                Learn more <ArrowRight className="w-4 h-4" />
+              <Link href="/business" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '32px', color: '#6366F1', fontWeight: '600', textDecoration: 'none' }}>
+                Learn more →
               </Link>
             </div>
           </div>
@@ -199,35 +204,35 @@ export default function Home() {
       </section>
 
       {/* Testimonials */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Loved by Thousands
-            </h2>
-            <p className="text-xl text-gray-600">
+      <section className="section" style={{ background: 'white' }}>
+        <div className="container">
+          <div style={{ textAlign: 'center', marginBottom: '60px' }}>
+            <h2 className="section-title">Loved by Thousands</h2>
+            <p className="section-subtitle">
               See what our drivers and customers are saying.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
             {[
-              { name: "Mikko L.", role: "Driver", text: "Best platform for flexible work. I earn well and manage my own schedule.", rating: 5 },
-              { name: "Sanna R.", role: "Business Owner", text: "NadaRuns has transformed our delivery operations. Fast and reliable!", rating: 5 },
-              { name: "Aino K.", role: "Customer", text: "Always get my orders on time. The tracking feature is amazing.", rating: 5 },
+              { name: 'Mikko L.', role: 'Driver', text: 'Best platform for flexible work. I earn well and manage my own schedule. The app is super easy to use!' },
+              { name: 'Sanna R.', role: 'Business Owner', text: 'NadaRuns has transformed our delivery operations. Fast, reliable, and their support team is amazing.' },
+              { name: 'Aino K.', role: 'Customer', text: 'Always get my orders on time. The tracking feature is amazing - I can see exactly where my package is.' },
             ].map((testimonial, i) => (
-              <div key={i} className="bg-gray-50 rounded-2xl p-6">
-                <div className="flex gap-1 mb-4">
-                  {[...Array(testimonial.rating)].map((_, j) => (
-                    <Star key={j} className="w-5 h-5 fill-amber-400 text-amber-400" />
+              <div key={i} className="testimonial-card">
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+                  {[...Array(5)].map((_, j) => (
+                    <span key={j} style={{ color: '#F59E0B', fontSize: '18px' }}>★</span>
                   ))}
                 </div>
-                <p className="text-gray-700 mb-4">"{testimonial.text}"</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-indigo-400 rounded-full"></div>
+                <p style={{ color: '#374151', lineHeight: 1.7, marginBottom: '24px', position: 'relative', zIndex: 1 }}>
+                  "{testimonial.text}"
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #10B981 0%, #6366F1 100%)', borderRadius: '12px' }} />
                   <div>
-                    <div className="font-semibold text-gray-900">{testimonial.name}</div>
-                    <div className="text-sm text-gray-500">{testimonial.role}</div>
+                    <div style={{ fontWeight: '600', color: '#111827' }}>{testimonial.name}</div>
+                    <div style={{ fontSize: '14px', color: '#6B7280' }}>{testimonial.role}</div>
                   </div>
                 </div>
               </div>
@@ -237,28 +242,49 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-br from-emerald-600 to-indigo-700">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+      <section style={{ padding: '100px 0', background: 'linear-gradient(135deg, #10B981 0%, #6366F1 100%)', position: 'relative', overflow: 'hidden' }}>
+        {/* Decorations */}
+        <div style={{ position: 'absolute', top: '0', left: '0', right: '0', bottom: '0', background: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.05\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }} />
+        
+        <div className="container" style={{ position: 'relative', textAlign: 'center' }}>
+          <h2 style={{ fontSize: '44px', fontWeight: '800', color: 'white', marginBottom: '20px' }}>
             Ready to Get Started?
           </h2>
-          <p className="text-xl text-white/80 mb-8">
+          <p style={{ fontSize: '20px', color: 'rgba(255,255,255,0.8)', marginBottom: '40px', maxWidth: '500px', margin: '0 auto 40px' }}>
             Join thousands of drivers and businesses already using NadaRuns.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/drivers"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-emerald-600 font-semibold rounded-xl hover:bg-gray-100 transition-all btn-hover"
-            >
-              <Bike className="w-5 h-5" />
-              Start Driving
+          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+            <Link href="/drivers" style={{
+              background: 'white',
+              color: '#10B981',
+              padding: '16px 32px',
+              borderRadius: '12px',
+              fontWeight: '600',
+              fontSize: '16px',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.3s',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+            }}>
+              🚴 Start Driving
             </Link>
-            <Link
-              href="/business"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/20 transition-all border border-white/30"
-            >
-              <Building2 className="w-5 h-5" />
-              Ship Products
+            <Link href="/business" style={{
+              background: 'rgba(255,255,255,0.15)',
+              color: 'white',
+              padding: '16px 32px',
+              borderRadius: '12px',
+              fontWeight: '600',
+              fontSize: '16px',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              border: '2px solid rgba(255,255,255,0.3)',
+              backdropFilter: 'blur(10px)'
+            }}>
+              🏢 Ship Products
             </Link>
           </div>
         </div>
