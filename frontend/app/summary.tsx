@@ -61,7 +61,7 @@ export default function SummaryScreen() {
     setSubmitting(true);
     try {
       if (rate) await api.rate(order.id, rate, feedback || undefined);
-      router.replace("/");
+      router.replace("/driver-home");
     } finally {
       setSubmitting(false);
     }

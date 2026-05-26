@@ -124,7 +124,7 @@ export default function OrderFlowScreen() {
     return (
       <View style={[styles.loading, { paddingTop: insets.top }]}>
         <Text style={styles.empty}>No active delivery</Text>
-        <TouchableOpacity onPress={() => router.replace("/")} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.replace("/driver-home")} style={styles.backBtn}>
           <Text style={styles.backBtnText}>Back to dashboard</Text>
         </TouchableOpacity>
       </View>
@@ -156,7 +156,7 @@ export default function OrderFlowScreen() {
       >
         <TouchableOpacity
           style={[styles.iconBtn, shadows.md]}
-          onPress={() => router.replace("/")}
+          onPress={() => router.replace("/driver-home")}
           testID="order-back-button"
         >
           <Ionicons name="chevron-back" size={22} color={theme.textPrimary} />
