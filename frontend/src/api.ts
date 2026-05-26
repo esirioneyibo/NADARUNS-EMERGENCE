@@ -196,4 +196,19 @@ export const api = {
     }),
   
   simulateKYCApproval: () => request<any>("/driver/kyc/simulate-approval", { method: "POST" }),
+  
+  // Real-time location tracking
+  updateDriverLocation: (location: { lat: number; lng: number }, orderId?: string) =>
+    request<{ status: string }>("/driver/location", {
+      method: "POST",
+      body: JSON.stringify({ location, order_id: orderId }),
+    }),
+  
+  getDriverLocation: (orderId: string) =>
+    request<{
+      driver_id: string | null;
+      driver_name: string | null;
+      driver_location: { lat: number; lng: number } | null;
+      location_updated_at: string | null;
+    }>(`/orders/${orderId}/driver-location`),
 };

@@ -21,6 +21,7 @@ import { getAuthToken } from "../src/api";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 import MapView from "../src/components/MapView";
+import { useOrderTracking } from "../src/hooks/useWebSocket";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -90,8 +91,27 @@ export default function ShipperTrackingScreen() {
   const [shipment, setShipment] = useState<ShipmentDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [liveDriverLocation, setLiveDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const styles = createStyles(theme);
+
+  // Real-time tracking via WebSocket
+  const { isConnected: wsConnected, driverLocation: wsDriverLocation, orderStatus: wsOrderStatus } = useOrderTracking({
+    orderId: id || "",
+    enabled: !!id && !loading,
+    onLocationUpdate: (location, driverId) => {
+      console.log("[Tracking] Real-time location update:", location);
+      setLiveDriverLocation(location);
+    },
+    onStatusUpdate: (status, data) => {
+      console.log("[Tracking] Status update:", status);
+      // Refresh shipment data when status changes
+      loadShipment();
+    },
+  });
+
+  // Use WebSocket location if available, fallback to polled location
+  const currentDriverLocation = liveDriverLocation || wsDriverLocation || shipment?.driver?.location;
 
   const loadShipment = useCallback(async () => {
     try {
@@ -115,8 +135,8 @@ export default function ShipperTrackingScreen() {
 
   useEffect(() => {
     loadShipment();
-    // Poll for updates every 5 seconds
-    const interval = setInterval(loadShipment, 5000);
+    // Poll for updates every 10 seconds as fallback (WebSocket provides real-time)
+    const interval = setInterval(loadShipment, 10000);
     return () => clearInterval(interval);
   }, [loadShipment]);
 
@@ -205,9 +225,15 @@ export default function ShipperTrackingScreen() {
             <MapView
               pickup={{ lat: shipment.pickup.lat, lng: shipment.pickup.lng }}
               dropoff={{ lat: shipment.dropoff.lat, lng: shipment.dropoff.lng }}
-              driverLocation={shipment.driver?.location}
+              driverLocation={currentDriverLocation}
               style={styles.map}
             />
+            {wsConnected && (
+              <View style={styles.liveIndicator}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveText}>LIVE</Text>
+              </View>
+            )}
           </Animated.View>
         )}
 
@@ -402,8 +428,33 @@ const createStyles = (theme: any) => StyleSheet.create({
     marginBottom: spacing.lg,
     borderRadius: radius.xl,
     overflow: "hidden",
+    position: "relative",
   },
   map: { flex: 1 },
+  liveIndicator: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    gap: 4,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EF4444",
+  },
+  liveText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
   
   statusCard: {
     backgroundColor: theme.surface,

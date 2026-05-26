@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInDown, SlideInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Location from "expo-location";
 
 import { api } from "../src/api";
 import type { Driver, Order } from "../src/types";
@@ -22,6 +23,7 @@ import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 import MapView from "../src/components/MapView";
 import SlideToGoOnline from "../src/components/SlideToGoOnline";
+import { useDriverLocation } from "../src/hooks/useWebSocket";
 
 // Helper to get greeting based on time of day
 function getGreeting(): string {
@@ -49,8 +51,66 @@ export default function HomeScreen() {
   const [active, setActive] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
+  const [locationPermission, setLocationPermission] = useState<boolean>(false);
 
   const styles = createStyles(theme);
+
+  // WebSocket for sending driver location
+  const { isConnected: wsConnected, sendLocation } = useDriverLocation({
+    driverId: driver?.id || "",
+    orderId: active?.id,
+    enabled: !!driver?.id && !!active?.id,
+  });
+
+  // Request location permission and start tracking when driver has an active order
+  useEffect(() => {
+    let locationSubscription: Location.LocationSubscription | null = null;
+
+    const startLocationTracking = async () => {
+      if (!active || !driver?.is_online) return;
+
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('[Location] Permission denied');
+          setLocationPermission(false);
+          return;
+        }
+        setLocationPermission(true);
+
+        // Start watching location
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 5000, // Update every 5 seconds
+            distanceInterval: 10, // Or when moved 10 meters
+          },
+          (location) => {
+            const { latitude: lat, longitude: lng } = location.coords;
+            console.log('[Location] Update:', { lat, lng });
+            
+            // Send via WebSocket if connected
+            if (wsConnected) {
+              sendLocation({ lat, lng });
+            }
+            
+            // Also send via HTTP as fallback
+            api.updateDriverLocation({ lat, lng }, active.id).catch(() => {});
+          }
+        );
+      } catch (e) {
+        console.warn('[Location] Error:', e);
+      }
+    };
+
+    startLocationTracking();
+
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
+  }, [active?.id, driver?.is_online, wsConnected, sendLocation]);
 
   const load = useCallback(async () => {
     try {

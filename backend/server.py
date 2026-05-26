@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
@@ -10,9 +10,11 @@ import random
 import httpx
 import jwt
 import bcrypt
+import json
+import asyncio
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal, Tuple
+from typing import List, Optional, Literal, Tuple, Dict, Set
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -2210,6 +2212,240 @@ ADMIN_DASHBOARD_HTML = """
 async def admin_dashboard():
     """Serve the admin dashboard HTML page."""
     return ADMIN_DASHBOARD_HTML
+
+
+# ===================== WebSocket Real-time Tracking =====================
+
+class ConnectionManager:
+    """Manages WebSocket connections for real-time tracking."""
+    
+    def __init__(self):
+        # Map of order_id -> set of WebSocket connections (shippers watching this order)
+        self.order_subscribers: Dict[str, Set[WebSocket]] = {}
+        # Map of driver_id -> WebSocket connection
+        self.driver_connections: Dict[str, WebSocket] = {}
+        # Map of driver_id -> current location
+        self.driver_locations: Dict[str, dict] = {}
+    
+    async def connect_shipper(self, websocket: WebSocket, order_id: str):
+        """Connect a shipper to watch an order's driver location."""
+        await websocket.accept()
+        if order_id not in self.order_subscribers:
+            self.order_subscribers[order_id] = set()
+        self.order_subscribers[order_id].add(websocket)
+        logger.info(f"Shipper connected to watch order {order_id}")
+    
+    async def connect_driver(self, websocket: WebSocket, driver_id: str):
+        """Connect a driver for location updates."""
+        await websocket.accept()
+        self.driver_connections[driver_id] = websocket
+        logger.info(f"Driver {driver_id} connected for location tracking")
+    
+    def disconnect_shipper(self, websocket: WebSocket, order_id: str):
+        """Disconnect a shipper from watching an order."""
+        if order_id in self.order_subscribers:
+            self.order_subscribers[order_id].discard(websocket)
+            if not self.order_subscribers[order_id]:
+                del self.order_subscribers[order_id]
+        logger.info(f"Shipper disconnected from order {order_id}")
+    
+    def disconnect_driver(self, driver_id: str):
+        """Disconnect a driver."""
+        if driver_id in self.driver_connections:
+            del self.driver_connections[driver_id]
+        if driver_id in self.driver_locations:
+            del self.driver_locations[driver_id]
+        logger.info(f"Driver {driver_id} disconnected")
+    
+    async def broadcast_driver_location(self, driver_id: str, location: dict, order_id: str):
+        """Broadcast driver location to all shippers watching the order."""
+        self.driver_locations[driver_id] = location
+        
+        if order_id in self.order_subscribers:
+            message = json.dumps({
+                "type": "location_update",
+                "driver_id": driver_id,
+                "order_id": order_id,
+                "location": location,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            
+            disconnected = []
+            for ws in self.order_subscribers[order_id]:
+                try:
+                    await ws.send_text(message)
+                except Exception:
+                    disconnected.append(ws)
+            
+            # Clean up disconnected websockets
+            for ws in disconnected:
+                self.order_subscribers[order_id].discard(ws)
+    
+    async def broadcast_order_status(self, order_id: str, status: str, data: dict = None):
+        """Broadcast order status update to all watchers."""
+        if order_id in self.order_subscribers:
+            message = json.dumps({
+                "type": "status_update",
+                "order_id": order_id,
+                "status": status,
+                "data": data or {},
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            
+            disconnected = []
+            for ws in self.order_subscribers[order_id]:
+                try:
+                    await ws.send_text(message)
+                except Exception:
+                    disconnected.append(ws)
+            
+            for ws in disconnected:
+                self.order_subscribers[order_id].discard(ws)
+
+
+# Global connection manager instance
+ws_manager = ConnectionManager()
+
+
+@app.websocket("/ws/track/{order_id}")
+async def websocket_track_order(websocket: WebSocket, order_id: str):
+    """
+    WebSocket endpoint for shippers to track their order in real-time.
+    Receives driver location updates and order status changes.
+    """
+    await ws_manager.connect_shipper(websocket, order_id)
+    
+    try:
+        # Send initial order data
+        order = await db.orders.find_one({"id": order_id})
+        if order:
+            # Get driver location if available
+            driver_location = None
+            if order.get("driver_id"):
+                driver = await db.drivers.find_one({"id": order["driver_id"]})
+                if driver and driver.get("current_location"):
+                    driver_location = driver["current_location"]
+            
+            await websocket.send_text(json.dumps({
+                "type": "initial_state",
+                "order_id": order_id,
+                "status": order.get("status"),
+                "driver_location": driver_location,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }))
+        
+        # Keep connection alive and listen for messages
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                # Handle ping/pong to keep connection alive
+                if data == "ping":
+                    await websocket.send_text("pong")
+            except asyncio.TimeoutError:
+                # Send ping to check if client is still connected
+                try:
+                    await websocket.send_text(json.dumps({"type": "ping"}))
+                except Exception:
+                    break
+                    
+    except WebSocketDisconnect:
+        pass
+    finally:
+        ws_manager.disconnect_shipper(websocket, order_id)
+
+
+@app.websocket("/ws/driver/{driver_id}")
+async def websocket_driver_location(websocket: WebSocket, driver_id: str):
+    """
+    WebSocket endpoint for drivers to send their location updates.
+    Also receives order assignments and notifications.
+    """
+    await ws_manager.connect_driver(websocket, driver_id)
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            if message.get("type") == "location_update":
+                location = message.get("location", {})
+                order_id = message.get("order_id")
+                
+                # Update driver location in database
+                await db.drivers.update_one(
+                    {"id": driver_id},
+                    {"$set": {
+                        "current_location": location,
+                        "location_updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                
+                # If driver has an active order, broadcast to watchers
+                if order_id:
+                    await ws_manager.broadcast_driver_location(driver_id, location, order_id)
+                
+            elif message.get("type") == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+                
+    except WebSocketDisconnect:
+        pass
+    except json.JSONDecodeError:
+        pass
+    finally:
+        ws_manager.disconnect_driver(driver_id)
+
+
+# API endpoint to update driver location (fallback for HTTP polling)
+@api_router.post("/driver/location")
+async def update_driver_location(
+    request: Request,
+    user: dict = Depends(get_current_user)
+):
+    """Update driver location via HTTP (fallback when WebSocket not available)."""
+    if user.get("type") != "driver":
+        raise HTTPException(403, "Only drivers can update location")
+    
+    data = await request.json()
+    driver_id = user["id"]
+    location = data.get("location", {})
+    order_id = data.get("order_id")
+    
+    await db.drivers.update_one(
+        {"id": driver_id},
+        {"$set": {
+            "current_location": location,
+            "location_updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Broadcast to WebSocket subscribers if there's an active order
+    if order_id:
+        await ws_manager.broadcast_driver_location(driver_id, location, order_id)
+    
+    return {"status": "ok"}
+
+
+# API endpoint to get driver location (for shippers polling)
+@api_router.get("/orders/{order_id}/driver-location")
+async def get_driver_location(order_id: str, user: dict = Depends(get_current_user)):
+    """Get the current driver location for an order."""
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    
+    if not order.get("driver_id"):
+        return {"driver_location": None, "message": "No driver assigned yet"}
+    
+    driver = await db.drivers.find_one({"id": order["driver_id"]})
+    if not driver:
+        return {"driver_location": None, "message": "Driver not found"}
+    
+    return {
+        "driver_id": driver["id"],
+        "driver_name": driver.get("name"),
+        "driver_location": driver.get("current_location"),
+        "location_updated_at": driver.get("location_updated_at"),
+    }
 
 
 # ===================== Lifecycle =====================
