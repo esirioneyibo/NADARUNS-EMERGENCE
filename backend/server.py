@@ -489,7 +489,7 @@ class AdminLoginRequest(BaseModel):
 # ===================== Seed Data =====================
 
 DRIVER_ID = "driver-001"
-SEED_VERSION = 7  # bump to force re-seed (fresh order data)
+SEED_VERSION = 8  # bump to force re-seed (fresh order data)
 
 SEED_DRIVER = {
     "id": DRIVER_ID,

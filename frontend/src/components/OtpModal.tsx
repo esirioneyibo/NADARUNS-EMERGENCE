@@ -1,17 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
   Dimensions,
+  Animated as RNAnimated,
 } from "react-native";
 import Animated, { FadeIn, SlideInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,28 +28,46 @@ interface Props {
 
 const OTP_LENGTH = 4;
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const ANDROID_KEYBOARD_OFFSET = 100; // Extra offset for Android keyboards
 
 export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmit, error }: Props) {
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [submitting, setSubmitting] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const inputs = useRef<Array<TextInput | null>>([]);
+  const translateY = useRef(new RNAnimated.Value(0)).current;
 
+  // Track keyboard height and animate sheet position
   useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      () => setKeyboardVisible(true)
+      (e) => {
+        const height = e.endCoordinates.height;
+        setKeyboardHeight(height);
+        // Animate sheet up when keyboard shows
+        RNAnimated.timing(translateY, {
+          toValue: -height,
+          duration: Platform.OS === "ios" ? 250 : 150,
+          useNativeDriver: true,
+        }).start();
+      }
     );
     const hideSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardVisible(false)
+      () => {
+        setKeyboardHeight(0);
+        // Animate sheet back down when keyboard hides
+        RNAnimated.timing(translateY, {
+          toValue: 0,
+          duration: Platform.OS === "ios" ? 250 : 150,
+          useNativeDriver: true,
+        }).start();
+      }
     );
     return () => {
       showSub.remove();
       hideSub.remove();
     };
-  }, []);
+  }, [translateY]);
 
   useEffect(() => {
     if (visible) {
@@ -106,24 +123,19 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.modalContainer}
-        keyboardVerticalOffset={Platform.OS === "android" ? -ANDROID_KEYBOARD_OFFSET : 0}
-      >
+      <View style={styles.modalContainer}>
         {/* Backdrop - dismisses on press */}
         <Pressable style={styles.backdrop} onPress={handleBackdropPress} testID="otp-backdrop">
           <Animated.View entering={FadeIn.duration(180)} style={StyleSheet.absoluteFill} />
         </Pressable>
         
-        {/* ScrollView ensures content is scrollable when keyboard is open */}
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          bounces={false}
-          showsVerticalScrollIndicator={false}
+        {/* Bottom sheet that animates up with keyboard */}
+        <RNAnimated.View 
+          style={[
+            styles.sheetContainer,
+            { transform: [{ translateY }] }
+          ]}
         >
-          <View style={styles.spacer} />
           <Animated.View
             entering={SlideInDown.springify().damping(16)}
             style={[styles.sheet, shadows.lg]}
@@ -191,8 +203,8 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
               </TouchableOpacity>
             </Pressable>
           </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </RNAnimated.View>
+      </View>
     </Modal>
   );
 }
@@ -200,17 +212,14 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
+    justifyContent: "flex-end",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.5)",
   },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "flex-end",
-  },
-  spacer: {
-    flex: 1,
+  sheetContainer: {
+    width: "100%",
   },
   sheet: {
     backgroundColor: theme.surface,
