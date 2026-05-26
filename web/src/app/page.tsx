@@ -1,8 +1,12 @@
 import Link from "next/link";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
 export default function Home() {
   return (
-    <div style={{ paddingTop: '72px' }}>
+    <>
+      <Navbar />
+      <div style={{ paddingTop: '72px' }}>
       {/* Hero Section */}
       <section className="hero-gradient" style={{ padding: '80px 0 100px', position: 'relative', overflow: 'hidden' }}>
         {/* Background decorations */}
@@ -290,5 +294,7 @@ export default function Home() {
         </div>
       </section>
     </div>
+    <Footer />
+    </>
   );
 }
