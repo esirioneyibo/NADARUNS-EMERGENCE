@@ -1,10 +1,11 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { View } from "react-native";
+import * as Font from "expo-font";
+import { View, ActivityIndicator, Text } from "react-native";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { AuthProvider } from "../src/contexts/AuthContext";
 
@@ -160,9 +161,37 @@ function AppContent() {
 }
 
 export default function RootLayout() {
-  // @expo/vector-icons automatically loads fonts on native platforms
-  // No need to manually load them - they're bundled in the app
-  
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [fontError, setFontError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadFonts() {
+      try {
+        // Load Ionicons font from local assets folder
+        await Font.loadAsync({
+          // This is the key that Ionicons uses internally
+          'Ionicons': require('../assets/fonts/Ionicons.ttf'),
+        });
+        setFontsLoaded(true);
+      } catch (error) {
+        console.error('Error loading fonts:', error);
+        setFontError(error instanceof Error ? error.message : 'Font loading failed');
+        // Still allow app to proceed even if fonts fail
+        setFontsLoaded(true);
+      }
+    }
+    loadFonts();
+  }, []);
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }}>
+        <ActivityIndicator size="large" color="#0C4A42" />
+        <Text style={{ marginTop: 16, color: "#64748B", fontSize: 14 }}>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
     <ThemeProvider>
       <AuthProvider>
