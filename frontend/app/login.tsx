@@ -148,6 +148,13 @@ export default function LoginScreen() {
   };
 
   const handleRegister = async () => {
+    // For drivers, redirect to the full onboarding flow
+    if (selectedRole === "driver") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      router.push("/onboarding");
+      return;
+    }
+    
     if (!email.trim() || !password.trim() || !name.trim()) {
       Alert.alert("Error", "Please fill in all required fields");
       return;
@@ -162,42 +169,24 @@ export default function LoginScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     
     try {
-      let response;
-      
-      if (selectedRole === "shipper") {
-        response = await api.shipperRegister({
-          business_name: name.trim(),
-          email: email.trim(),
-          password: password,
-          phone: phone.trim(),
-        });
-        setAuthToken(response.token);
-        await login(response.token, {
-          id: response.shipper_id,
-          name: response.business_name,
-          email: email.trim(),
-          type: "shipper",
-        });
-        router.replace("/shipper-home");
-      } else {
-        response = await api.driverRegister({
-          name: name.trim(),
-          email: email.trim(),
-          password: password,
-          phone: phone.trim(),
-        });
-        setAuthToken(response.token);
-        await login(response.token, {
-          id: response.driver_id,
-          name: response.name,
-          email: email.trim(),
-          type: "driver",
-        });
-        router.replace("/onboarding");
-      }
+      // Shipper registration stays on this screen
+      const response = await api.shipperRegister({
+        business_name: name.trim(),
+        email: email.trim(),
+        password: password,
+        phone: phone.trim(),
+      });
+      setAuthToken(response.token);
+      await login(response.token, {
+        id: response.shipper_id,
+        name: response.business_name,
+        email: email.trim(),
+        type: "shipper",
+      });
+      router.replace("/shipper-home");
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert("Welcome!", "Your account has been created successfully.");
+      Alert.alert("Welcome!", "Your business account has been created successfully.");
     } catch (error: any) {
       const message = error?.message || "Registration failed. Please try again.";
       Alert.alert("Registration Failed", message);
@@ -264,16 +253,14 @@ export default function LoginScreen() {
 
         {/* Form */}
         <Animated.View entering={FadeInUp.delay(200).duration(400)} style={styles.form}>
-          {isRegister && (
+          {isRegister && selectedRole === "shipper" && (
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>
-                {selectedRole === "shipper" ? "Business Name" : "Full Name"}
-              </Text>
+              <Text style={styles.inputLabel}>Business Name</Text>
               <View style={styles.inputContainer}>
-                <Ionicons name="person-outline" size={20} color={theme.textSecondary} />
+                <Ionicons name="storefront-outline" size={20} color={theme.textSecondary} />
                 <TextInput
                   style={styles.input}
-                  placeholder={selectedRole === "shipper" ? "Your business name" : "Your full name"}
+                  placeholder="Your business name"
                   placeholderTextColor={theme.textSecondary}
                   value={name}
                   onChangeText={setName}
@@ -284,69 +271,84 @@ export default function LoginScreen() {
             </View>
           )}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Email</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color={theme.textSecondary} />
-              <TextInput
-                style={styles.input}
-                placeholder="your@email.com"
-                placeholderTextColor={theme.textSecondary}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                testID="email-input"
-              />
-            </View>
-          </View>
-
-          {isRegister && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Phone (optional)</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="call-outline" size={20} color={theme.textSecondary} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="+358 40 123 4567"
-                  placeholderTextColor={theme.textSecondary}
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                  testID="phone-input"
-                />
+          {/* Only show email/password for login or shipper registration */}
+          {(!isRegister || selectedRole === "shipper") && (
+            <>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="mail-outline" size={20} color={theme.textSecondary} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="your@email.com"
+                    placeholderTextColor={theme.textSecondary}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    testID="email-input"
+                  />
+                </View>
               </View>
-            </View>
+
+              {isRegister && selectedRole === "shipper" && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Phone (optional)</Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="call-outline" size={20} color={theme.textSecondary} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="+358 40 123 4567"
+                      placeholderTextColor={theme.textSecondary}
+                      value={phone}
+                      onChangeText={setPhone}
+                      keyboardType="phone-pad"
+                      testID="phone-input"
+                    />
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Password</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="••••••••"
+                    placeholderTextColor={theme.textSecondary}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    testID="password-input"
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                    <Ionicons 
+                      name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                      size={20} 
+                      color={theme.textSecondary} 
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {!isRegister && (
+                <TouchableOpacity style={styles.forgotBtn} testID="forgot-password">
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} />
-              <TextInput
-                style={styles.input}
-                placeholder="••••••••"
-                placeholderTextColor={theme.textSecondary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                testID="password-input"
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons 
-                  name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                  size={20} 
-                  color={theme.textSecondary} 
-                />
-              </TouchableOpacity>
+          {/* Driver registration shows a message to go to onboarding */}
+          {isRegister && selectedRole === "driver" && (
+            <View style={styles.driverRegisterInfo}>
+              <Ionicons name="information-circle" size={24} color={theme.primary} />
+              <Text style={styles.driverRegisterText}>
+                Driver registration requires a quick 4-step onboarding process to set up your profile and vehicle information.
+              </Text>
             </View>
-          </View>
-
-          {!isRegister && (
-            <TouchableOpacity style={styles.forgotBtn} testID="forgot-password">
-              <Text style={styles.forgotText}>Forgot password?</Text>
-            </TouchableOpacity>
           )}
 
           <TouchableOpacity
@@ -360,7 +362,9 @@ export default function LoginScreen() {
             ) : (
               <>
                 <Text style={styles.submitBtnText}>
-                  {isRegister ? "Create Account" : "Sign In"}
+                  {isRegister 
+                    ? (selectedRole === "driver" ? "Start Onboarding" : "Create Account")
+                    : "Sign In"}
                 </Text>
                 <Ionicons name="arrow-forward" size={20} color="#fff" />
               </>
@@ -507,6 +511,22 @@ const createStyles = (theme: any) => StyleSheet.create({
 
   forgotBtn: { alignSelf: "flex-end", marginBottom: spacing.lg },
   forgotText: { color: theme.primary, fontSize: 13, fontWeight: "600" },
+
+  driverRegisterInfo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: theme.primaryLight,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
+    gap: 12,
+  },
+  driverRegisterText: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.textSecondary,
+    lineHeight: 20,
+  },
 
   submitBtn: {
     flexDirection: "row",
