@@ -1,23 +1,28 @@
-import React from "react";
+import React, { useEffect, useCallback } from "react";
 import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { View, Platform, StyleSheet } from "react-native";
+import { useFonts } from "expo-font";
+import * as SplashScreen from "expo-splash-screen";
+import { View, Platform, StyleSheet, Text, ActivityIndicator } from "react-native";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { AuthProvider } from "../src/contexts/AuthContext";
+
+// Prevent splash screen from auto-hiding until fonts are loaded
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // Ignore errors if splash screen is already hidden
+});
 
 function TabsNavigator() {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   
-  // Android needs extra padding for the navigation bar
-  // Samsung and other Android phones have software navigation buttons
-  const isAndroid = Platform.OS === "android";
-  const androidExtraPadding = isAndroid ? 16 : 0;
-  const bottomPadding = Math.max(insets.bottom, isAndroid ? 24 : 8) + androidExtraPadding;
-  const tabBarHeight = 64 + bottomPadding;
+  // Simplified padding - use system insets directly
+  // Add small extra padding for better visual spacing
+  const bottomPadding = insets.bottom + 8;
+  const tabBarHeight = 60 + bottomPadding;
 
   return (
     <>
@@ -31,17 +36,15 @@ function TabsNavigator() {
             backgroundColor: theme.surface,
             borderTopColor: theme.border,
             borderTopWidth: 1,
-            paddingTop: 10,
+            paddingTop: 8,
             paddingBottom: bottomPadding,
             height: tabBarHeight,
-            // Ensure tab bar is above Android navigation
             elevation: 8,
           },
           tabBarLabelStyle: {
             fontSize: 11,
             fontWeight: "600",
-            marginTop: 4,
-            marginBottom: isAndroid ? 10 : 0,
+            marginTop: 2,
           },
           tabBarIconStyle: {
             marginTop: 4,
@@ -111,11 +114,49 @@ function AppContent() {
   );
 }
 
+// Loading screen component
+function LoadingScreen() {
+  return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#0C4A42" />
+      <Text style={styles.loadingText}>Loading NadaRuns...</Text>
+    </View>
+  );
+}
+
 export default function RootLayout() {
-  // @expo/vector-icons automatically loads and registers fonts on native platforms
-  // No manual font loading needed - the package handles this internally
-  // The web preview may show font errors but native devices should work
-  
+  // CRITICAL: Preload Ionicons font before rendering any UI
+  // This prevents the "white circles" issue on Android
+  const [fontsLoaded, fontError] = useFonts({
+    // Load Ionicons directly from the @expo/vector-icons package
+    // This is the correct path that works in Expo Go on both iOS and Android
+    ...Ionicons.font,
+  });
+
+  // Hide splash screen once fonts are loaded
+  const onLayoutRootView = useCallback(async () => {
+    if (fontsLoaded || fontError) {
+      await SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, fontError]);
+
+  useEffect(() => {
+    onLayoutRootView();
+  }, [onLayoutRootView]);
+
+  // Log font errors for debugging but don't block the app
+  useEffect(() => {
+    if (fontError) {
+      console.warn('Font loading error:', fontError.message);
+    }
+  }, [fontError]);
+
+  // IMPORTANT: Return null/loading while fonts are loading
+  // This ensures icons are ready before UI renders
+  if (!fontsLoaded && !fontError) {
+    return <LoadingScreen />;
+  }
+
   return (
     <ThemeProvider>
       <AuthProvider>
@@ -124,3 +165,18 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFC",
+  },
+  loadingText: {
+    marginTop: 16,
+    color: "#64748B",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+});
