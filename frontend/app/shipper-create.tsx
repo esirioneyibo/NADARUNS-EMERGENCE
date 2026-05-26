@@ -67,6 +67,8 @@ export default function ShipperCreateScreen() {
   const [vehicleType, setVehicleType] = useState("car");
   const [cargoWeight, setCargoWeight] = useState("");
   const [cargoDescription, setCargoDescription] = useState("");
+  const [customPrice, setCustomPrice] = useState("");
+  const [useCustomPrice, setUseCustomPrice] = useState(false);
   
   // Location picker modals
   const [showPickupPicker, setShowPickupPicker] = useState(false);
@@ -119,6 +121,13 @@ export default function ShipperCreateScreen() {
       return;
     }
     
+    // Validate price
+    const finalPrice = useCustomPrice && customPrice ? parseFloat(customPrice) : priceQuote;
+    if (!finalPrice || finalPrice <= 0) {
+      Alert.alert("Price Required", "Please set a delivery price for this shipment.");
+      return;
+    }
+    
     const token = getAuthToken();
     if (!token) {
       Alert.alert(
@@ -148,13 +157,16 @@ export default function ShipperCreateScreen() {
           pickup_contact_name: pickupName,
           pickup_contact_phone: pickupPhone,
           pickup_notes: pickupNotes,
+          pickup_coords: pickupCoords,
           dropoff_address: dropoffAddress,
           dropoff_contact_name: dropoffName,
           dropoff_contact_phone: dropoffPhone,
           dropoff_notes: dropoffNotes,
+          dropoff_coords: dropoffCoords,
           vehicle_type: vehicleType,
           cargo_weight_kg: parseFloat(cargoWeight) || 0,
           cargo_description: cargoDescription,
+          price: useCustomPrice && customPrice ? parseFloat(customPrice) : priceQuote,
         }),
       });
       
@@ -442,16 +454,66 @@ export default function ShipperCreateScreen() {
       <View style={[styles.quoteCard, shadows.sm]}>
         <View style={styles.quoteHeader}>
           <Ionicons name="pricetag" size={20} color="#6366F1" />
-          <Text style={styles.quoteTitle}>Estimated Price</Text>
+          <Text style={styles.quoteTitle}>Delivery Price</Text>
         </View>
-        {quoteLoading ? (
-          <ActivityIndicator size="small" color="#6366F1" />
-        ) : priceQuote ? (
-          <Text style={styles.quotePrice}>€{priceQuote.toFixed(2)}</Text>
+        
+        {/* Toggle between estimated and custom price */}
+        <View style={styles.priceToggle}>
+          <TouchableOpacity
+            style={[styles.priceToggleBtn, !useCustomPrice && styles.priceToggleBtnActive]}
+            onPress={() => setUseCustomPrice(false)}
+          >
+            <Text style={[styles.priceToggleText, !useCustomPrice && styles.priceToggleTextActive]}>
+              Estimated
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.priceToggleBtn, useCustomPrice && styles.priceToggleBtnActive]}
+            onPress={() => setUseCustomPrice(true)}
+          >
+            <Text style={[styles.priceToggleText, useCustomPrice && styles.priceToggleTextActive]}>
+              Set Custom
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {useCustomPrice ? (
+          <View style={styles.customPriceContainer}>
+            <Text style={styles.currencySymbol}>€</Text>
+            <TextInput
+              style={styles.customPriceInput}
+              placeholder="0.00"
+              placeholderTextColor={theme.textSecondary}
+              value={customPrice}
+              onChangeText={(text) => {
+                // Only allow numbers and decimal point
+                const cleaned = text.replace(/[^0-9.]/g, '');
+                // Only allow one decimal point
+                const parts = cleaned.split('.');
+                if (parts.length > 2) return;
+                if (parts[1] && parts[1].length > 2) return;
+                setCustomPrice(cleaned);
+              }}
+              keyboardType="decimal-pad"
+            />
+          </View>
         ) : (
-          <Text style={styles.quotePlaceholder}>Enter all details to see price</Text>
+          <>
+            {quoteLoading ? (
+              <ActivityIndicator size="small" color="#6366F1" />
+            ) : priceQuote ? (
+              <Text style={styles.quotePrice}>€{priceQuote.toFixed(2)}</Text>
+            ) : (
+              <Text style={styles.quotePlaceholder}>Enter all details to see price</Text>
+            )}
+          </>
         )}
-        <Text style={styles.quoteNote}>Final price may vary based on actual distance and conditions</Text>
+        
+        <Text style={styles.quoteNote}>
+          {useCustomPrice 
+            ? "Set your own price for this delivery"
+            : "Final price may vary based on actual distance and conditions"}
+        </Text>
       </View>
     </Animated.View>
   );
@@ -1211,6 +1273,52 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.textSecondary,
     marginTop: spacing.sm,
     textAlign: "center",
+  },
+  
+  // Price toggle styles
+  priceToggle: {
+    flexDirection: "row",
+    backgroundColor: theme.border,
+    borderRadius: radius.md,
+    padding: 4,
+    marginBottom: spacing.md,
+    width: "100%",
+  },
+  priceToggleBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: radius.md - 2,
+    alignItems: "center",
+  },
+  priceToggleBtnActive: {
+    backgroundColor: theme.card || theme.background,
+  },
+  priceToggleText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: theme.textSecondary,
+  },
+  priceToggleTextActive: {
+    color: "#6366F1",
+  },
+  customPriceContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  currencySymbol: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#6366F1",
+  },
+  customPriceInput: {
+    fontSize: 36,
+    fontWeight: "800",
+    color: "#6366F1",
+    minWidth: 120,
+    textAlign: "center",
+    padding: 0,
   },
   
   bottomAction: {
