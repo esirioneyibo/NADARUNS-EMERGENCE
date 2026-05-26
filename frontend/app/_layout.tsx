@@ -102,6 +102,7 @@ function TabsNavigator() {
         <Tabs.Screen name="kyc" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="onboarding" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="login" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="chat" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="shipper-home" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="shipper-login" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="shipper-create" options={{ href: null, tabBarStyle: { display: "none" } }} />
