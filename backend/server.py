@@ -2448,6 +2448,284 @@ async def get_driver_location(order_id: str, user: dict = Depends(get_current_us
     }
 
 
+# ===================== Push Notifications =====================
+
+class PushTokenRegister(BaseModel):
+    push_token: str
+    user_id: str
+    user_type: Literal["driver", "shipper"]
+    platform: str = "android"
+
+
+@api_router.post("/notifications/register")
+async def register_push_token(data: PushTokenRegister):
+    """Register a push notification token for a user."""
+    await db.push_tokens.update_one(
+        {"user_id": data.user_id},
+        {"$set": {
+            "push_token": data.push_token,
+            "user_type": data.user_type,
+            "platform": data.platform,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True
+    )
+    logger.info(f"Registered push token for {data.user_type} {data.user_id}")
+    return {"status": "ok"}
+
+
+async def send_push_notification(user_id: str, title: str, body: str, data: dict = None):
+    """Send a push notification to a user (via Expo Push API)."""
+    token_doc = await db.push_tokens.find_one({"user_id": user_id})
+    if not token_doc or not token_doc.get("push_token"):
+        logger.warning(f"No push token found for user {user_id}")
+        return False
+    
+    push_token = token_doc["push_token"]
+    
+    # Send via Expo Push API
+    message = {
+        "to": push_token,
+        "title": title,
+        "body": body,
+        "sound": "default",
+        "data": data or {},
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://exp.host/--/api/v2/push/send",
+                json=message,
+                headers={"Content-Type": "application/json"},
+            )
+            if response.status_code == 200:
+                logger.info(f"Push notification sent to {user_id}")
+                return True
+            else:
+                logger.warning(f"Push notification failed: {response.text}")
+                return False
+    except Exception as e:
+        logger.error(f"Push notification error: {e}")
+        return False
+
+
+# ===================== Chat System =====================
+
+class ChatManager:
+    """Manages WebSocket connections for chat."""
+    
+    def __init__(self):
+        # Map of order_id -> list of chat participants (WebSocket, user_id, user_type, user_name)
+        self.chat_rooms: Dict[str, list] = {}
+    
+    async def join_room(self, websocket: WebSocket, order_id: str, user_id: str, user_type: str, user_name: str):
+        """Join a chat room for an order."""
+        await websocket.accept()
+        if order_id not in self.chat_rooms:
+            self.chat_rooms[order_id] = []
+        self.chat_rooms[order_id].append({
+            "ws": websocket,
+            "user_id": user_id,
+            "user_type": user_type,
+            "user_name": user_name,
+        })
+        logger.info(f"User {user_name} ({user_type}) joined chat for order {order_id}")
+        
+        # Send chat history
+        messages = await db.chat_messages.find({"order_id": order_id}).sort("timestamp", 1).to_list(100)
+        history = [{
+            "id": str(m.get("_id", m.get("id", ""))),
+            "order_id": m["order_id"],
+            "sender_id": m["sender_id"],
+            "sender_type": m["sender_type"],
+            "sender_name": m["sender_name"],
+            "message": m["message"],
+            "timestamp": m["timestamp"],
+            "read": m.get("read", False),
+        } for m in messages]
+        
+        await websocket.send_text(json.dumps({"type": "chat_history", "messages": history}))
+    
+    def leave_room(self, websocket: WebSocket, order_id: str):
+        """Leave a chat room."""
+        if order_id in self.chat_rooms:
+            self.chat_rooms[order_id] = [p for p in self.chat_rooms[order_id] if p["ws"] != websocket]
+            if not self.chat_rooms[order_id]:
+                del self.chat_rooms[order_id]
+    
+    async def send_message(self, order_id: str, sender_id: str, sender_type: str, sender_name: str, message: str):
+        """Send a message to all participants in a chat room."""
+        msg_id = str(uuid.uuid4())
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        # Save to database
+        msg_doc = {
+            "id": msg_id,
+            "order_id": order_id,
+            "sender_id": sender_id,
+            "sender_type": sender_type,
+            "sender_name": sender_name,
+            "message": message,
+            "timestamp": timestamp,
+            "read": False,
+        }
+        await db.chat_messages.insert_one(msg_doc)
+        
+        # Broadcast to all participants
+        if order_id in self.chat_rooms:
+            msg_data = json.dumps({
+                "type": "new_message",
+                "message": {
+                    "id": msg_id,
+                    "order_id": order_id,
+                    "sender_id": sender_id,
+                    "sender_type": sender_type,
+                    "sender_name": sender_name,
+                    "message": message,
+                    "timestamp": timestamp,
+                    "read": False,
+                },
+            })
+            
+            disconnected = []
+            for participant in self.chat_rooms[order_id]:
+                try:
+                    await participant["ws"].send_text(msg_data)
+                except Exception:
+                    disconnected.append(participant)
+            
+            # Clean up disconnected
+            for p in disconnected:
+                self.chat_rooms[order_id].remove(p)
+        
+        # Send push notification to other participants
+        order = await db.orders.find_one({"id": order_id})
+        if order:
+            # Notify driver if sender is not the driver
+            if sender_type != "driver" and order.get("driver_id"):
+                await send_push_notification(
+                    order["driver_id"],
+                    f"Message from {sender_name}",
+                    message[:100],
+                    {"type": "chat", "order_id": order_id}
+                )
+            # Notify shipper if sender is not the shipper
+            if sender_type != "shipper" and order.get("shipper_id"):
+                await send_push_notification(
+                    order["shipper_id"],
+                    f"Message from {sender_name}",
+                    message[:100],
+                    {"type": "chat", "order_id": order_id}
+                )
+        
+        return msg_doc
+    
+    async def mark_messages_read(self, order_id: str, user_id: str, message_ids: list):
+        """Mark messages as read."""
+        await db.chat_messages.update_many(
+            {"id": {"$in": message_ids}, "order_id": order_id},
+            {"$set": {"read": True}}
+        )
+        
+        # Notify other participants
+        if order_id in self.chat_rooms:
+            msg_data = json.dumps({
+                "type": "messages_read",
+                "message_ids": message_ids,
+                "read_by": user_id,
+            })
+            for participant in self.chat_rooms[order_id]:
+                if participant["user_id"] != user_id:
+                    try:
+                        await participant["ws"].send_text(msg_data)
+                    except Exception:
+                        pass
+
+
+# Global chat manager
+chat_manager = ChatManager()
+
+
+@app.websocket("/ws/chat/{order_id}")
+async def websocket_chat(websocket: WebSocket, order_id: str, user_id: str, user_type: str, user_name: str):
+    """WebSocket endpoint for real-time chat."""
+    await chat_manager.join_room(websocket, order_id, user_id, user_type, user_name)
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            if message.get("type") == "send_message":
+                await chat_manager.send_message(
+                    order_id,
+                    user_id,
+                    user_type,
+                    user_name,
+                    message.get("message", "")
+                )
+            elif message.get("type") == "mark_read":
+                await chat_manager.mark_messages_read(
+                    order_id,
+                    user_id,
+                    message.get("message_ids", [])
+                )
+            elif message.get("type") == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+                
+    except WebSocketDisconnect:
+        pass
+    except json.JSONDecodeError:
+        pass
+    finally:
+        chat_manager.leave_room(websocket, order_id)
+
+
+# API endpoint to get chat history (fallback)
+@api_router.get("/orders/{order_id}/chat")
+async def get_chat_history(order_id: str, user: dict = Depends(get_current_user)):
+    """Get chat history for an order."""
+    messages = await db.chat_messages.find({"order_id": order_id}).sort("timestamp", 1).to_list(100)
+    return [{
+        "id": str(m.get("_id", m.get("id", ""))),
+        "order_id": m["order_id"],
+        "sender_id": m["sender_id"],
+        "sender_type": m["sender_type"],
+        "sender_name": m["sender_name"],
+        "message": m["message"],
+        "timestamp": m["timestamp"],
+        "read": m.get("read", False),
+    } for m in messages]
+
+
+# API endpoint to send a chat message (fallback)
+@api_router.post("/orders/{order_id}/chat")
+async def send_chat_message(order_id: str, request: Request, user: dict = Depends(get_current_user)):
+    """Send a chat message (HTTP fallback when WebSocket not available)."""
+    data = await request.json()
+    message = data.get("message", "")
+    
+    if not message.strip():
+        raise HTTPException(400, "Message cannot be empty")
+    
+    # Determine sender info
+    sender_id = user["id"]
+    sender_type = user.get("type", "driver")
+    
+    if sender_type == "driver":
+        driver = await db.drivers.find_one({"id": sender_id})
+        sender_name = driver.get("name", "Driver") if driver else "Driver"
+    elif sender_type == "shipper":
+        shipper = await db.shippers.find_one({"id": sender_id})
+        sender_name = shipper.get("company_name", "Business") if shipper else "Business"
+    else:
+        sender_name = "User"
+    
+    msg_doc = await chat_manager.send_message(order_id, sender_id, sender_type, sender_name, message)
+    return msg_doc
+
+
 # ===================== Lifecycle =====================
 
 app.include_router(api_router)
