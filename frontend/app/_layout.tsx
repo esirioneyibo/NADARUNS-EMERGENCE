@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React from "react";
 import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import * as Font from "expo-font";
-import { View, ActivityIndicator, Text } from "react-native";
+import { View, Platform, StyleSheet } from "react-native";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { AuthProvider } from "../src/contexts/AuthContext";
 
@@ -13,9 +12,12 @@ function TabsNavigator() {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   
-  // Calculate proper bottom padding based on device safe area
-  const bottomPadding = Math.max(insets.bottom, 8);
-  const tabBarHeight = 56 + bottomPadding;
+  // Android needs extra padding for the navigation bar
+  // Samsung and other Android phones have software navigation buttons
+  const isAndroid = Platform.OS === "android";
+  const androidExtraPadding = isAndroid ? 16 : 0;
+  const bottomPadding = Math.max(insets.bottom, isAndroid ? 24 : 8) + androidExtraPadding;
+  const tabBarHeight = 64 + bottomPadding;
 
   return (
     <>
@@ -29,15 +31,17 @@ function TabsNavigator() {
             backgroundColor: theme.surface,
             borderTopColor: theme.border,
             borderTopWidth: 1,
-            paddingTop: 8,
+            paddingTop: 10,
             paddingBottom: bottomPadding,
             height: tabBarHeight,
+            // Ensure tab bar is above Android navigation
+            elevation: 8,
           },
           tabBarLabelStyle: {
             fontSize: 11,
             fontWeight: "600",
-            marginTop: 2,
-            marginBottom: 0,
+            marginTop: 4,
+            marginBottom: isAndroid ? 10 : 0,
           },
           tabBarIconStyle: {
             marginTop: 4,
@@ -81,68 +85,15 @@ function TabsNavigator() {
           }}
         />
         {/* Hidden screens - accessible via navigation but not in tab bar */}
-        <Tabs.Screen
-          name="order"
-          options={{
-            href: null,
-            tabBarStyle: { display: "none" },
-          }}
-        />
-        <Tabs.Screen
-          name="summary"
-          options={{
-            href: null,
-            tabBarStyle: { display: "none" },
-          }}
-        />
-        <Tabs.Screen
-          name="kyc"
-          options={{
-            href: null,
-            tabBarStyle: { display: "none" },
-          }}
-        />
-        <Tabs.Screen
-          name="onboarding"
-          options={{
-            href: null,
-            tabBarStyle: { display: "none" },
-          }}
-        />
-        <Tabs.Screen
-          name="login"
-          options={{
-            href: null,
-            tabBarStyle: { display: "none" },
-          }}
-        />
-        <Tabs.Screen
-          name="shipper-home"
-          options={{
-            href: null,
-            tabBarStyle: { display: "none" },
-          }}
-        />
-        <Tabs.Screen
-          name="shipper-login"
-          options={{
-            href: null,
-            tabBarStyle: { display: "none" },
-          }}
-        />
-        <Tabs.Screen
-          name="admin"
-          options={{
-            href: null,
-            tabBarStyle: { display: "none" },
-          }}
-        />
-        <Tabs.Screen
-          name="+html"
-          options={{
-            href: null,
-          }}
-        />
+        <Tabs.Screen name="order" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="summary" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="kyc" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="onboarding" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="login" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="shipper-home" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="shipper-login" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="admin" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="+html" options={{ href: null }} />
       </Tabs>
     </>
   );
@@ -161,37 +112,10 @@ function AppContent() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [fontError, setFontError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadFonts() {
-      try {
-        // Load Ionicons font from local assets folder
-        await Font.loadAsync({
-          // This is the key that Ionicons uses internally
-          'Ionicons': require('../assets/fonts/Ionicons.ttf'),
-        });
-        setFontsLoaded(true);
-      } catch (error) {
-        console.error('Error loading fonts:', error);
-        setFontError(error instanceof Error ? error.message : 'Font loading failed');
-        // Still allow app to proceed even if fonts fail
-        setFontsLoaded(true);
-      }
-    }
-    loadFonts();
-  }, []);
-
-  if (!fontsLoaded) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }}>
-        <ActivityIndicator size="large" color="#0C4A42" />
-        <Text style={{ marginTop: 16, color: "#64748B", fontSize: 14 }}>Loading...</Text>
-      </View>
-    );
-  }
-
+  // @expo/vector-icons automatically loads and registers fonts on native platforms
+  // No manual font loading needed - the package handles this internally
+  // The web preview may show font errors but native devices should work
+  
   return (
     <ThemeProvider>
       <AuthProvider>
