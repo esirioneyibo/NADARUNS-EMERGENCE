@@ -18,7 +18,8 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInRight, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
-import { api } from "../src/api";
+import { api, setAuthToken } from "../src/api";
+import { useAuth } from "../src/contexts/AuthContext";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 
@@ -82,6 +83,7 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { login } = useAuth();
   const scrollRef = useRef<ScrollView>(null);
   
   const [step, setStep] = useState(1);
@@ -136,12 +138,16 @@ export default function OnboardingScreen() {
         license_plate: formData.licensePlate || undefined,
       });
       
-      // Set auth token
-      const { setAuthToken } = await import("../src/api");
+      // Set auth token in API module
       setAuthToken(response.token);
       
       // Save to auth context
-      const { useAuth } = await import("../src/contexts/AuthContext");
+      await login(response.token, {
+        id: response.driver_id,
+        name: `${formData.firstName} ${formData.lastName}`,
+        email: formData.email,
+        type: "driver",
+      });
       
       Alert.alert(
         "Registration Successful!",

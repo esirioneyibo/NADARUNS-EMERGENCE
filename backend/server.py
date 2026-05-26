@@ -941,13 +941,11 @@ async def register_driver(registration: DriverRegistration):
     
     # Create new driver
     driver_id = str(uuid.uuid4())
-    vehicle_labels = {
-        "bicycle": "Bicycle",
-        "scooter": "Scooter",
-        "motorbike": "Motorbike",
-        "car": "Car"
-    }
-    vehicle_label = vehicle_labels.get(registration.vehicle_type, "Bicycle")
+    
+    # Get vehicle info from VEHICLE_TYPES
+    vehicle_info = VEHICLE_TYPES.get(registration.vehicle_type, VEHICLE_TYPES.get("cargo_van"))
+    vehicle_label = vehicle_info["name"] if vehicle_info else "Cargo Van"
+    vehicle_capacity = vehicle_info["max_weight_kg"] if vehicle_info else 1500
     
     # Hash the password
     password_hash = hash_password(registration.password)
@@ -959,6 +957,7 @@ async def register_driver(registration: DriverRegistration):
         avatar="https://api.dicebear.com/7.x/avataaars/png?seed=" + driver_id,
         vehicle=f"{vehicle_label} • {registration.license_plate or '—'}",
         vehicle_type=registration.vehicle_type,
+        vehicle_capacity_kg=vehicle_capacity,
         plate=registration.license_plate or "",
         email=registration.email,
         phone=registration.phone,
@@ -1422,6 +1421,15 @@ async def create_shipment(
     )
     
     logger.info(f"Shipper {shipper_id} created shipment {order_id}")
+    
+    # Send push notification to online drivers with matching vehicle type
+    asyncio.create_task(notify_available_drivers(
+        order_id=order_id,
+        order_number=order_number,
+        vehicle_type=request.vehicle_type,
+        pickup_address=request.pickup_address,
+        earnings=driver_earnings,
+    ))
     
     return {
         "order_id": order_id,
@@ -2602,6 +2610,46 @@ async def send_push_notification(user_id: str, title: str, body: str, data: dict
     except Exception as e:
         logger.error(f"Push notification error: {e}")
         return False
+
+
+async def notify_available_drivers(
+    order_id: str,
+    order_number: str,
+    vehicle_type: str,
+    pickup_address: str,
+    earnings: float
+):
+    """Notify online drivers about a new order."""
+    try:
+        # Find online drivers with matching or compatible vehicle types
+        # For now, notify all online drivers (vehicle matching can be added later)
+        online_drivers = await db.drivers.find(
+            {"is_online": True},
+            {"id": 1}
+        ).to_list(length=100)
+        
+        vehicle_info = VEHICLE_TYPES.get(vehicle_type, {})
+        vehicle_name = vehicle_info.get("name", "Vehicle")
+        
+        notification_count = 0
+        for driver_doc in online_drivers:
+            driver_id = driver_doc["id"]
+            success = await send_push_notification(
+                user_id=driver_id,
+                title="🚚 New Delivery Available!",
+                body=f"{vehicle_name} needed • €{earnings:.2f} • {pickup_address[:30]}...",
+                data={
+                    "type": "new_order",
+                    "order_id": order_id,
+                    "order_number": order_number,
+                }
+            )
+            if success:
+                notification_count += 1
+        
+        logger.info(f"Notified {notification_count} drivers about new order {order_id}")
+    except Exception as e:
+        logger.error(f"Failed to notify drivers: {e}")
 
 
 # ===================== Chat System =====================

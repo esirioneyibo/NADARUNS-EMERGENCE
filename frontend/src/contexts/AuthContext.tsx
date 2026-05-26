@@ -10,7 +10,7 @@ interface User {
   id: string;
   name: string;
   email?: string;
-  type: "driver" | "admin";
+  type: "driver" | "shipper" | "admin";
 }
 
 interface AuthContextType {

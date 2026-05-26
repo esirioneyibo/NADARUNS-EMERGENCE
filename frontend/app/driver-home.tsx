@@ -18,15 +18,20 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 
 import { api } from "../src/api";
-import type { Driver, Order } from "../src/types";
+import { Driver, Order } from "../src/types";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 import MapView from "../src/components/MapView";
 import SlideToGoOnline from "../src/components/SlideToGoOnline";
 import { useDriverLocation } from "../src/hooks/useWebSocket";
+import { 
+  registerForPushNotifications, 
+  registerPushTokenWithBackend,
+  addNotificationResponseListener 
+} from "../src/services/notifications";
 
 // Helper to get greeting based on time of day
-function getGreeting(): string {
+function getGreeting() {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
@@ -34,7 +39,7 @@ function getGreeting(): string {
 }
 
 // Format current date
-function formatDate(): string {
+function formatDate() {
   return new Date().toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -130,6 +135,43 @@ export default function HomeScreen() {
       load();
     }, [load])
   );
+
+  // Register for push notifications when driver is loaded
+  useEffect(() => {
+    if (!driver?.id) return;
+
+    const setupPushNotifications = async () => {
+      try {
+        const token = await registerForPushNotifications();
+        if (token) {
+          await registerPushTokenWithBackend(token, driver.id, "driver");
+          console.log("[Notifications] Registered for push notifications");
+        }
+      } catch (e) {
+        console.warn("[Notifications] Setup failed:", e);
+      }
+    };
+
+    setupPushNotifications();
+
+    // Handle notification taps
+    const subscription = addNotificationResponseListener((response) => {
+      const data = response.notification.request.content.data;
+      console.log("[Notifications] Response:", data);
+      
+      // Navigate based on notification type
+      if (data?.type === "new_order" && data?.order_id) {
+        // Will be picked up by pending order polling
+        load();
+      } else if (data?.type === "chat" && data?.order_id) {
+        router.push(`/chat?orderId=${data.order_id}`);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [driver?.id, router, load]);
 
   // Auto-poll for pending order AND active order while online
   useEffect(() => {
