@@ -33,14 +33,46 @@ interface FormData {
   vehicleType: string;
   licensePlate: string;
   city: string;
+  vehicleCapacity: string;
 }
 
-const VEHICLE_OPTIONS = [
-  { id: "bicycle", label: "Bicycle", icon: "bicycle-outline" as const, desc: "Eco-friendly" },
-  { id: "scooter", label: "Scooter", icon: "rocket-outline" as const, desc: "Fast & agile" },
-  { id: "motorbike", label: "Motorbike", icon: "speedometer-outline" as const, desc: "Quick delivery" },
-  { id: "car", label: "Car", icon: "car-outline" as const, desc: "Large orders" },
+// Logistics Vehicle Categories
+const VEHICLE_CATEGORIES = [
+  {
+    category: "Medium Vehicles",
+    vehicles: [
+      { id: "cargo_van", label: "Cargo Van", icon: "car-outline" as const, desc: "Up to 1,500 kg", capacity: "1500" },
+      { id: "box_truck", label: "Box Truck", icon: "bus-outline" as const, desc: "Up to 5,000 kg", capacity: "5000" },
+      { id: "flatbed_truck", label: "Flatbed Truck", icon: "train-outline" as const, desc: "Open cargo bed", capacity: "8000" },
+    ],
+  },
+  {
+    category: "Heavy Vehicles",
+    vehicles: [
+      { id: "semi_truck", label: "Semi-Truck", icon: "bus-outline" as const, desc: "Long haul", capacity: "20000" },
+      { id: "trailer_truck", label: "Trailer Truck", icon: "train-outline" as const, desc: "Large cargo", capacity: "25000" },
+      { id: "container_truck", label: "Container Truck", icon: "cube-outline" as const, desc: "Container shipping", capacity: "30000" },
+      { id: "tanker", label: "Tanker", icon: "water-outline" as const, desc: "Liquid cargo", capacity: "35000" },
+    ],
+  },
+  {
+    category: "Specialized",
+    vehicles: [
+      { id: "refrigerated", label: "Refrigerated", icon: "snow-outline" as const, desc: "Temperature controlled", capacity: "15000" },
+      { id: "crane_truck", label: "Crane Truck", icon: "construct-outline" as const, desc: "Heavy lifting", capacity: "12000" },
+      { id: "hazmat", label: "Hazmat Vehicle", icon: "warning-outline" as const, desc: "Dangerous goods", capacity: "18000" },
+    ],
+  },
+  {
+    category: "Other",
+    vehicles: [
+      { id: "other", label: "Other", icon: "ellipsis-horizontal-outline" as const, desc: "Specify below", capacity: "0" },
+    ],
+  },
 ];
+
+// Flatten for easy lookup
+const ALL_VEHICLES = VEHICLE_CATEGORIES.flatMap(cat => cat.vehicles);
 
 const CITIES = ["Helsinki", "Espoo", "Tampere", "Turku", "Oulu"];
 
@@ -63,6 +95,7 @@ export default function OnboardingScreen() {
     vehicleType: "",
     licensePlate: "",
     city: "",
+    vehicleCapacity: "",
   });
 
   const styles = createStyles(theme);
@@ -244,39 +277,69 @@ export default function OnboardingScreen() {
           <Animated.View entering={FadeInRight.duration(300)} key="step3" style={styles.stepContent}>
             <View style={styles.stepHeader}>
               <Text style={styles.stepTitle}>Your vehicle</Text>
-              <Text style={styles.stepSubtitle}>How will you make deliveries?</Text>
+              <Text style={styles.stepSubtitle}>Select your logistics vehicle type</Text>
             </View>
             
-            <View style={styles.vehicleGrid}>
-              {VEHICLE_OPTIONS.map((v) => {
-                const selected = formData.vehicleType === v.id;
-                return (
-                  <TouchableOpacity
-                    key={v.id}
-                    style={[styles.vehicleCard, selected && styles.vehicleCardSelected]}
-                    onPress={() => {
-                      updateField("vehicleType", v.id);
-                      Haptics.selectionAsync().catch(() => {});
-                    }}
-                    testID={`vehicle-${v.id}`}
-                  >
-                    <Ionicons 
-                      name={v.icon} 
-                      size={32} 
-                      color={selected ? "#fff" : theme.textPrimary} 
-                    />
-                    <Text style={[styles.vehicleLabel, selected && { color: "#fff" }]}>
-                      {v.label}
-                    </Text>
-                    <Text style={[styles.vehicleDesc, selected && { color: "rgba(255,255,255,0.7)" }]}>
-                      {v.desc}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 280 }}
+              nestedScrollEnabled
+            >
+              {VEHICLE_CATEGORIES.map((category) => (
+                <View key={category.category} style={styles.vehicleCategory}>
+                  <Text style={styles.vehicleCategoryTitle}>{category.category}</Text>
+                  <View style={styles.vehicleGrid}>
+                    {category.vehicles.map((v) => {
+                      const selected = formData.vehicleType === v.id;
+                      return (
+                        <TouchableOpacity
+                          key={v.id}
+                          style={[styles.vehicleCard, selected && styles.vehicleCardSelected]}
+                          onPress={() => {
+                            updateField("vehicleType", v.id);
+                            updateField("vehicleCapacity", v.capacity);
+                            Haptics.selectionAsync().catch(() => {});
+                          }}
+                          testID={`vehicle-${v.id}`}
+                        >
+                          <Ionicons 
+                            name={v.icon} 
+                            size={28} 
+                            color={selected ? "#fff" : theme.textPrimary} 
+                          />
+                          <Text style={[styles.vehicleLabel, selected && { color: "#fff" }]} numberOfLines={1}>
+                            {v.label}
+                          </Text>
+                          <Text style={[styles.vehicleDesc, selected && { color: "rgba(255,255,255,0.7)" }]} numberOfLines={1}>
+                            {v.desc}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
 
-            <View style={styles.inputGroup}>
+            {/* Custom capacity input for "Other" vehicle type */}
+            {formData.vehicleType === "other" && (
+              <View style={[styles.inputGroup, { marginTop: spacing.md }]}>
+                <Text style={styles.inputLabel}>Vehicle Capacity (kg)</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="cube-outline" size={20} color={theme.textSecondary} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter capacity in kg"
+                    placeholderTextColor={theme.textSecondary}
+                    value={formData.vehicleCapacity}
+                    onChangeText={(v) => updateField("vehicleCapacity", v.replace(/[^0-9]/g, ""))}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+            )}
+
+            <View style={[styles.inputGroup, { marginTop: spacing.md }]}>
               <Text style={styles.inputLabel}>Delivery city</Text>
               <ScrollView 
                 horizontal 
@@ -295,6 +358,15 @@ export default function OnboardingScreen() {
                       }}
                     >
                       <Text style={[styles.cityText, selected && { color: "#fff" }]}>
+                        {city}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </Animated.View>
+        );
                         {city}
                       </Text>
                     </TouchableOpacity>
