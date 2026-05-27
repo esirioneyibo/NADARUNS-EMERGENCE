@@ -501,15 +501,19 @@ class KYCSubmitRequest(BaseModel):
 
 # ===================== Registration Models =====================
 
+# Valid logistics vehicle type IDs
+VALID_VEHICLE_TYPE_IDS = list(VEHICLE_TYPES.keys())
+
 class DriverRegistration(BaseModel):
     first_name: str
     last_name: str
     email: str
     phone: str
     password: str  # plain password, will be hashed
-    vehicle_type: Literal["bicycle", "scooter", "motorbike", "car"]
+    vehicle_type: str  # logistics vehicle type ID (e.g., "cargo_van", "semi_truck")
     city: str
     license_plate: Optional[str] = None
+    vehicle_capacity_kg: Optional[int] = None  # Custom capacity for "other" type
 
 
 class RegistrationResponse(BaseModel):
@@ -763,14 +767,106 @@ async def get_pending():
 
 
 @api_router.get("/orders/available", response_model=List[Order])
-async def get_available_orders():
+async def get_available_orders(
+    vehicle_type: Optional[str] = None,
+    min_capacity_kg: Optional[int] = None,
+):
     """
     Get all available (pending) orders for map-based job discovery.
     Returns orders with their pickup locations for displaying on driver's map.
+    
+    Optional filters:
+    - vehicle_type: Filter orders requiring a specific vehicle type
+    - min_capacity_kg: Filter orders where cargo weight is within this capacity
     """
-    cursor = db.orders.find({"status": "pending"}, {"_id": 0}).limit(50)
+    query = {"status": "pending"}
+    
+    # Filter by vehicle type if specified
+    if vehicle_type:
+        # Show orders that either:
+        # 1. Require this exact vehicle type
+        # 2. Have no vehicle type requirement (legacy orders)
+        query["$or"] = [
+            {"vehicle_type": vehicle_type},
+            {"vehicle_type": None},
+            {"vehicle_type": {"$exists": False}},
+        ]
+    
+    # Filter by capacity if specified
+    if min_capacity_kg:
+        # Show orders where cargo weight is within the driver's capacity
+        query["$or"] = query.get("$or", []) + [
+            {"cargo_weight_kg": {"$lte": min_capacity_kg}},
+            {"cargo_weight_kg": None},
+            {"cargo_weight_kg": {"$exists": False}},
+        ]
+    
+    cursor = db.orders.find(query, {"_id": 0}).limit(50)
     items = await cursor.to_list(50)
     return [Order(**o) for o in items]
+
+
+@api_router.get("/orders/available/matched", response_model=List[Order])
+async def get_matched_orders(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Get available orders matched to the driver's vehicle type and capacity.
+    Orders are sorted by best match (exact vehicle type match first).
+    """
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "driver":
+        raise HTTPException(403, "Driver access required")
+    
+    driver = await db.drivers.find_one({"id": payload["sub"]}, {"_id": 0})
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+    
+    driver_vehicle_type = driver.get("vehicle_type", "cargo_van")
+    driver_capacity = driver.get("vehicle_capacity_kg", 1500)
+    
+    # Get all pending orders
+    all_orders = await db.orders.find({"status": "pending"}, {"_id": 0}).limit(100).to_list(100)
+    
+    # Score and filter orders based on vehicle match
+    matched_orders = []
+    for order in all_orders:
+        order_vehicle_type = order.get("vehicle_type")
+        order_weight = order.get("cargo_weight_kg", 0) or 0
+        
+        # Check if driver can handle this order
+        if order_weight > driver_capacity:
+            continue  # Skip orders that exceed driver's capacity
+        
+        # Calculate match score
+        score = 0
+        if order_vehicle_type is None:
+            # No vehicle preference - any driver can take it
+            score = 1
+        elif order_vehicle_type == driver_vehicle_type:
+            # Exact match - highest priority
+            score = 3
+        else:
+            # Check if driver's vehicle can handle this type of order
+            # Allow higher capacity vehicles to take lower capacity orders
+            order_vehicle_info = VEHICLE_TYPES.get(order_vehicle_type)
+            driver_vehicle_info = VEHICLE_TYPES.get(driver_vehicle_type)
+            
+            if order_vehicle_info and driver_vehicle_info:
+                if driver_vehicle_info["max_weight_kg"] >= order_vehicle_info["max_weight_kg"]:
+                    score = 2  # Driver has bigger/equal vehicle
+                # Special case: specialized vehicles can only take their own type
+                if order_vehicle_info["category"] == "Specialized" and order_vehicle_type != driver_vehicle_type:
+                    continue  # Skip specialized orders if vehicle doesn't match
+        
+        if score > 0:
+            matched_orders.append((score, order))
+    
+    # Sort by score (highest first), then by earnings (highest first)
+    matched_orders.sort(key=lambda x: (-x[0], -(x[1].get("earnings", 0) or 0)))
+    
+    return [Order(**order) for _, order in matched_orders[:50]]
 
 
 @api_router.get("/orders/active", response_model=Optional[Order])
@@ -997,13 +1093,22 @@ async def register_driver(registration: DriverRegistration):
     if existing:
         raise HTTPException(400, "A driver with this email already exists")
     
+    # Validate vehicle type
+    if registration.vehicle_type not in VEHICLE_TYPES:
+        raise HTTPException(400, f"Invalid vehicle type: {registration.vehicle_type}. Valid types: {list(VEHICLE_TYPES.keys())}")
+    
     # Create new driver
     driver_id = str(uuid.uuid4())
     
     # Get vehicle info from VEHICLE_TYPES
     vehicle_info = VEHICLE_TYPES.get(registration.vehicle_type, VEHICLE_TYPES.get("cargo_van"))
     vehicle_label = vehicle_info["name"] if vehicle_info else "Cargo Van"
-    vehicle_capacity = vehicle_info["max_weight_kg"] if vehicle_info else 1500
+    
+    # Use custom capacity if provided (for "other" type), otherwise use vehicle default
+    if registration.vehicle_type == "other" and registration.vehicle_capacity_kg:
+        vehicle_capacity = registration.vehicle_capacity_kg
+    else:
+        vehicle_capacity = vehicle_info["max_weight_kg"] if vehicle_info else 1500
     
     # Hash the password
     password_hash = hash_password(registration.password)
@@ -1115,6 +1220,8 @@ class SimpleDriverRegistration(BaseModel):
     email: str
     password: str
     phone: Optional[str] = None
+    vehicle_type: Optional[str] = "cargo_van"  # Default to cargo van
+    vehicle_capacity_kg: Optional[int] = None  # Custom capacity for "other" type
 
 
 class SimpleShipperRegistration(BaseModel):
@@ -1122,6 +1229,7 @@ class SimpleShipperRegistration(BaseModel):
     email: str
     password: str
     phone: Optional[str] = None
+    preferred_vehicle_type: Optional[str] = None  # Default preferred vehicle
 
 
 @api_router.post("/auth/driver-register")
@@ -1132,16 +1240,32 @@ async def simple_driver_register(registration: SimpleDriverRegistration):
     if existing:
         raise HTTPException(400, "A driver with this email already exists")
     
+    # Validate vehicle type
+    vehicle_type = registration.vehicle_type or "cargo_van"
+    if vehicle_type not in VEHICLE_TYPES:
+        vehicle_type = "cargo_van"  # Fallback to cargo van
+    
     driver_id = str(uuid.uuid4())
     password_hash = hash_password(registration.password)
+    
+    # Get vehicle info
+    vehicle_info = VEHICLE_TYPES[vehicle_type]
+    vehicle_label = vehicle_info["name"]
+    
+    # Use custom capacity if provided (for "other" type), otherwise use vehicle default
+    if vehicle_type == "other" and registration.vehicle_capacity_kg:
+        vehicle_capacity = registration.vehicle_capacity_kg
+    else:
+        vehicle_capacity = vehicle_info["max_weight_kg"]
     
     new_driver = Driver(
         id=driver_id,
         name=registration.name,
         rating=5.0,
         avatar="https://api.dicebear.com/7.x/avataaars/png?seed=" + driver_id,
-        vehicle="Bicycle • —",
-        vehicle_type="bicycle",
+        vehicle=f"{vehicle_label} • —",
+        vehicle_type=vehicle_type,
+        vehicle_capacity_kg=vehicle_capacity,
         plate="",
         email=registration.email,
         phone=registration.phone or "",
@@ -1187,6 +1311,11 @@ async def simple_shipper_register(registration: SimpleShipperRegistration):
     if existing:
         raise HTTPException(400, "A business with this email already exists")
     
+    # Validate preferred vehicle type if provided
+    preferred_vehicle = registration.preferred_vehicle_type
+    if preferred_vehicle and preferred_vehicle not in VEHICLE_TYPES:
+        preferred_vehicle = None  # Reset to no preference if invalid
+    
     shipper_id = str(uuid.uuid4())
     password_hash = hash_password(registration.password)
     
@@ -1198,6 +1327,7 @@ async def simple_shipper_register(registration: SimpleShipperRegistration):
         phone=registration.phone or "",
         password_hash=password_hash,
         avatar=f"https://api.dicebear.com/7.x/initials/png?seed={registration.business_name}",
+        preferred_vehicle_type=preferred_vehicle,
     )
     
     await db.shippers.insert_one(new_shipper.model_dump())

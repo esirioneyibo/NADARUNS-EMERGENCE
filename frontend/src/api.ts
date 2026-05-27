@@ -172,6 +172,18 @@ export const api = {
   // Available orders for map-based discovery
   getAvailableOrders: () => request<Order[]>("/orders/available"),
   
+  // Available orders filtered by vehicle type
+  getAvailableOrdersFiltered: (vehicleType?: string, minCapacityKg?: number) => {
+    const params = new URLSearchParams();
+    if (vehicleType) params.append("vehicle_type", vehicleType);
+    if (minCapacityKg) params.append("min_capacity_kg", minCapacityKg.toString());
+    const queryString = params.toString();
+    return request<Order[]>(`/orders/available${queryString ? `?${queryString}` : ""}`);
+  },
+  
+  // Get orders matched to driver's vehicle type and capacity
+  getMatchedOrders: () => request<Order[]>("/orders/available/matched"),
+  
   // Wallet
   getWallet: () => request<Wallet>("/driver/wallet"),
   

@@ -111,11 +111,62 @@ backend:
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: true
           agent: "main"
           comment: "Added delivery_photo field to Order model, PhotoRequest model, POST /api/orders/{id}/photo endpoint with base64 + data-URI normalisation, 7.5MB soft size cap, and startup migration setting delivery_photo=None on existing orders. Smoke-tested with curl: stored & normalised correctly."
+        - working: true
+          agent: "testing"
+          comment: "Backend testing completed for logistics vehicle types implementation. All 6 test cases passed: (1) GET /api/shipper/vehicle-types returns 11 vehicle types with correct structure, (2) POST /api/driver/register with semi_truck successfully registered driver, (3) POST /api/driver/register with invalid vehicle type 'bicycle' correctly rejected with 400 error, (4) GET /api/orders/available?vehicle_type=cargo_van successfully filtered 9 orders, (5) PATCH /api/driver/me successfully updated vehicle type to refrigerated and capacity to 12000 kg, (6) POST /api/auth/driver-register with tanker successfully registered driver. Vehicle type validation, capacity setting, and filtering all working correctly."
+
+  - task: "Logistics vehicle types endpoint (GET /api/shipper/vehicle-types)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Tested GET /api/shipper/vehicle-types endpoint. Successfully returns 11 vehicle types (cargo_van, box_truck, flatbed_truck, semi_truck, trailer_truck, container_truck, tanker, refrigerated, crane_truck, hazmat, other) with correct structure including id, name, category, max_weight_kg, and base_rate_per_km fields."
+
+  - task: "Driver registration with vehicle type validation"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Tested POST /api/driver/register and POST /api/auth/driver-register endpoints with vehicle types. Valid vehicle types (semi_truck, tanker) are accepted and drivers are registered successfully with correct vehicle_capacity_kg set based on vehicle type. Invalid vehicle types (bicycle) are correctly rejected with 400 error and appropriate error message listing valid types."
+
+  - task: "Driver profile update with vehicle type"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Tested PATCH /api/driver/me endpoint for updating vehicle type and capacity. Successfully updated driver vehicle_type from semi_truck to refrigerated and vehicle_capacity_kg to 12000 kg. Changes persist correctly in driver profile."
+
+  - task: "Available orders filtering by vehicle type"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Tested GET /api/orders/available?vehicle_type=cargo_van endpoint. Successfully returns orders filtered by vehicle type. Returns orders that either match the specified vehicle type or have no vehicle type requirement (null/undefined). Found 9 available orders, all matching the filter criteria."
 
 frontend:
   - task: "PhotoCapture component + dropoff integration"
@@ -144,13 +195,16 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.1"
-  test_sequence: 0
+  version: "1.2"
+  test_sequence: 1
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Photo proof endpoint (POST /api/orders/{id}/photo)"
+    - "Logistics vehicle types endpoint (GET /api/shipper/vehicle-types)"
+    - "Driver registration with vehicle type validation"
+    - "Driver profile update with vehicle type"
+    - "Available orders filtering by vehicle type"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -158,3 +212,5 @@ test_plan:
 agent_communication:
     - agent: "main"
       message: "Implemented Photo Proof at Delivery (feature a). Backend has new POST /api/orders/{id}/photo endpoint and delivery_photo field on Order. Please run backend tests focusing on the new endpoint: valid base64, raw base64 (no data: prefix should be normalised), unknown order id (404), oversized payload (>7.5MB → 413), empty photo (400). Existing endpoints must still pass."
+    - agent: "testing"
+      message: "Completed backend testing for logistics vehicle types implementation. All 6 test cases passed successfully: (1) Vehicle types endpoint returns 11 vehicle types with correct structure, (2) Driver registration with valid vehicle types (semi_truck, tanker) works correctly, (3) Invalid vehicle types (bicycle) are properly rejected with 400 error, (4) Available orders endpoint filters by vehicle type correctly, (5) Driver profile update with vehicle type and capacity works, (6) Simple driver registration with vehicle type works. All vehicle type validation, capacity setting based on vehicle type, and order filtering functionality is working as expected. No issues found."
