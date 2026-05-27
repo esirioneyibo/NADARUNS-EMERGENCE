@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Platform, StyleSheet, View, Text } from "react-native";
+import React, { useEffect, useRef, useState, ReactNode } from "react";
+import { ActivityIndicator, Alert, Platform, StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Location from "expo-location";
 import { theme } from "../theme";
@@ -9,6 +9,13 @@ interface Point {
   lng: number;
 }
 
+interface CustomMarker {
+  key: string;
+  coordinate: { latitude: number; longitude: number };
+  children: ReactNode;
+  onPress?: () => void;
+}
+
 interface Props {
   pickup?: Point | null;
   dropoff?: Point | null;
@@ -16,12 +23,14 @@ interface Props {
   routePoints?: Point[] | null;
   showRoute?: boolean;
   height?: number | "100%";
+  customMarkers?: CustomMarker[];
 }
 
 /**
  * Native Google Maps view (iOS / Android).
  * Renders pickup + dropoff markers, the driver marker (user's real location), and a polyline route.
  * Uses expo-location for real-time device tracking.
+ * Supports custom markers for job discovery.
  */
 export default function NativeMapView({
   pickup,
@@ -29,6 +38,7 @@ export default function NativeMapView({
   driver,
   routePoints,
   showRoute = true,
+  customMarkers,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
   const [userLocation, setUserLocation] = useState<Point | null>(null);
@@ -229,6 +239,18 @@ export default function NativeMapView({
             </View>
           </Marker>
         ) : null}
+
+        {/* Custom markers for job discovery */}
+        {customMarkers?.map((marker) => (
+          <Marker
+            key={marker.key}
+            coordinate={marker.coordinate}
+            anchor={{ x: 0.5, y: 1 }}
+            onPress={marker.onPress}
+          >
+            {marker.children}
+          </Marker>
+        ))}
       </MapView>
       
       {/* Location permission denied indicator */}

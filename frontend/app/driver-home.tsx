@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -29,6 +30,8 @@ import {
   registerPushTokenWithBackend,
   addNotificationResponseListener 
 } from "../src/services/notifications";
+import JobMarker from "../src/components/JobMarker";
+import JobDetailSheet from "../src/components/JobDetailSheet";
 
 // Helper to get greeting based on time of day
 function getGreeting() {
@@ -57,6 +60,11 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
+  
+  // Map-based job discovery state
+  const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
+  const [selectedOrders, setSelectedOrders] = useState<Order[]>([]);
+  const [showJobSheet, setShowJobSheet] = useState(false);
 
   const styles = createStyles(theme);
 
@@ -119,10 +127,16 @@ export default function HomeScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [d, p, a] = await Promise.all([api.getDriver(), api.getPending(), api.getActive()]);
+      const [d, p, a, available] = await Promise.all([
+        api.getDriver(), 
+        api.getPending(), 
+        api.getActive(),
+        api.getAvailableOrders(),
+      ]);
       setDriver(d);
       setPending(p);
       setActive(a);
+      setAvailableOrders(available || []);
     } catch (e) {
       console.warn("Home load failed", e);
     } finally {
@@ -212,6 +226,55 @@ export default function HomeScreen() {
   const handleResume = () => {
     router.push("/order");
   };
+
+  // Cluster orders by location (same lat/lng within ~11m = same cluster)
+  const clusteredLocations = useMemo(() => {
+    const clusters = new Map<string, { key: string; lat: number; lng: number; orders: Order[] }>();
+    
+    for (const order of availableOrders) {
+      const lat = Math.round(order.pickup.lat * 10000) / 10000;
+      const lng = Math.round(order.pickup.lng * 10000) / 10000;
+      const key = `${lat},${lng}`;
+      
+      if (clusters.has(key)) {
+        clusters.get(key)!.orders.push(order);
+      } else {
+        clusters.set(key, { key, lat, lng, orders: [order] });
+      }
+    }
+    
+    return Array.from(clusters.values());
+  }, [availableOrders]);
+
+  // Handle marker press - show job detail sheet
+  const handleMarkerPress = useCallback((orders: Order[]) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setSelectedOrders(orders);
+    setShowJobSheet(true);
+  }, []);
+
+  // Handle job accept from sheet
+  const handleAcceptJob = useCallback(async (orderId: string) => {
+    try {
+      await api.accept(orderId);
+      setShowJobSheet(false);
+      setSelectedOrders([]);
+      // Remove from available orders
+      setAvailableOrders(prev => prev.filter(o => o.id !== orderId));
+      router.push("/order");
+    } catch (error: any) {
+      Alert.alert("Job Taken", "This job was already accepted by another driver.");
+      // Refresh available orders
+      const available = await api.getAvailableOrders();
+      setAvailableOrders(available || []);
+    }
+  }, [router]);
+
+  // Handle job sheet close
+  const handleCloseJobSheet = useCallback(() => {
+    setShowJobSheet(false);
+    setSelectedOrders([]);
+  }, []);
 
   if (loading || !driver) {
     return (
@@ -325,11 +388,34 @@ export default function HomeScreen() {
     <View style={styles.container} testID="home-screen">
       <View style={StyleSheet.absoluteFill}>
         <MapView
-          pickup={pending?.pickup}
-          dropoff={pending?.dropoff}
-          showRoute={!!pending}
+          pickup={active?.pickup || pending?.pickup}
+          dropoff={active?.dropoff || pending?.dropoff}
+          showRoute={!!active || !!pending}
+          customMarkers={
+            !active && !showJobSheet ? clusteredLocations.map((cluster) => ({
+              key: cluster.key,
+              coordinate: { latitude: cluster.lat, longitude: cluster.lng },
+              children: (
+                <JobMarker
+                  count={cluster.orders.length}
+                  earnings={cluster.orders.reduce((sum, o) => sum + o.earnings, 0) / cluster.orders.length}
+                  isSelected={selectedOrders.some(so => cluster.orders.some(co => co.id === so.id))}
+                />
+              ),
+              onPress: () => handleMarkerPress(cluster.orders),
+            })) : undefined
+          }
         />
       </View>
+
+      {/* Job count badge */}
+      {!active && !showJobSheet && availableOrders.length > 0 && (
+        <View style={styles.jobCountBadge}>
+          <Text style={styles.jobCountText}>
+            {availableOrders.length} job{availableOrders.length !== 1 ? "s" : ""} nearby
+          </Text>
+        </View>
+      )}
 
       {/* Top bar */}
       <Animated.View
@@ -414,15 +500,20 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.waitingMessage}>
-              <ActivityIndicator size="small" color={theme.primary} />
-              <Text style={styles.waitingText}>Waiting for delivery requests...</Text>
+              <Ionicons name="map" size={20} color={theme.primary} />
+              <Text style={styles.waitingText}>
+                {availableOrders.length > 0 
+                  ? `Tap a marker to view job details`
+                  : `Searching for nearby jobs...`}
+              </Text>
             </View>
           </>
         )}
       </Animated.View>
 
-      {/* Incoming order overlay */}
-      {showRequest ? (
+      {/* Incoming order overlay - OLD FLOW (disabled in favor of map-based discovery) */}
+      {/* Now using JobDetailSheet instead when user taps a marker */}
+      {false && showRequest ? (
         <Animated.View
           entering={SlideInDown.springify().damping(16).mass(0.9)}
           style={[styles.requestOverlay, { paddingBottom: 20 }, shadows.lg]}
@@ -507,6 +598,15 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
       ) : null}
+
+      {/* Job Detail Sheet - Map-based job discovery */}
+      <JobDetailSheet
+        orders={selectedOrders}
+        visible={showJobSheet}
+        onClose={handleCloseJobSheet}
+        onAccept={handleAcceptJob}
+        theme={theme}
+      />
     </View>
   );
 }
@@ -514,6 +614,23 @@ export default function HomeScreen() {
 const createStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.background },
+  
+  // Job discovery badge
+  jobCountBadge: {
+    position: "absolute",
+    top: 180,
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.8)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 10,
+  },
+  jobCountText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   
   // Welcome screen styles
   welcomeContent: {

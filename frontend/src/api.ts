@@ -169,6 +169,9 @@ export const api = {
       body: JSON.stringify({ photo }),
     }),
   
+  // Available orders for map-based discovery
+  getAvailableOrders: () => request<Order[]>("/orders/available"),
+  
   // Wallet
   getWallet: () => request<Wallet>("/driver/wallet"),
   

@@ -594,11 +594,11 @@ ITEM_SETS = [
 NOTES = ["Please knock softly", "Leave at door", "Ring buzzer 3 times", "No contact please", None]
 
 
-def build_order(status: OrderStatus = "pending", completed_offset_hours: Optional[int] = None) -> dict:
+def build_order(status: OrderStatus = "pending", completed_offset_hours: Optional[int] = None, override_pickup: dict = None, override_dropoff: dict = None) -> dict:
     idx = random.randint(0, 4)
-    r = RESTAURANTS[idx]
+    r = override_pickup or RESTAURANTS[idx]
     c = CUSTOMERS[idx]
-    d = DROPOFFS[idx]
+    d = override_dropoff or DROPOFFS[idx]
     items = ITEM_SETS[idx]
     distance = round(random.uniform(1.4, 5.2), 1)
     eta = int(distance * 4) + random.randint(3, 8)
@@ -635,6 +635,44 @@ def build_order(status: OrderStatus = "pending", completed_offset_hours: Optiona
     return order
 
 
+# Additional pickup locations around Helsinki for map-based job discovery
+ADDITIONAL_PICKUPS = [
+    {"lat": 60.1872, "lng": 24.9543, "address": "Kaisaniemenkatu 3", "name": "DHL Express"},
+    {"lat": 60.1695, "lng": 24.9354, "address": "Mannerheimintie 22", "name": "PostNord Hub"},
+    {"lat": 60.1795, "lng": 24.9208, "address": "Töölönkatu 8", "name": "UPS Center"},
+    {"lat": 60.1645, "lng": 24.9411, "address": "Bulevardi 14", "name": "Matkahuolto"},
+    {"lat": 60.1732, "lng": 24.9621, "address": "Hakaniementori 1", "name": "DB Schenker"},
+    # Clustered locations (same spot, multiple orders)
+    {"lat": 60.1699, "lng": 24.9384, "address": "Rautatientori 5", "name": "Helsinki Central Station"},  # Multiple orders here
+    {"lat": 60.1699, "lng": 24.9384, "address": "Rautatientori 5", "name": "Helsinki Central Station"},  # Multiple orders here
+    {"lat": 60.1699, "lng": 24.9384, "address": "Rautatientori 5", "name": "Helsinki Central Station"},  # Multiple orders here
+    {"lat": 60.1589, "lng": 24.9222, "address": "Lapinlahdenkatu 16", "name": "Jätkäsaari Terminal"},
+    {"lat": 60.1589, "lng": 24.9222, "address": "Lapinlahdenkatu 16", "name": "Jätkäsaari Terminal"},
+]
+
+ADDITIONAL_DROPOFFS = [
+    {"lat": 60.1922, "lng": 24.9543, "address": "Kalasatamankatu 12", "name": "Kalasatama", "apt": "4B"},
+    {"lat": 60.1755, "lng": 24.9094, "address": "Meilahti 8", "name": "Meilahti", "apt": "2A"},
+    {"lat": 60.1645, "lng": 24.9611, "address": "Sörnäinen 15", "name": "Sörnäinen", "apt": "6C"},
+    {"lat": 60.1712, "lng": 24.9411, "address": "Kamppi Center", "name": "Kamppi", "apt": "1D"},
+    {"lat": 60.1822, "lng": 24.9698, "address": "Siltasaari 3", "name": "Siltasaari", "apt": "3B"},
+    {"lat": 60.1855, "lng": 24.9555, "address": "Toinen linja 10", "name": "Sörnainen", "apt": "5A"},
+    {"lat": 60.1855, "lng": 24.9555, "address": "Toinen linja 10", "name": "Sörnainen", "apt": "5A"},
+    {"lat": 60.1855, "lng": 24.9555, "address": "Toinen linja 10", "name": "Sörnainen", "apt": "5A"},
+    {"lat": 60.1622, "lng": 24.9311, "address": "Hietalahti 7", "name": "Hietalahti", "apt": "2F"},
+    {"lat": 60.1622, "lng": 24.9311, "address": "Hietalahti 7", "name": "Hietalahti", "apt": "2F"},
+]
+
+
+async def seed_multiple_pending_orders():
+    """Seed multiple pending orders at different locations for map-based job discovery."""
+    for i, pickup in enumerate(ADDITIONAL_PICKUPS):
+        dropoff = ADDITIONAL_DROPOFFS[i % len(ADDITIONAL_DROPOFFS)]
+        order = build_order("pending", override_pickup=pickup, override_dropoff=dropoff)
+        await db.orders.insert_one(order)
+    logger.info(f"Seeded {len(ADDITIONAL_PICKUPS)} pending orders for map discovery")
+
+
 async def ensure_seed():
     # Detect a seed version bump (e.g., locale change Stockholm → Helsinki) and wipe stale data
     meta = await db.meta.find_one({"_id": "seed"})
@@ -661,8 +699,9 @@ async def ensure_seed():
 
     pending = await db.orders.find_one({"status": "pending"}, {"_id": 0})
     if not pending:
-        await db.orders.insert_one(build_order("pending"))
-        logger.info("Seeded pending order")
+        # Seed multiple pending orders at different locations for map-based discovery
+        await seed_multiple_pending_orders()
+        logger.info("Seeded multiple pending orders for map discovery")
 
     # Migrate any orders missing OTPs (added in a later version)
     missing_otp = await db.orders.update_many(
@@ -721,6 +760,17 @@ async def get_pending():
     if not order:
         return None
     return Order(**order)
+
+
+@api_router.get("/orders/available", response_model=List[Order])
+async def get_available_orders():
+    """
+    Get all available (pending) orders for map-based job discovery.
+    Returns orders with their pickup locations for displaying on driver's map.
+    """
+    cursor = db.orders.find({"status": "pending"}, {"_id": 0}).limit(50)
+    items = await cursor.to_list(50)
+    return [Order(**o) for o in items]
 
 
 @api_router.get("/orders/active", response_model=Optional[Order])
@@ -911,6 +961,14 @@ async def get_wallet():
 async def seed_new_pending():
     # remove existing pending then create one
     await db.orders.delete_many({"status": "pending"})
+    new_order = build_order("pending")
+    await db.orders.insert_one(new_order.copy())
+    return Order(**new_order)
+
+
+@api_router.post("/orders/add-pending", response_model=Order)
+async def add_pending_order():
+    """Add a single pending order without deleting existing ones."""
     new_order = build_order("pending")
     await db.orders.insert_one(new_order.copy())
     return Order(**new_order)
