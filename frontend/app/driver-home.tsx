@@ -347,7 +347,7 @@ export default function HomeScreen() {
           </Animated.View>
           
           <Animated.View 
-            entering={SlideInUp.delay(300).springify()}
+            entering={SlideInUp.delay(300).duration(350)}
             style={styles.offlineSlideContainer}
           >
             <SlideToGoOnline 
@@ -407,7 +407,7 @@ export default function HomeScreen() {
 
       {/* Bottom card */}
       <Animated.View
-        entering={SlideInDown.springify().damping(18)}
+        entering={SlideInDown.duration(350)}
         style={[styles.bottomSheet, { paddingBottom: 20 }, shadows.lg]}
       >
         <View style={styles.handle} />
@@ -466,7 +466,7 @@ export default function HomeScreen() {
       {/* Now using JobDetailSheet instead when user taps a marker */}
       {false && showRequest ? (
         <Animated.View
-          entering={SlideInDown.springify().damping(16).mass(0.9)}
+          entering={SlideInDown.duration(350)}
           style={[styles.requestOverlay, { paddingBottom: 20 }, shadows.lg]}
           testID="incoming-order-card"
         >

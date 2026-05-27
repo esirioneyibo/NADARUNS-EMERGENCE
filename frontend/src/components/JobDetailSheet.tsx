@@ -48,12 +48,11 @@ export default function JobDetailSheet({
 
   useEffect(() => {
     if (visible) {
-      // Slide up
-      Animated.spring(translateY, {
+      // Slide up - smooth easing, no bounce
+      Animated.timing(translateY, {
         toValue: 0,
+        duration: 300,
         useNativeDriver: true,
-        tension: 65,
-        friction: 11,
       }).start();
       
       // Start timer

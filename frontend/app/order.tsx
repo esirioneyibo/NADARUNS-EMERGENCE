@@ -11,7 +11,7 @@ import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeIn, FadeInUp, Layout, SlideInDown } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInUp, SlideInDown, Easing, withTiming } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 import { api } from "../src/api";
@@ -181,8 +181,7 @@ export default function OrderFlowScreen() {
 
       {/* Stage pill */}
       <Animated.View
-        entering={FadeIn.delay(100)}
-        layout={Layout.springify()}
+        entering={FadeIn.delay(100).duration(300)}
         style={[styles.stagePill, { top: insets.top + 76 }, shadows.sm]}
         testID={`stage-${order.status}`}
       >
@@ -192,7 +191,7 @@ export default function OrderFlowScreen() {
       {/* Bottom sheet */}
       <Animated.View
         key={order.status}
-        entering={SlideInDown.springify().damping(18).mass(0.9)}
+        entering={SlideInDown.duration(350).easing(Easing.out(Easing.cubic))}
         style={[styles.sheet, { paddingBottom: insets.bottom + 24 }, shadows.lg]}
         testID="order-action-sheet"
       >
