@@ -5,16 +5,21 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "nadaruns",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "assetBundlePatterns": [
       "**/*",
       "node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/*"
     ],
+    "splash": {
+      "image": "./assets/images/splash-image.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.driverapp",
+      "bundleIdentifier": "com.nadaruns.driver",
       "infoPlist": {
         "NSCameraUsageDescription": "Take delivery proof photos at dropoff",
         "NSPhotoLibraryUsageDescription": "Attach proof photos to deliveries",
@@ -26,10 +31,10 @@
       }
     },
     "android": {
-      "package": "com.emergent.driverapp",
+      "package": "com.nadaruns.driver",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -63,16 +68,21 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
+          "image": "./assets/images/splash-image.png",
+          "imageWidth": 300,
           "resizeMode": "contain",
-          "backgroundColor": "#000"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "https://api.nadaruns.com",
+      "adminUrl": "https://admin.nadaruns.com",
+      "websiteUrl": "https://nadaruns.com"
     }
   }
 }
