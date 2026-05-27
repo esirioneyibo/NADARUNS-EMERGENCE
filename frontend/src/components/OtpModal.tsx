@@ -140,7 +140,7 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
           ]}
         >
           <Animated.View
-            entering={SlideInDown.springify().damping(16)}
+            entering={SlideInDown.duration(300)}
             style={[styles.sheet, shadows.lg]}
             testID="otp-modal"
           >
