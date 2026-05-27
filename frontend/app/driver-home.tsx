@@ -359,7 +359,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Job count badge - only when online */}
+      {/* Job count badge - only when online and no active order */}
       {!isOffline && !active && !showJobSheet && availableOrders.length > 0 && (
         <View style={styles.jobCountBadge}>
           <Text style={styles.jobCountText}>
@@ -368,99 +368,105 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Top bar */}
-      <Animated.View
-        entering={FadeInDown.duration(400)}
-        style={[styles.topBar, { top: insets.top + 12 }]}
-      >
-        <View style={[styles.profileChip, shadows.md]}>
-          <Image source={{ uri: driver.avatar }} style={styles.avatar} />
-          <View style={{ marginLeft: 10 }}>
-            <Text style={styles.profileName} numberOfLines={1}>{driver.name}</Text>
-            <View style={styles.rowCenter}>
-              <Ionicons name="star" size={12} color={theme.warning} />
-              <Text style={styles.profileMeta}>  {driver.rating.toFixed(2)} · {driver.vehicle}</Text>
+      {/* Top bar - only show when online */}
+      {!isOffline && (
+        <Animated.View
+          entering={FadeInDown.duration(400)}
+          style={[styles.topBar, { top: insets.top + 12 }]}
+        >
+          <View style={[styles.profileChip, shadows.md]}>
+            <Image source={{ uri: driver.avatar }} style={styles.avatar} />
+            <View style={{ marginLeft: 10 }}>
+              <Text style={styles.profileName} numberOfLines={1}>{driver.name}</Text>
+              <View style={styles.rowCenter}>
+                <Ionicons name="star" size={12} color={theme.warning} />
+                <Text style={styles.profileMeta}>  {driver.rating.toFixed(2)} · {driver.vehicle}</Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        <TouchableOpacity
-          style={[styles.offlineBtn, shadows.md]}
-          onPress={goOffline}
-          disabled={toggling}
-          testID="go-offline-button"
+          <TouchableOpacity
+            style={[styles.offlineBtn, shadows.md]}
+            onPress={goOffline}
+            disabled={toggling}
+            testID="go-offline-button"
+          >
+            <Ionicons name="power" size={18} color={theme.error} />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {/* Status pill - only show when online */}
+      {!isOffline && (
+        <Animated.View
+          entering={FadeIn.delay(120)}
+          style={[styles.statusPill, { top: insets.top + 90 }, shadows.sm]}
         >
-          <Ionicons name="power" size={18} color={theme.error} />
-        </TouchableOpacity>
-      </Animated.View>
+          <View style={[styles.dot, { backgroundColor: theme.success }]} />
+          <Text style={styles.statusText}>You're online</Text>
+          <View style={styles.brandSep} />
+          <Text style={styles.brandText}>NadaRuns</Text>
+        </Animated.View>
+      )}
 
-      {/* Status pill */}
-      <Animated.View
-        entering={FadeIn.delay(120)}
-        style={[styles.statusPill, { top: insets.top + 90 }, shadows.sm]}
-      >
-        <View style={[styles.dot, { backgroundColor: theme.success }]} />
-        <Text style={styles.statusText}>You're online</Text>
-        <View style={styles.brandSep} />
-        <Text style={styles.brandText}>NadaRuns</Text>
-      </Animated.View>
+      {/* Bottom card - only show when online */}
+      {!isOffline && (
+        <Animated.View
+          entering={SlideInDown.duration(350)}
+          style={[styles.bottomSheet, { paddingBottom: 20 }, shadows.lg]}
+        >
+          <View style={styles.handle} />
 
-      {/* Bottom card */}
-      <Animated.View
-        entering={SlideInDown.duration(350)}
-        style={[styles.bottomSheet, { paddingBottom: 20 }, shadows.lg]}
-      >
-        <View style={styles.handle} />
-
-        {active ? (
-          <Animated.View entering={FadeInUp} style={styles.activeBanner} testID="active-order-banner">
-            <View style={{ flex: 1 }}>
-              <Text style={styles.activeLabel}>Active delivery</Text>
-              <Text style={styles.activeTitle} numberOfLines={1}>
-                {active.pickup.name} → {active.customer.name}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleResume}
-              style={styles.resumeBtn}
-              testID="resume-order-button"
-            >
-              <Text style={styles.resumeBtnText}>Resume</Text>
-              <Ionicons name="arrow-forward" size={16} color="#fff" />
-            </TouchableOpacity>
-          </Animated.View>
-        ) : (
-          <>
-            <View style={styles.statsRow}>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue} testID="earnings-today">
-                  €{driver.earnings_today.toFixed(2)}
+          {active ? (
+            <Animated.View entering={FadeInUp} style={styles.activeBanner} testID="active-order-banner">
+              <View style={{ flex: 1 }}>
+                <Text style={styles.activeLabel}>Active delivery</Text>
+                <Text style={styles.activeTitle} numberOfLines={1}>
+                  {active.pickup.name} → {active.customer.name}
                 </Text>
-                <Text style={styles.statLabel}>Today's earnings</Text>
               </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>{driver.deliveries_today}</Text>
-                <Text style={styles.statLabel}>Deliveries</Text>
+              <TouchableOpacity
+                onPress={handleResume}
+                style={styles.resumeBtn}
+                testID="resume-order-button"
+              >
+                <Text style={styles.resumeBtnText}>Resume</Text>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              </TouchableOpacity>
+            </Animated.View>
+          ) : (
+            <>
+              <View style={styles.statsRow}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue} testID="earnings-today">
+                    €{driver.earnings_today.toFixed(2)}
+                  </Text>
+                  <Text style={styles.statLabel}>Today's earnings</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue}>{driver.deliveries_today}</Text>
+                  <Text style={styles.statLabel}>Deliveries</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue}>{driver.acceptance_rate.toFixed(0)}%</Text>
+                  <Text style={styles.statLabel}>Accept rate</Text>
+                </View>
               </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>{driver.acceptance_rate.toFixed(0)}%</Text>
-                <Text style={styles.statLabel}>Accept rate</Text>
-              </View>
-            </View>
 
-            <View style={styles.waitingMessage}>
-              <Ionicons name="map" size={20} color={theme.primary} />
-              <Text style={styles.waitingText}>
-                {availableOrders.length > 0 
-                  ? `Tap a marker to view job details`
-                  : `Searching for nearby jobs...`}
-              </Text>
-            </View>
-          </>
-        )}
-      </Animated.View>
+              <View style={styles.waitingMessage}>
+                <Ionicons name="map" size={20} color={theme.primary} />
+                <Text style={styles.waitingText}>
+                  {availableOrders.length > 0 
+                    ? `Tap a marker to view job details`
+                    : `Searching for nearby jobs...`}
+                </Text>
+              </View>
+            </>
+          )}
+        </Animated.View>
+      )}
 
       {/* Incoming order overlay - OLD FLOW (disabled in favor of map-based discovery) */}
       {/* Now using JobDetailSheet instead when user taps a marker */}
