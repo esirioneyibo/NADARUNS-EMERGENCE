@@ -287,7 +287,93 @@ export default function HomeScreen() {
   const showRequest = driver.is_online && pending && !active;
   const isOffline = !driver.is_online && !active;
 
-  // ALWAYS show map view - with overlay for going online if offline
+  // Show OFFLINE welcome screen when driver is not online
+  if (isOffline) {
+    return (
+      <View style={[styles.offlineContainer, { paddingTop: insets.top + 20 }]} testID="home-screen">
+        {/* Header with avatar and brand */}
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.offlineTopRow}>
+          <Image source={{ uri: driver.avatar }} style={styles.offlineAvatarLarge} />
+          <View style={styles.brandBadge}>
+            <Ionicons name="flash" size={14} color="#10B981" />
+            <Text style={styles.brandBadgeText}>NadaRuns</Text>
+          </View>
+        </Animated.View>
+
+        {/* Greeting */}
+        <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.greetingSection}>
+          <Text style={styles.greetingLight}>{getGreeting()},</Text>
+          <Text style={styles.greetingBold}>{driver.name.split(" ")[0]}!</Text>
+          <Text style={styles.greetingDate}>{formatDate()}</Text>
+        </Animated.View>
+
+        {/* Stats Cards */}
+        <Animated.View entering={FadeInUp.delay(200).duration(400)} style={[styles.statsCardsRow, shadows.sm]}>
+          <View style={styles.statCardItem}>
+            <View style={[styles.statIconCircle, { backgroundColor: "#DBEAFE" }]}>
+              <Ionicons name="wallet-outline" size={24} color="#3B82F6" />
+            </View>
+            <Text style={styles.statCardValue}>€{driver.earnings_today.toFixed(2)}</Text>
+            <Text style={styles.statCardLabel}>Today's earnings</Text>
+          </View>
+          
+          <View style={styles.statCardItem}>
+            <View style={[styles.statIconCircle, { backgroundColor: "#FEF3C7" }]}>
+              <Ionicons name="bicycle-outline" size={24} color="#F59E0B" />
+            </View>
+            <Text style={styles.statCardValue}>{driver.deliveries_today}</Text>
+            <Text style={styles.statCardLabel}>Deliveries</Text>
+          </View>
+          
+          <View style={styles.statCardItem}>
+            <View style={[styles.statIconCircle, { backgroundColor: "#E0E7FF" }]}>
+              <Ionicons name="star-outline" size={24} color="#6366F1" />
+            </View>
+            <Text style={styles.statCardValue}>{driver.rating.toFixed(2)}</Text>
+            <Text style={styles.statCardLabel}>Rating</Text>
+          </View>
+        </Animated.View>
+
+        {/* Vehicle & Acceptance Info */}
+        <Animated.View entering={FadeInUp.delay(300).duration(400)} style={[styles.vehicleInfoBar, shadows.sm]}>
+          <View style={styles.vehicleInfoItem}>
+            <Ionicons name="car-outline" size={18} color={theme.textPrimary} />
+            <Text style={styles.vehicleInfoText}>{driver.vehicle || "No vehicle set"}</Text>
+          </View>
+          <View style={styles.vehicleInfoDivider} />
+          <View style={styles.vehicleInfoItem}>
+            <Ionicons name="checkmark-circle-outline" size={18} color="#10B981" />
+            <Text style={styles.vehicleInfoText}>{driver.acceptance_rate.toFixed(0)}% acceptance</Text>
+          </View>
+        </Animated.View>
+
+        {/* Ready Message */}
+        <Animated.View entering={FadeIn.delay(400).duration(400)} style={styles.readyMessageBox}>
+          <Ionicons name="location-outline" size={22} color={theme.textSecondary} />
+          <Text style={styles.readyMessageText}>
+            Ready to start earning? Slide below to go online and receive delivery requests nearby.
+          </Text>
+        </Animated.View>
+
+        {/* Spacer */}
+        <View style={{ flex: 1 }} />
+
+        {/* Slide to go online */}
+        <Animated.View 
+          entering={SlideInUp.delay(500).duration(350)}
+          style={[styles.slideContainerOffline, { paddingBottom: insets.bottom + 80 }]}
+        >
+          <SlideToGoOnline 
+            onGoOnline={goOnline} 
+            disabled={toggling}
+            testID="slide-to-go-online"
+          />
+        </Animated.View>
+      </View>
+    );
+  }
+
+  // ONLINE STATE - show map view with job markers
   return (
     <View style={styles.container} testID="home-screen">
       <View style={StyleSheet.absoluteFill}>
@@ -296,7 +382,7 @@ export default function HomeScreen() {
           dropoff={active?.dropoff || pending?.dropoff}
           showRoute={!!active || !!pending}
           customMarkers={
-            !active && !showJobSheet && !isOffline ? clusteredLocations.map((cluster) => ({
+            !active && !showJobSheet ? clusteredLocations.map((cluster) => ({
               key: cluster.key,
               coordinate: { latitude: cluster.lat, longitude: cluster.lng },
               children: (
@@ -312,55 +398,8 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Offline overlay - show when driver is not online */}
-      {isOffline && (
-        <View style={styles.offlineOverlay}>
-          <Animated.View entering={FadeInDown.duration(400)} style={[styles.offlineCard, shadows.lg]}>
-            <View style={styles.offlineHeader}>
-              <Image source={{ uri: driver.avatar }} style={styles.offlineAvatar} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.offlineGreeting}>{getGreeting()}, {driver.name.split(" ")[0]}!</Text>
-                <Text style={styles.offlineDate}>{formatDate()}</Text>
-              </View>
-            </View>
-            
-            <View style={styles.offlineStats}>
-              <View style={styles.offlineStat}>
-                <Text style={styles.offlineStatValue}>€{driver.earnings_today.toFixed(2)}</Text>
-                <Text style={styles.offlineStatLabel}>Today</Text>
-              </View>
-              <View style={styles.offlineStatDivider} />
-              <View style={styles.offlineStat}>
-                <Text style={styles.offlineStatValue}>{driver.deliveries_today}</Text>
-                <Text style={styles.offlineStatLabel}>Deliveries</Text>
-              </View>
-              <View style={styles.offlineStatDivider} />
-              <View style={styles.offlineStat}>
-                <Text style={styles.offlineStatValue}>{driver.rating.toFixed(1)}★</Text>
-                <Text style={styles.offlineStatLabel}>Rating</Text>
-              </View>
-            </View>
-            
-            <Text style={styles.offlineMessage}>
-              Slide below to go online and see delivery requests on the map
-            </Text>
-          </Animated.View>
-          
-          <Animated.View 
-            entering={SlideInUp.delay(300).duration(350)}
-            style={styles.offlineSlideContainer}
-          >
-            <SlideToGoOnline 
-              onGoOnline={goOnline} 
-              disabled={toggling}
-              testID="slide-to-go-online"
-            />
-          </Animated.View>
-        </View>
-      )}
-
       {/* Job count badge - only when online and no active order */}
-      {!isOffline && !active && !showJobSheet && availableOrders.length > 0 && (
+      {!active && !showJobSheet && availableOrders.length > 0 && (
         <View style={styles.jobCountBadge}>
           <Text style={styles.jobCountText}>
             {availableOrders.length} job{availableOrders.length !== 1 ? "s" : ""} nearby
@@ -830,75 +869,131 @@ const createStyles = (theme: any) => StyleSheet.create({
   acceptBtn: { flex: 2, height: 56, borderRadius: 16, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
   acceptText: { color: "#fff", fontWeight: "800", fontSize: 17 },
   
-  // Offline overlay styles (map visible behind)
-  offlineOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-    paddingBottom: 100,
+  // OFFLINE SCREEN - Full page welcome layout (no map)
+  offlineContainer: {
+    flex: 1,
+    backgroundColor: "#F0FDF4", // Light green tint background
+    paddingHorizontal: spacing.xl,
   },
-  offlineCard: {
-    backgroundColor: theme.surface,
-    marginHorizontal: spacing.lg,
-    borderRadius: radius.xxl,
-    padding: spacing.xl,
-    marginBottom: spacing.lg,
-  },
-  offlineHeader: {
+  offlineTopRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.lg,
   },
-  offlineAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  offlineAvatarLarge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     borderWidth: 3,
     borderColor: theme.primary,
   },
-  offlineGreeting: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: theme.textPrimary,
-  },
-  offlineDate: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  offlineStats: {
+  brandBadge: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: theme.border,
-    marginBottom: spacing.md,
-  },
-  offlineStat: {
     alignItems: "center",
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    gap: 6,
   },
-  offlineStatValue: {
-    fontSize: 22,
+  brandBadgeText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#10B981",
+  },
+  greetingSection: {
+    marginBottom: spacing.xl,
+  },
+  greetingLight: {
+    fontSize: 28,
+    fontWeight: "400",
+    color: theme.textSecondary,
+  },
+  greetingBold: {
+    fontSize: 36,
+    fontWeight: "800",
+    color: theme.textPrimary,
+    marginTop: -4,
+  },
+  greetingDate: {
+    fontSize: 15,
+    color: theme.textSecondary,
+    marginTop: 6,
+  },
+  statsCardsRow: {
+    flexDirection: "row",
+    backgroundColor: theme.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  statCardItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+  },
+  statIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  statCardValue: {
+    fontSize: 20,
     fontWeight: "800",
     color: theme.textPrimary,
   },
-  offlineStatLabel: {
-    fontSize: 12,
+  statCardLabel: {
+    fontSize: 11,
     color: theme.textSecondary,
     marginTop: 2,
+    textAlign: "center",
   },
-  offlineStatDivider: {
+  vehicleInfoBar: {
+    flexDirection: "row",
+    backgroundColor: "#ECFDF5",
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    alignItems: "center",
+  },
+  vehicleInfoItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  vehicleInfoDivider: {
     width: 1,
-    backgroundColor: theme.border,
+    height: 24,
+    backgroundColor: "#A7F3D0",
+    marginHorizontal: spacing.md,
   },
-  offlineMessage: {
+  vehicleInfoText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: theme.textPrimary,
+  },
+  readyMessageBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: theme.surfaceMuted,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: 12,
+  },
+  readyMessageText: {
+    flex: 1,
     fontSize: 14,
     color: theme.textSecondary,
-    textAlign: "center",
     lineHeight: 20,
   },
-  offlineSlideContainer: {
-    paddingHorizontal: spacing.lg,
+  slideContainerOffline: {
+    paddingHorizontal: 0,
   },
 });
