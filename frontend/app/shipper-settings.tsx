@@ -77,7 +77,7 @@ interface ShipperProfile {
 export default function ShipperSettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { theme } = useTheme();
+  const { theme, mode, setMode } = useTheme();
   const { logout } = useAuth();
 
   const [profile, setProfile] = useState<ShipperProfile | null>(null);
@@ -93,6 +93,11 @@ export default function ShipperSettingsScreen() {
   const [preferredVehicle, setPreferredVehicle] = useState<string | null>(null);
 
   const styles = createStyles(theme);
+
+  const selectTheme = (newMode: "light" | "dark" | "system") => {
+    setMode(newMode);
+    Haptics.selectionAsync().catch(() => {});
+  };
 
   const loadProfile = useCallback(async () => {
     const token = getAuthToken();
@@ -230,6 +235,33 @@ export default function ShipperSettingsScreen() {
           <View style={styles.profileBadge}>
             <Ionicons name="cube" size={14} color="#fff" />
             <Text style={styles.badgeText}>{profile?.total_shipments || 0} Shipments</Text>
+          </View>
+        </Animated.View>
+
+        {/* Appearance Section */}
+        <Animated.View entering={FadeInUp.delay(75)}>
+          <Text style={styles.sectionTitle}>Appearance</Text>
+          <View style={[styles.card, shadows.sm]}>
+            <View style={styles.themeGrid}>
+              {[
+                { id: "light" as const, label: "Light", icon: "sunny-outline" as const },
+                { id: "dark" as const, label: "Dark", icon: "moon-outline" as const },
+                { id: "system" as const, label: "System", icon: "phone-portrait-outline" as const },
+              ].map((t) => {
+                const selected = t.id === mode;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[styles.themeTile, selected && { backgroundColor: "#6366F1", borderColor: "#6366F1" }]}
+                    onPress={() => selectTheme(t.id)}
+                    testID={`theme-${t.id}`}
+                  >
+                    <Ionicons name={t.icon} size={22} color={selected ? "#fff" : theme.textPrimary} />
+                    <Text style={[styles.themeLabel, selected && { color: "#fff" }]}>{t.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         </Animated.View>
 
@@ -459,6 +491,10 @@ const createStyles = (theme: any) =>
       gap: 6,
     },
     badgeText: { color: "#fff", fontSize: 12, fontWeight: "600" },
+    // Theme grid styles
+    themeGrid: { flexDirection: "row", gap: 8, paddingVertical: spacing.sm },
+    themeTile: { flex: 1, paddingVertical: 14, borderRadius: radius.lg, backgroundColor: theme.surfaceMuted, alignItems: "center", gap: 6, borderWidth: 1.5, borderColor: "transparent" },
+    themeLabel: { fontSize: 12, color: theme.textPrimary, fontWeight: "600" },
     sectionTitle: {
       fontSize: 16,
       fontWeight: "700",
