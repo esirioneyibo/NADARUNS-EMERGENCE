@@ -1610,6 +1610,138 @@ async def delete_notification(notification_id: str, credentials: HTTPAuthorizati
     return {"message": "Notification deleted"}
 
 
+class PushTokenRegister(BaseModel):
+    push_token: str
+    user_id: str
+    user_type: Literal["driver", "shipper"]
+    platform: str = "ios"
+
+
+@api_router.post("/notifications/register")
+async def register_push_token(body: PushTokenRegister):
+    """Register a push token for a user."""
+    # Store the push token in the user's document
+    if body.user_type == "driver":
+        await db.drivers.update_one(
+            {"id": body.user_id},
+            {"$set": {"push_token": body.push_token, "push_platform": body.platform}}
+        )
+    else:
+        await db.shippers.update_one(
+            {"id": body.user_id},
+            {"$set": {"push_token": body.push_token, "push_platform": body.platform}}
+        )
+    
+    logger.info(f"Registered push token for {body.user_type} {body.user_id}")
+    return {"message": "Push token registered"}
+
+
+async def send_push_notification(
+    push_token: str,
+    title: str,
+    body: str,
+    data: Optional[Dict] = None,
+):
+    """Send a push notification using Expo's push notification service."""
+    import httpx
+    
+    message = {
+        "to": push_token,
+        "sound": "default",
+        "title": title,
+        "body": body,
+        "data": data or {},
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://exp.host/--/api/v2/push/send",
+                json=message,
+                headers={"Content-Type": "application/json"},
+            )
+            if response.status_code == 200:
+                logger.info(f"Push notification sent to {push_token[:20]}...")
+                return True
+            else:
+                logger.error(f"Push notification failed: {response.text}")
+                return False
+    except Exception as e:
+        logger.error(f"Push notification error: {e}")
+        return False
+
+
+async def notify_drivers_of_new_order(order: dict):
+    """Notify online drivers about a new available order."""
+    # Find online drivers with matching vehicle type
+    query = {"is_online": True, "push_token": {"$exists": True, "$ne": None}}
+    
+    # If order requires specific vehicle, filter drivers
+    if order.get("vehicle_type"):
+        query["vehicle_type"] = order["vehicle_type"]
+    
+    drivers = await db.drivers.find(query, {"_id": 0, "push_token": 1, "name": 1}).to_list(50)
+    
+    for driver in drivers:
+        if driver.get("push_token"):
+            await send_push_notification(
+                driver["push_token"],
+                "🚚 New Delivery Available!",
+                f"{order.get('order_number', 'New Order')} • {order['pickup'].get('name', 'Pickup')}\nEarn €{order.get('earnings', 0):.2f}",
+                {"type": "new_order", "order_id": order.get("id")}
+            )
+    
+    logger.info(f"Notified {len(drivers)} online drivers about new order {order.get('order_number')}")
+
+
+async def notify_available_drivers(
+    order_id: str,
+    order_number: str,
+    vehicle_type: str,
+    pickup_address: str,
+    earnings: float
+):
+    """Notify online drivers about a new order (called when shipper creates shipment)."""
+    try:
+        # Find online drivers with matching or compatible vehicle types
+        query = {"is_online": True, "push_token": {"$exists": True, "$ne": None}}
+        
+        # Optionally filter by vehicle type
+        if vehicle_type:
+            query["vehicle_type"] = vehicle_type
+        
+        online_drivers = await db.drivers.find(query, {"_id": 0, "push_token": 1, "name": 1, "id": 1}).to_list(100)
+        
+        vehicle_info = VEHICLE_TYPES.get(vehicle_type, {})
+        vehicle_name = vehicle_info.get("name", "Vehicle")
+        
+        notification_count = 0
+        for driver in online_drivers:
+            if driver.get("push_token"):
+                success = await send_push_notification(
+                    driver["push_token"],
+                    "🚚 New Delivery Available!",
+                    f"{vehicle_name} needed • €{earnings:.2f} • {pickup_address[:40]}...",
+                    {"type": "new_order", "order_id": order_id, "order_number": order_number}
+                )
+                if success:
+                    notification_count += 1
+                    
+                # Also create in-app notification
+                await create_notification(
+                    recipient_id=driver["id"],
+                    recipient_type="driver",
+                    notification_type="order",
+                    title="New Delivery Available",
+                    message=f"{vehicle_name} needed • €{earnings:.2f}",
+                    data={"order_id": order_id, "order_number": order_number}
+                )
+        
+        logger.info(f"Notified {notification_count} drivers about new shipment {order_number}")
+    except Exception as e:
+        logger.error(f"Failed to notify drivers: {e}")
+
+
 async def create_notification(
     recipient_id: str,
     recipient_type: str,
@@ -3328,108 +3460,6 @@ async def get_driver_location(order_id: str, user: dict = Depends(get_current_us
         "driver_location": driver.get("current_location"),
         "location_updated_at": driver.get("location_updated_at"),
     }
-
-
-# ===================== Push Notifications =====================
-
-class PushTokenRegister(BaseModel):
-    push_token: str
-    user_id: str
-    user_type: Literal["driver", "shipper"]
-    platform: str = "android"
-
-
-@api_router.post("/notifications/register")
-async def register_push_token(data: PushTokenRegister):
-    """Register a push notification token for a user."""
-    await db.push_tokens.update_one(
-        {"user_id": data.user_id},
-        {"$set": {
-            "push_token": data.push_token,
-            "user_type": data.user_type,
-            "platform": data.platform,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }},
-        upsert=True
-    )
-    logger.info(f"Registered push token for {data.user_type} {data.user_id}")
-    return {"status": "ok"}
-
-
-async def send_push_notification(user_id: str, title: str, body: str, data: dict = None):
-    """Send a push notification to a user (via Expo Push API)."""
-    token_doc = await db.push_tokens.find_one({"user_id": user_id})
-    if not token_doc or not token_doc.get("push_token"):
-        logger.warning(f"No push token found for user {user_id}")
-        return False
-    
-    push_token = token_doc["push_token"]
-    
-    # Send via Expo Push API
-    message = {
-        "to": push_token,
-        "title": title,
-        "body": body,
-        "sound": "default",
-        "data": data or {},
-    }
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://exp.host/--/api/v2/push/send",
-                json=message,
-                headers={"Content-Type": "application/json"},
-            )
-            if response.status_code == 200:
-                logger.info(f"Push notification sent to {user_id}")
-                return True
-            else:
-                logger.warning(f"Push notification failed: {response.text}")
-                return False
-    except Exception as e:
-        logger.error(f"Push notification error: {e}")
-        return False
-
-
-async def notify_available_drivers(
-    order_id: str,
-    order_number: str,
-    vehicle_type: str,
-    pickup_address: str,
-    earnings: float
-):
-    """Notify online drivers about a new order."""
-    try:
-        # Find online drivers with matching or compatible vehicle types
-        # For now, notify all online drivers (vehicle matching can be added later)
-        online_drivers = await db.drivers.find(
-            {"is_online": True},
-            {"id": 1}
-        ).to_list(length=100)
-        
-        vehicle_info = VEHICLE_TYPES.get(vehicle_type, {})
-        vehicle_name = vehicle_info.get("name", "Vehicle")
-        
-        notification_count = 0
-        for driver_doc in online_drivers:
-            driver_id = driver_doc["id"]
-            success = await send_push_notification(
-                user_id=driver_id,
-                title="🚚 New Delivery Available!",
-                body=f"{vehicle_name} needed • €{earnings:.2f} • {pickup_address[:30]}...",
-                data={
-                    "type": "new_order",
-                    "order_id": order_id,
-                    "order_number": order_number,
-                }
-            )
-            if success:
-                notification_count += 1
-        
-        logger.info(f"Notified {notification_count} drivers about new order {order_id}")
-    except Exception as e:
-        logger.error(f"Failed to notify drivers: {e}")
 
 
 # ===================== Chat System =====================

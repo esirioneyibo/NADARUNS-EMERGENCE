@@ -15,6 +15,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { api } from "../src/api";
 import type { Wallet, WalletTransaction } from "../src/types";
 import { radius, shadows, spacing, theme } from "../src/theme";
+import { useAuth } from "../src/contexts/AuthContext";
 
 function formatDate(iso?: string | null) {
   if (!iso) return "";
@@ -34,18 +35,55 @@ function txnIcon(t: WalletTransaction["type"]): keyof typeof Ionicons.glyphMap {
 export default function WalletScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!isAuthenticated) {
+      setError("Please login to view your wallet");
+      return;
+    }
     try {
+      setError(null);
       const w = await api.getWallet();
       setWallet(w);
-    } catch (e) {
+    } catch (e: any) {
       console.warn("wallet load failed", e);
+      setError(e.message || "Failed to load wallet");
     }
-  }, []);
+  }, [isAuthenticated]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { 
+    if (!authLoading) {
+      load(); 
+    }
+  }, [load, authLoading]));
+
+  // Show loading while auth is initializing
+  if (authLoading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={theme.primary} size="large" />
+      </View>
+    );
+  }
+
+  // Show error if not authenticated
+  if (error || !isAuthenticated) {
+    return (
+      <View style={[styles.loading, { paddingHorizontal: spacing.xl }]}>
+        <Ionicons name="wallet-outline" size={64} color={theme.textSecondary} />
+        <Text style={styles.errorText}>{error || "Please login to view your wallet"}</Text>
+        <TouchableOpacity 
+          style={styles.loginBtn} 
+          onPress={() => router.push("/login")}
+        >
+          <Text style={styles.loginBtnText}>Go to Login</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (!wallet) {
     return (
@@ -167,4 +205,7 @@ const styles = StyleSheet.create({
   txnAmount: { fontSize: 16, fontWeight: "800", color: theme.primary },
   empty: { alignItems: "center", justifyContent: "center", paddingVertical: 80, gap: 12 },
   emptyText: { color: theme.textSecondary, fontSize: 14 },
+  errorText: { color: theme.textSecondary, fontSize: 16, textAlign: "center", marginTop: spacing.lg },
+  loginBtn: { marginTop: spacing.xl, backgroundColor: theme.primary, paddingHorizontal: 32, paddingVertical: 14, borderRadius: radius.pill },
+  loginBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
 });
