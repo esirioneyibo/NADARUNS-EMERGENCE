@@ -686,16 +686,104 @@ LOGISTICS_NOTES = [
     None,
 ]
 
+# ===================== TAMPERE REGION =====================
+TAMPERE_PICKUPS = [
+    {"name": "Tampere Freight Terminal", "address": "Rahtipolku 5, Tampere", "lat": 61.4978, "lng": 23.7610, "region": "tampere"},
+    {"name": "Posti Tampere Hub", "address": "Hatanpään valtatie 30, Tampere", "lat": 61.4858, "lng": 23.7817, "region": "tampere"},
+    {"name": "DHL Tampere Center", "address": "Lentokentänkatu 12, Pirkkala", "lat": 61.4214, "lng": 23.5896, "region": "tampere"},
+    {"name": "Schenker Tampere", "address": "Ilmailuntie 7, Tampere", "lat": 61.4167, "lng": 23.6044, "region": "tampere"},
+    {"name": "Tokmanni Distribution", "address": "Mäentakusenkatu 1, Mänttä", "lat": 62.0289, "lng": 24.6261, "region": "tampere"},
+    {"name": "UPM Paper Mill", "address": "Tehtaankatu 1, Valkeakoski", "lat": 61.2640, "lng": 24.0316, "region": "tampere"},
+    {"name": "Sandvik Mining Tampere", "address": "Pitkäniemenkatu 15, Tampere", "lat": 61.5100, "lng": 23.6950, "region": "tampere"},
+    {"name": "Nokian Tyres Factory", "address": "Pirkkalaistie 7, Nokia", "lat": 61.4674, "lng": 23.5020, "region": "tampere"},
+    {"name": "AGCO Factory", "address": "Valmetintie 2, Suolahti", "lat": 61.4891, "lng": 23.7523, "region": "tampere"},
+    {"name": "Metso Tampere", "address": "Lokomonkatu 3, Tampere", "lat": 61.5017, "lng": 23.7264, "region": "tampere"},
+]
 
-def build_logistics_order(status: OrderStatus = "pending", completed_offset_hours: Optional[int] = None, override_pickup: dict = None, override_dropoff: dict = None, shipper_id: Optional[str] = None) -> dict:
-    """Build a logistics order with realistic cargo data."""
-    pickup_idx = random.randint(0, len(LOGISTICS_PICKUPS) - 1)
-    dropoff_idx = random.randint(0, len(LOGISTICS_DROPOFFS) - 1)
+TAMPERE_DROPOFFS = [
+    {"name": "Tampere University Hospital", "address": "Teiskontie 35, Tampere", "lat": 61.5098, "lng": 23.8178, "contact": "Medical Logistics", "region": "tampere"},
+    {"name": "Prisma Kaleva", "address": "Sammonkatu 73, Tampere", "lat": 61.4922, "lng": 23.8230, "contact": "Goods Reception", "region": "tampere"},
+    {"name": "Ideapark Shopping Center", "address": "Ideaparkinkatu 4, Lempäälä", "lat": 61.3139, "lng": 23.7639, "contact": "Dock C", "region": "tampere"},
+    {"name": "Tampere Central Hospital", "address": "Biokatu 6, Tampere", "lat": 61.4544, "lng": 23.8564, "contact": "Supply Chain", "region": "tampere"},
+    {"name": "Ratina Shopping Mall", "address": "Vuolteenkatu 1, Tampere", "lat": 61.4941, "lng": 23.7687, "contact": "Delivery Entrance", "region": "tampere"},
+    {"name": "SSAB Steel Hämeenlinna", "address": "Harvialantie 420, Hämeenlinna", "lat": 61.0156, "lng": 24.4958, "contact": "Gate 3", "region": "tampere"},
+    {"name": "K-Rauta Tampere", "address": "Hatanpään valtatie 1, Tampere", "lat": 61.4889, "lng": 23.7762, "contact": "Building Materials", "region": "tampere"},
+    {"name": "Fazer Tampere Bakery", "address": "Näsilinnankatu 48, Tampere", "lat": 61.4984, "lng": 23.7583, "contact": "Production", "region": "tampere"},
+    {"name": "Pirkanmaa Hospital District", "address": "Finn-Medi 1, Tampere", "lat": 61.4566, "lng": 23.8498, "contact": "Pharmacy", "region": "tampere"},
+    {"name": "Nokia Networks", "address": "Visiokatu 1, Tampere", "lat": 61.4496, "lng": 23.8567, "contact": "Tech Park", "region": "tampere"},
+]
+
+# ===================== OTHER FINNISH REGIONS =====================
+# Turku region
+TURKU_PICKUPS = [
+    {"name": "Port of Turku", "address": "Satamakatu 1, Turku", "lat": 60.4357, "lng": 22.2189, "region": "turku"},
+    {"name": "Turku Logistics Center", "address": "Rieskalähteentie 75, Turku", "lat": 60.4632, "lng": 22.3012, "region": "turku"},
+]
+
+TURKU_DROPOFFS = [
+    {"name": "Turku University Hospital", "address": "Kiinamyllynkatu 4-8, Turku", "lat": 60.4509, "lng": 22.2866, "contact": "Central Hospital", "region": "turku"},
+    {"name": "Meyer Turku Shipyard", "address": "Telakkakatu 1, Turku", "lat": 60.4268, "lng": 22.2231, "contact": "Shipyard Gate", "region": "turku"},
+]
+
+# Oulu region
+OULU_PICKUPS = [
+    {"name": "Oulu Port Terminal", "address": "Poikkimaantie 16, Oulu", "lat": 65.0078, "lng": 25.4211, "region": "oulu"},
+    {"name": "Posti Oulu Hub", "address": "Postikuja 2, Oulu", "lat": 65.0172, "lng": 25.4687, "region": "oulu"},
+]
+
+OULU_DROPOFFS = [
+    {"name": "Oulu University Hospital", "address": "Kajaanintie 50, Oulu", "lat": 65.0074, "lng": 25.5196, "contact": "OYS Logistics", "region": "oulu"},
+    {"name": "Technopolis Oulu", "address": "Elektroniikkatie 3, Oulu", "lat": 65.0590, "lng": 25.4420, "contact": "Tech Campus", "region": "oulu"},
+]
+
+# Kuopio region
+KUOPIO_PICKUPS = [
+    {"name": "Kuopio Freight Center", "address": "Volttikatu 1, Kuopio", "lat": 62.8924, "lng": 27.6556, "region": "kuopio"},
+]
+
+KUOPIO_DROPOFFS = [
+    {"name": "Kuopio University Hospital", "address": "Puijonlaaksontie 2, Kuopio", "lat": 62.8765, "lng": 27.6383, "contact": "KYS Pharmacy", "region": "kuopio"},
+]
+
+# All regions combined for easy access
+ALL_PICKUPS = LOGISTICS_PICKUPS + TAMPERE_PICKUPS + TURKU_PICKUPS + OULU_PICKUPS + KUOPIO_PICKUPS
+ALL_DROPOFFS = LOGISTICS_DROPOFFS + TAMPERE_DROPOFFS + TURKU_DROPOFFS + OULU_DROPOFFS + KUOPIO_DROPOFFS
+
+
+def build_logistics_order(status: OrderStatus = "pending", completed_offset_hours: Optional[int] = None, override_pickup: dict = None, override_dropoff: dict = None, shipper_id: Optional[str] = None, region: Optional[str] = None) -> dict:
+    """Build a logistics order with realistic cargo data.
+    
+    Args:
+        region: Optional region filter - "helsinki", "tampere", "turku", "oulu", "kuopio", or None for random
+    """
+    # Select pickups and dropoffs based on region
+    if region == "tampere":
+        pickups = TAMPERE_PICKUPS
+        dropoffs = TAMPERE_DROPOFFS
+    elif region == "turku":
+        pickups = TURKU_PICKUPS
+        dropoffs = TURKU_DROPOFFS
+    elif region == "oulu":
+        pickups = OULU_PICKUPS
+        dropoffs = OULU_DROPOFFS
+    elif region == "kuopio":
+        pickups = KUOPIO_PICKUPS
+        dropoffs = KUOPIO_DROPOFFS
+    elif region == "helsinki":
+        pickups = LOGISTICS_PICKUPS
+        dropoffs = LOGISTICS_DROPOFFS
+    else:
+        # Use all regions
+        pickups = ALL_PICKUPS
+        dropoffs = ALL_DROPOFFS
+    
+    pickup_idx = random.randint(0, len(pickups) - 1)
+    dropoff_idx = random.randint(0, len(dropoffs) - 1)
     customer_idx = random.randint(0, len(LOGISTICS_CUSTOMERS) - 1)
     cargo_idx = random.randint(0, len(CARGO_DESCRIPTIONS) - 1)
     
-    pickup = override_pickup or LOGISTICS_PICKUPS[pickup_idx]
-    dropoff_data = override_dropoff or LOGISTICS_DROPOFFS[dropoff_idx]
+    pickup = override_pickup or pickups[pickup_idx]
+    dropoff_data = override_dropoff or dropoffs[dropoff_idx]
     customer = LOGISTICS_CUSTOMERS[customer_idx]
     cargo = CARGO_DESCRIPTIONS[cargo_idx]
     
@@ -922,12 +1010,60 @@ async def seed_demo_data():
         result["created"]["shipper"] = {"email": demo_shipper_email, "password": "demo1234"}
         logger.info(f"Created demo shipper: {demo_shipper_email}")
     
-    # Seed pending orders if none exist
+    # Seed pending orders for all regions
     pending_count = await db.orders.count_documents({"status": "pending"})
-    if pending_count < 5:
-        await seed_multiple_pending_orders()
-        result["created"]["orders"] = len(ADDITIONAL_PICKUPS)
-        logger.info(f"Seeded {len(ADDITIONAL_PICKUPS)} pending logistics orders")
+    if pending_count < 20:
+        orders_created = 0
+        
+        # Helsinki region - 10 orders
+        for i, pickup in enumerate(LOGISTICS_PICKUPS):
+            dropoff = LOGISTICS_DROPOFFS[i % len(LOGISTICS_DROPOFFS)]
+            order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff, region="helsinki")
+            await db.orders.insert_one(order)
+            orders_created += 1
+        logger.info("Seeded 10 Helsinki region logistics orders")
+        
+        # Tampere region - 10 orders
+        for i, pickup in enumerate(TAMPERE_PICKUPS):
+            dropoff = TAMPERE_DROPOFFS[i % len(TAMPERE_DROPOFFS)]
+            order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff, region="tampere")
+            await db.orders.insert_one(order)
+            orders_created += 1
+        logger.info("Seeded 10 Tampere region logistics orders")
+        
+        # Turku region - 2 orders
+        for i, pickup in enumerate(TURKU_PICKUPS):
+            dropoff = TURKU_DROPOFFS[i % len(TURKU_DROPOFFS)]
+            order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff, region="turku")
+            await db.orders.insert_one(order)
+            orders_created += 1
+        logger.info("Seeded 2 Turku region logistics orders")
+        
+        # Oulu region - 2 orders
+        for i, pickup in enumerate(OULU_PICKUPS):
+            dropoff = OULU_DROPOFFS[i % len(OULU_DROPOFFS)]
+            order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff, region="oulu")
+            await db.orders.insert_one(order)
+            orders_created += 1
+        logger.info("Seeded 2 Oulu region logistics orders")
+        
+        # Kuopio region - 1 order
+        for i, pickup in enumerate(KUOPIO_PICKUPS):
+            dropoff = KUOPIO_DROPOFFS[i % len(KUOPIO_DROPOFFS)]
+            order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff, region="kuopio")
+            await db.orders.insert_one(order)
+            orders_created += 1
+        logger.info("Seeded 1 Kuopio region logistics order")
+        
+        result["created"]["orders"] = orders_created
+        result["created"]["orders_by_region"] = {
+            "helsinki": 10,
+            "tampere": 10,
+            "turku": 2,
+            "oulu": 2,
+            "kuopio": 1,
+        }
+        logger.info(f"Seeded total {orders_created} pending logistics orders across all regions")
     
     # Seed delivery history if none exists
     history_count = await db.orders.count_documents({"status": "delivered"})
