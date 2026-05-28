@@ -205,6 +205,30 @@ frontend:
           agent: "main"
           comment: "Summary screen now shows a 'Proof of delivery captured' card with thumbnail + shield icon when delivery_photo exists. History cards now have right-side 56px thumbnail with green shield badge overlay."
 
+  - task: "Vehicle types in onboarding with capacity"
+    implemented: true
+    working: true
+    file: "frontend/app/onboarding.tsx, frontend/src/api.ts, frontend/src/types.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Updated types.ts to include vehicle_capacity_kg in Driver and DriverUpdate interfaces. Updated api.ts registerDriver to include vehicle_capacity_kg parameter. Updated onboarding.tsx to pass vehicle_capacity_kg in registration. The onboarding screen already had UI for selecting vehicle types with categories (Medium, Heavy, Specialized, Other) and capacities."
+
+  - task: "Vehicle types in settings profile update"
+    implemented: true
+    working: true
+    file: "frontend/app/settings.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Settings screen already had vehicle type selection with categories and capacity display. Updated to use vehicle_capacity_kg from Driver type. Vehicle type changes trigger saveField with vehicle_type, vehicle_capacity_kg, and vehicle string."
+
 metadata:
   created_by: "main_agent"
   version: "1.3"

@@ -86,6 +86,7 @@ export interface Driver {
   avatar: string;
   vehicle: string;
   vehicle_type: string;
+  vehicle_capacity_kg: number;
   plate: string;
   email: string;
   phone: string;
@@ -100,6 +101,7 @@ export interface DriverUpdate {
   name?: string;
   vehicle?: string;
   vehicle_type?: string;
+  vehicle_capacity_kg?: number;
   plate?: string;
   email?: string;
   phone?: string;

@@ -124,6 +124,7 @@ export const api = {
     vehicle_type: string;
     city: string;
     license_plate?: string;
+    vehicle_capacity_kg?: number;
   }) => request<RegisterResponse>("/driver/register", {
     method: "POST",
     body: JSON.stringify(data),

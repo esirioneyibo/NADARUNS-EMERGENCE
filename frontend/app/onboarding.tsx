@@ -136,6 +136,7 @@ export default function OnboardingScreen() {
         vehicle_type: formData.vehicleType,
         city: formData.city,
         license_plate: formData.licensePlate || undefined,
+        vehicle_capacity_kg: formData.vehicleCapacity ? parseInt(formData.vehicleCapacity) : undefined,
       });
       
       // Set auth token in API module
