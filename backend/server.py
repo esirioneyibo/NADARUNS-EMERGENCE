@@ -787,19 +787,27 @@ def build_logistics_order(status: OrderStatus = "pending", completed_offset_hour
     customer = LOGISTICS_CUSTOMERS[customer_idx]
     cargo = CARGO_DESCRIPTIONS[cargo_idx]
     
-    # Calculate distance based on coordinates
-    lat_diff = abs(pickup["lat"] - dropoff_data["lat"])
-    lng_diff = abs(pickup["lng"] - dropoff_data["lng"])
-    distance = round((lat_diff + lng_diff) * 111, 1)  # Rough km conversion
-    distance = max(5.0, min(distance, 50.0))  # Clamp between 5-50km
+    # Calculate accurate distance using Haversine formula
+    import math
+    R = 6371.0  # Earth's radius in km
+    lat1, lng1 = math.radians(pickup["lat"]), math.radians(pickup["lng"])
+    lat2, lng2 = math.radians(dropoff_data["lat"]), math.radians(dropoff_data["lng"])
+    dlat = lat2 - lat1
+    dlng = lng2 - lng1
+    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng / 2) ** 2
+    distance = round(2 * R * math.asin(math.sqrt(h)), 1)
+    
+    # Apply road factor (roads are typically 1.3x longer than straight-line distance)
+    road_distance = round(distance * 1.3, 1)
+    road_distance = max(2.0, road_distance)  # Minimum 2km for any delivery
     
     # Calculate pricing based on vehicle type and distance
     vehicle_type = cargo["vehicle"]
     vehicle_info = VEHICLE_TYPES.get(vehicle_type, VEHICLE_TYPES["cargo_van"])
     base_rate = vehicle_info["base_rate_per_km"]
-    earnings = round(distance * base_rate + random.uniform(5, 25), 2)
+    earnings = round(road_distance * base_rate + random.uniform(5, 15), 2)
     
-    eta = int(distance * 2.5) + random.randint(10, 30)  # ~2.5 min per km + loading time
+    eta = int(road_distance * 2.0) + random.randint(15, 45)  # ~2 min per km + loading time
     
     created = datetime.now(timezone.utc)
     completed = None
@@ -831,7 +839,7 @@ def build_logistics_order(status: OrderStatus = "pending", completed_offset_hour
             notes=random.choice(LOGISTICS_NOTES),
         ),
         items=[OrderItem(**i) for i in cargo["items"]],
-        distance_km=distance,
+        distance_km=road_distance,  # Use accurate road distance
         eta_minutes=eta,
         earnings=earnings,
         tip=0.0,  # B2B logistics typically no tips

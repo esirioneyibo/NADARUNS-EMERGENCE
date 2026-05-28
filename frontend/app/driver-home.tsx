@@ -348,81 +348,87 @@ export default function HomeScreen() {
   if (isOffline) {
     return (
       <View style={[styles.offlineContainer, { paddingTop: insets.top + 20 }]} testID="home-screen">
-        {/* Header with avatar and brand */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.offlineTopRow}>
-          <Image source={{ uri: driver.avatar }} style={styles.offlineAvatarLarge} />
-          <View style={styles.brandBadge}>
-            <Ionicons name="flash" size={14} color="#10B981" />
-            <Text style={styles.brandBadgeText}>NadaRuns</Text>
-          </View>
-        </Animated.View>
-
-        {/* Greeting */}
-        <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.greetingSection}>
-          <Text style={styles.greetingLight}>{getGreeting()},</Text>
-          <Text style={styles.greetingBold}>{driver.name.split(" ")[0]}!</Text>
-          <Text style={styles.greetingDate}>{formatDate()}</Text>
-        </Animated.View>
-
-        {/* Stats Cards */}
-        <Animated.View entering={FadeInUp.delay(200).duration(400)} style={[styles.statsCardsRow, shadows.sm]}>
-          <View style={styles.statCardItem}>
-            <View style={[styles.statIconCircle, { backgroundColor: "#DBEAFE" }]}>
-              <Ionicons name="wallet-outline" size={24} color="#3B82F6" />
-            </View>
-            <Text style={styles.statCardValue}>€{driver.earnings_today.toFixed(2)}</Text>
-            <Text style={styles.statCardLabel}>Today's earnings</Text>
-          </View>
-          
-          <View style={styles.statCardItem}>
-            <View style={[styles.statIconCircle, { backgroundColor: "#FEF3C7" }]}>
-              <Ionicons name="bicycle-outline" size={24} color="#F59E0B" />
-            </View>
-            <Text style={styles.statCardValue}>{driver.deliveries_today}</Text>
-            <Text style={styles.statCardLabel}>Deliveries</Text>
-          </View>
-          
-          <View style={styles.statCardItem}>
-            <View style={[styles.statIconCircle, { backgroundColor: "#E0E7FF" }]}>
-              <Ionicons name="star-outline" size={24} color="#6366F1" />
-            </View>
-            <Text style={styles.statCardValue}>{driver.rating.toFixed(2)}</Text>
-            <Text style={styles.statCardLabel}>Rating</Text>
-          </View>
-        </Animated.View>
-
-        {/* Vehicle & Acceptance Info */}
-        <Animated.View entering={FadeInUp.delay(300).duration(400)} style={[styles.vehicleInfoBar, shadows.sm]}>
-          <View style={styles.vehicleInfoItem}>
-            <Ionicons name="car-outline" size={18} color={theme.textPrimary} />
-            <Text style={styles.vehicleInfoText}>{driver.vehicle || "No vehicle set"}</Text>
-          </View>
-          <View style={styles.vehicleInfoDivider} />
-          <View style={styles.vehicleInfoItem}>
-            <Ionicons name="checkmark-circle-outline" size={18} color="#10B981" />
-            <Text style={styles.vehicleInfoText}>{driver.acceptance_rate.toFixed(0)}% acceptance</Text>
-          </View>
-        </Animated.View>
-
-        {/* Ready Message */}
-        <Animated.View entering={FadeIn.delay(400).duration(400)} style={styles.readyMessageBox}>
-          <Ionicons name="location-outline" size={22} color={theme.textSecondary} />
-          <Text style={styles.readyMessageText}>
-            Ready to start earning? Slide below to go online and receive delivery requests nearby.
-          </Text>
-        </Animated.View>
-
-        {/* Slide to go online - positioned at bottom */}
-        <Animated.View 
-          entering={SlideInUp.delay(500).duration(350)}
-          style={[styles.slideContainerOffline, { marginTop: spacing.xl, marginBottom: insets.bottom + 90 }]}
+        <ScrollView 
+          style={{ flex: 1 }} 
+          contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+          showsVerticalScrollIndicator={false}
         >
-          <SlideToGoOnline 
-            onGoOnline={goOnline} 
-            disabled={toggling}
-            testID="slide-to-go-online"
-          />
-        </Animated.View>
+          {/* Header with avatar and brand */}
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.offlineTopRow}>
+            <Image source={{ uri: driver.avatar }} style={styles.offlineAvatarLarge} />
+            <View style={styles.brandBadge}>
+              <Ionicons name="flash" size={14} color="#10B981" />
+              <Text style={styles.brandBadgeText}>NadaRuns</Text>
+            </View>
+          </Animated.View>
+
+          {/* Greeting */}
+          <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.greetingSection}>
+            <Text style={styles.greetingLight}>{getGreeting()},</Text>
+            <Text style={styles.greetingBold}>{driver.name.split(" ")[0]}!</Text>
+            <Text style={styles.greetingDate}>{formatDate()}</Text>
+          </Animated.View>
+
+          {/* Stats Cards */}
+          <Animated.View entering={FadeInUp.delay(200).duration(400)} style={[styles.statsCardsRow, shadows.sm]}>
+            <View style={styles.statCardItem}>
+              <View style={[styles.statIconCircle, { backgroundColor: "#DBEAFE" }]}>
+                <Ionicons name="wallet-outline" size={24} color="#3B82F6" />
+              </View>
+              <Text style={styles.statCardValue}>€{driver.earnings_today.toFixed(2)}</Text>
+              <Text style={styles.statCardLabel}>Today's earnings</Text>
+            </View>
+            
+            <View style={styles.statCardItem}>
+              <View style={[styles.statIconCircle, { backgroundColor: "#FEF3C7" }]}>
+                <Ionicons name="bicycle-outline" size={24} color="#F59E0B" />
+              </View>
+              <Text style={styles.statCardValue}>{driver.deliveries_today}</Text>
+              <Text style={styles.statCardLabel}>Deliveries</Text>
+            </View>
+            
+            <View style={styles.statCardItem}>
+              <View style={[styles.statIconCircle, { backgroundColor: "#E0E7FF" }]}>
+                <Ionicons name="star-outline" size={24} color="#6366F1" />
+              </View>
+              <Text style={styles.statCardValue}>{driver.rating.toFixed(2)}</Text>
+              <Text style={styles.statCardLabel}>Rating</Text>
+            </View>
+          </Animated.View>
+
+          {/* Vehicle & Acceptance Info */}
+          <Animated.View entering={FadeInUp.delay(300).duration(400)} style={[styles.vehicleInfoBar, shadows.sm]}>
+            <View style={styles.vehicleInfoItem}>
+              <Ionicons name="car-outline" size={18} color={theme.textPrimary} />
+              <Text style={styles.vehicleInfoText}>{driver.vehicle || "No vehicle set"}</Text>
+            </View>
+            <View style={styles.vehicleInfoDivider} />
+            <View style={styles.vehicleInfoItem}>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#10B981" />
+              <Text style={styles.vehicleInfoText}>{driver.acceptance_rate.toFixed(0)}% acceptance</Text>
+            </View>
+          </Animated.View>
+
+          {/* Ready Message */}
+          <Animated.View entering={FadeIn.delay(400).duration(400)} style={styles.readyMessageBox}>
+            <Ionicons name="location-outline" size={22} color={theme.textSecondary} />
+            <Text style={styles.readyMessageText}>
+              Ready to start earning? Slide below to go online and receive delivery requests nearby.
+            </Text>
+          </Animated.View>
+
+          {/* Slide to go online */}
+          <Animated.View 
+            entering={SlideInUp.delay(500).duration(350)}
+            style={[styles.slideContainerOffline, { marginTop: spacing.xl }]}
+          >
+            <SlideToGoOnline 
+              onGoOnline={goOnline} 
+              disabled={toggling}
+              testID="slide-to-go-online"
+            />
+          </Animated.View>
+        </ScrollView>
       </View>
     );
   }
