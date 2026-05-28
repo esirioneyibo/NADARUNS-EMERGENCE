@@ -178,21 +178,31 @@ export default function ShipperSettingsScreen() {
 
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Sign Out",
-          style: "destructive",
-          onPress: async () => {
-            await logout();
-            router.replace("/login");
+    
+    const doLogout = async () => {
+      await logout();
+      router.replace("/");
+    };
+
+    // On web, Alert might not work properly, so handle it gracefully
+    if (typeof window !== "undefined" && window.confirm) {
+      if (window.confirm("Are you sure you want to sign out?")) {
+        doLogout();
+      }
+    } else {
+      Alert.alert(
+        "Sign Out",
+        "Are you sure you want to sign out?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Sign Out",
+            style: "destructive",
+            onPress: doLogout,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   if (loading) {

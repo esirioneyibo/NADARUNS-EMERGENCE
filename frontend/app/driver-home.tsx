@@ -412,13 +412,10 @@ export default function HomeScreen() {
           </Text>
         </Animated.View>
 
-        {/* Spacer */}
-        <View style={{ flex: 1 }} />
-
-        {/* Slide to go online */}
+        {/* Slide to go online - positioned at bottom */}
         <Animated.View 
           entering={SlideInUp.delay(500).duration(350)}
-          style={[styles.slideContainerOffline, { paddingBottom: insets.bottom + 80 }]}
+          style={[styles.slideContainerOffline, { marginTop: spacing.xl, marginBottom: insets.bottom + 90 }]}
         >
           <SlideToGoOnline 
             onGoOnline={goOnline} 

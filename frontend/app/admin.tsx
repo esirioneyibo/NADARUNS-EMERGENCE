@@ -160,17 +160,26 @@ export default function AdminScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      { 
-        text: "Logout", 
-        style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/login");
-        }
+    const doLogout = async () => {
+      await logout();
+      router.replace("/");
+    };
+
+    // On web, Alert might not work properly, so handle it gracefully
+    if (typeof window !== "undefined" && window.confirm) {
+      if (window.confirm("Are you sure you want to logout?")) {
+        doLogout();
       }
-    ]);
+    } else {
+      Alert.alert("Logout", "Are you sure you want to logout?", [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Logout", 
+          style: "destructive",
+          onPress: doLogout,
+        }
+      ]);
+    }
   };
 
   if (loading) {

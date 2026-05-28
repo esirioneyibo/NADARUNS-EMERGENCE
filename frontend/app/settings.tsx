@@ -70,7 +70,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, mode, setMode, isDark } = useTheme();
-  const { logout } = useAuth();
+  const { logout, isAuthenticated, isLoading: authLoading } = useAuth();
   const [driver, setDriver] = useState(null);
   const [name, setName] = useState("");
   const [plate, setPlate] = useState("");
@@ -82,43 +82,85 @@ export default function SettingsScreen() {
     push: true, sound: true, new_orders: true, earnings_summary: true,
   });
   const [savingField, setSavingField] = useState(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const handleSignOut = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-    Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Sign Out",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await logout();
-            } catch (e) {
-              // Ignore errors
-            }
-            router.replace("/login");
+    
+    const doLogout = async () => {
+      try {
+        await logout();
+      } catch (e) {
+        // Ignore errors
+      }
+      router.replace("/");
+    };
+
+    // On web, Alert might not work properly, so handle it gracefully
+    if (typeof window !== "undefined" && window.confirm) {
+      if (window.confirm("Are you sure you want to sign out?")) {
+        doLogout();
+      }
+    } else {
+      Alert.alert(
+        "Sign Out",
+        "Are you sure you want to sign out?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Sign Out",
+            style: "destructive",
+            onPress: doLogout,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const load = useCallback(async () => {
-    const d = await api.getDriver();
-    setDriver(d);
-    setName(d.name);
-    setPlate(d.plate);
-    setEmail(d.email);
-    setPhone(d.phone);
-    setVehicleType(d.vehicle_type || "cargo_van");
-    setVehicleCapacity(d.vehicle_capacity_kg || 1500);
-    setNotifications(d.notifications);
-  }, []);
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      setLoadError("Please login to view settings");
+      return;
+    }
+    try {
+      setLoadError(null);
+      const d = await api.getDriver();
+      setDriver(d);
+      setName(d.name);
+      setPlate(d.plate);
+      setEmail(d.email);
+      setPhone(d.phone);
+      setVehicleType(d.vehicle_type || "cargo_van");
+      setVehicleCapacity(d.vehicle_capacity_kg || 1500);
+      setNotifications(d.notifications);
+    } catch (e: any) {
+      console.warn("Settings load failed:", e);
+      setLoadError("Session expired. Please login again.");
+    }
+  }, [authLoading, isAuthenticated]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { 
+    if (!authLoading) load(); 
+  }, [load, authLoading]));
+
+  // Show login prompt if not authenticated
+  if (!authLoading && (!isAuthenticated || loadError)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.xl }}>
+        <Ionicons name="person-circle-outline" size={80} color={theme.textSecondary} />
+        <Text style={{ fontSize: 20, fontWeight: "700", color: theme.textPrimary, marginTop: spacing.lg, textAlign: "center" }}>
+          {loadError || "Login Required"}
+        </Text>
+        <TouchableOpacity 
+          style={{ marginTop: spacing.xl, backgroundColor: theme.primary, paddingHorizontal: 40, paddingVertical: 16, borderRadius: radius.pill }}
+          onPress={() => router.push("/login")}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>Go to Login</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const saveField = async (patch, marker) => {
     setSavingField(marker);
