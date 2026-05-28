@@ -33,9 +33,9 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'nadaruns-super-secret-key-change-in-p
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
 
-# Admin credentials (hardcoded for MVP)
-ADMIN_EMAIL = "admin@nadaruns.com"
-ADMIN_PASSWORD = "admin123"  # In production, use env variable
+# Admin credentials from environment variables
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@nadaruns.com')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -499,6 +499,58 @@ class KYCSubmitRequest(BaseModel):
     selfie: str
 
 
+# ===================== Transaction & Wallet Models =====================
+
+class Transaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str  # driver_id or shipper_id
+    user_type: Literal["driver", "shipper"] = "driver"
+    type: Literal["earning", "payout", "bonus", "fee", "refund", "charge"]
+    amount: float  # positive for credit, can be negative for debit
+    currency: str = "EUR"
+    description: str
+    reference_id: Optional[str] = None  # order_id if related to an order
+    status: Literal["pending", "completed", "failed", "cancelled"] = "completed"
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    completed_at: Optional[str] = None
+    metadata: Optional[Dict] = None
+
+
+class WalletAccount(BaseModel):
+    """Detailed wallet account model for database storage."""
+    user_id: str
+    user_type: Literal["driver", "shipper"] = "driver"
+    balance: float = 0.0
+    pending_balance: float = 0.0
+    currency: str = "EUR"
+    total_earned: float = 0.0
+    total_withdrawn: float = 0.0
+    last_payout_date: Optional[str] = None
+    next_payout_date: Optional[str] = None
+    payout_method: Optional[str] = None  # "bank_transfer", "paypal", etc.
+
+
+class PayoutRequest(BaseModel):
+    amount: float
+    method: str = "bank_transfer"
+
+
+# ===================== Notification Models =====================
+
+class Notification(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    recipient_id: str  # user_id (driver, shipper, or admin)
+    recipient_type: Literal["driver", "shipper", "admin"] = "driver"
+    type: Literal["order", "payment", "system", "promotion", "alert"]
+    title: str
+    message: str
+    data: Optional[Dict] = None  # Additional data (order_id, etc.)
+    read: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    read_at: Optional[str] = None
+    expires_at: Optional[str] = None
+
+
 # ===================== Registration Models =====================
 
 # Valid logistics vehicle type IDs
@@ -563,71 +615,138 @@ SEED_DRIVER = {
     "notifications": {"push": True, "sound": True, "new_orders": True, "earnings_summary": True},
 }
 
-RESTAURANTS = [
-    {"name": "Karl Fazer Café", "address": "3 Kluuvikatu, Helsinki", "lat": 60.1696, "lng": 24.9442},
-    {"name": "Pizzeria Forza", "address": "12 Kolmas Linja, Helsinki", "lat": 60.1822, "lng": 24.9498},
-    {"name": "Café Esplanad", "address": "37 Pohjoisesplanadi, Helsinki", "lat": 60.1683, "lng": 24.9460},
-    {"name": "Sushibar Punavuori", "address": "21 Iso Roobertinkatu, Helsinki", "lat": 60.1620, "lng": 24.9385},
-    {"name": "Hesburger Kamppi", "address": "1 Urho Kekkosen katu, Helsinki", "lat": 60.1690, "lng": 24.9320},
+# ===================== Logistics Demo Data =====================
+
+# Logistics pickup locations (warehouses, distribution centers, ports)
+LOGISTICS_PICKUPS = [
+    {"name": "Helsinki Port Terminal A", "address": "Vuosaari Harbour, Helsinki", "lat": 60.2095, "lng": 25.1478},
+    {"name": "DHL Distribution Center", "address": "Vantaankoskentie 14, Vantaa", "lat": 60.2887, "lng": 24.8464},
+    {"name": "PostNord Logistics Hub", "address": "Tikkurilantie 146, Vantaa", "lat": 60.2922, "lng": 25.0392},
+    {"name": "DB Schenker Warehouse", "address": "Ansatie 5, Vantaa", "lat": 60.2714, "lng": 24.9681},
+    {"name": "UPS Express Center", "address": "Koivuhaantie 6, Vantaa", "lat": 60.2943, "lng": 24.9636},
+    {"name": "Amazon Fulfillment FI", "address": "Turunlinnantie 8, Espoo", "lat": 60.1754, "lng": 24.7363},
+    {"name": "Posti Terminal", "address": "Postintaival 7, Helsinki", "lat": 60.2280, "lng": 24.8763},
+    {"name": "K-Citymarket Warehouse", "address": "Lauttasaarentie 39, Helsinki", "lat": 60.1573, "lng": 24.8752},
+    {"name": "IKEA Distribution", "address": "Porttipuistontie 3, Vantaa", "lat": 60.2766, "lng": 24.9847},
+    {"name": "Matkahuolto Central", "address": "Kamppi, Helsinki", "lat": 60.1690, "lng": 24.9320},
 ]
 
-CUSTOMERS = [
-    {"name": "Aino K.", "rating": 4.8, "phone": "+358 41 123 4567"},
-    {"name": "Onni L.", "rating": 4.6, "phone": "+358 41 234 5678"},
-    {"name": "Liisa N.", "rating": 5.0, "phone": "+358 41 345 6789"},
-    {"name": "Mikko B.", "rating": 4.4, "phone": "+358 41 456 7890"},
-    {"name": "Sanna R.", "rating": 4.9, "phone": "+358 41 567 8901"},
+# Logistics dropoff locations (businesses, stores, construction sites)
+LOGISTICS_DROPOFFS = [
+    {"name": "Nokia HQ", "address": "Karakaari 7, Espoo", "lat": 60.2198, "lng": 24.7589, "contact": "Reception Desk"},
+    {"name": "Stockmann Department Store", "address": "Aleksanterinkatu 52, Helsinki", "lat": 60.1685, "lng": 24.9410, "contact": "Loading Dock B"},
+    {"name": "Oulu Construction Site", "address": "Kalasatama 3, Helsinki", "lat": 60.1872, "lng": 24.9768, "contact": "Site Manager"},
+    {"name": "Prisma Kaari", "address": "Kantelettarentie 1, Helsinki", "lat": 60.2286, "lng": 24.8839, "contact": "Goods Receiving"},
+    {"name": "HUS Hospital", "address": "Meilahti, Helsinki", "lat": 60.1898, "lng": 24.9061, "contact": "Medical Supplies"},
+    {"name": "Aalto University", "address": "Otakaari 1, Espoo", "lat": 60.1865, "lng": 24.8261, "contact": "Facilities"},
+    {"name": "Mall of Tripla", "address": "Fredikanterassi 1, Helsinki", "lat": 60.1982, "lng": 24.9295, "contact": "Delivery Zone C"},
+    {"name": "Verkkokauppa.com", "address": "Tyynenmerenkatu 11, Helsinki", "lat": 60.1634, "lng": 24.9221, "contact": "Warehouse Team"},
+    {"name": "SOK Logistics", "address": "Fleminginkatu 34, Helsinki", "lat": 60.1827, "lng": 24.9475, "contact": "Operations"},
+    {"name": "Kone Corporation", "address": "Keilasatama 3, Espoo", "lat": 60.1753, "lng": 24.8294, "contact": "Shipping Dept"},
 ]
 
-DROPOFFS = [
-    {"address": "15 Mannerheimintie, Helsinki", "lat": 60.1729, "lng": 24.9356, "apt": "Apt 4B"},
-    {"address": "92 Hämeentie, Helsinki", "lat": 60.1872, "lng": 24.9543, "apt": "Apt 12"},
-    {"address": "5 Bulevardi, Helsinki", "lat": 60.1645, "lng": 24.9395, "apt": "Apt 2A"},
-    {"address": "33 Aleksanterinkatu, Helsinki", "lat": 60.1685, "lng": 24.9410, "apt": "Apt 7"},
-    {"address": "18 Fredrikinkatu, Helsinki", "lat": 60.1655, "lng": 24.9320, "apt": "Apt 3C"},
+# Logistics customers (businesses)
+LOGISTICS_CUSTOMERS = [
+    {"name": "Kesko Logistics", "rating": 4.8, "phone": "+358 10 5311"},
+    {"name": "S-Group Transport", "rating": 4.9, "phone": "+358 10 7682 000"},
+    {"name": "Fazer Supply Chain", "rating": 4.7, "phone": "+358 20 555 3000"},
+    {"name": "Marimekko Shipping", "rating": 5.0, "phone": "+358 9 758 711"},
+    {"name": "Fiskars Distribution", "rating": 4.6, "phone": "+358 20 439 100"},
+    {"name": "Paulig Coffee Co", "rating": 4.8, "phone": "+358 9 319 81"},
+    {"name": "Wärtsilä Marine", "rating": 4.5, "phone": "+358 10 709 0000"},
+    {"name": "Konecranes Parts", "rating": 4.7, "phone": "+358 20 427 11"},
+    {"name": "Valmet Industries", "rating": 4.9, "phone": "+358 10 672 0000"},
+    {"name": "Outokumpu Steel", "rating": 4.4, "phone": "+358 9 4211"},
 ]
 
-ITEM_SETS = [
-    [{"name": "Korvapuusti", "quantity": 2}, {"name": "Cappuccino", "quantity": 1}],
-    [{"name": "Margherita Pizza", "quantity": 1}, {"name": "Caesar Salad", "quantity": 1}],
-    [{"name": "Salmon Soup", "quantity": 1}, {"name": "Rye Bread", "quantity": 1}, {"name": "Sparkling Water", "quantity": 2}],
-    [{"name": "Rainbow Maki", "quantity": 2}, {"name": "Edamame", "quantity": 1}],
-    [{"name": "Megamaster Burger", "quantity": 1}, {"name": "Fries", "quantity": 1}, {"name": "Kotijuoma", "quantity": 1}],
+# Cargo descriptions for logistics orders
+CARGO_DESCRIPTIONS = [
+    {"items": [{"name": "Industrial Pallets", "quantity": 12}], "weight_kg": 2400, "type": "general", "vehicle": "flatbed_truck"},
+    {"items": [{"name": "Electronics Shipment", "quantity": 50}], "weight_kg": 800, "type": "fragile", "vehicle": "box_truck"},
+    {"items": [{"name": "Construction Materials", "quantity": 1}], "weight_kg": 5000, "type": "oversized", "vehicle": "flatbed_truck"},
+    {"items": [{"name": "Refrigerated Goods", "quantity": 200}], "weight_kg": 3500, "type": "perishable", "vehicle": "refrigerated"},
+    {"items": [{"name": "Medical Supplies", "quantity": 30}], "weight_kg": 150, "type": "fragile", "vehicle": "cargo_van"},
+    {"items": [{"name": "Auto Parts Crate", "quantity": 8}], "weight_kg": 1200, "type": "general", "vehicle": "box_truck"},
+    {"items": [{"name": "Chemical Drums", "quantity": 20}], "weight_kg": 4000, "type": "hazardous", "vehicle": "hazmat"},
+    {"items": [{"name": "Furniture Delivery", "quantity": 15}], "weight_kg": 900, "type": "fragile", "vehicle": "box_truck"},
+    {"items": [{"name": "Steel Beams", "quantity": 6}], "weight_kg": 8000, "type": "oversized", "vehicle": "flatbed_truck"},
+    {"items": [{"name": "Office Equipment", "quantity": 25}], "weight_kg": 500, "type": "general", "vehicle": "cargo_van"},
 ]
 
-NOTES = ["Please knock softly", "Leave at door", "Ring buzzer 3 times", "No contact please", None]
+# Delivery notes for logistics
+LOGISTICS_NOTES = [
+    "Call 30 min before arrival",
+    "Use loading dock B",
+    "Forklift required",
+    "Check with security first",
+    "Fragile - handle with care",
+    "Temperature sensitive",
+    "Weekend delivery only",
+    "Morning delivery preferred",
+    None,
+]
 
 
-def build_order(status: OrderStatus = "pending", completed_offset_hours: Optional[int] = None, override_pickup: dict = None, override_dropoff: dict = None) -> dict:
-    idx = random.randint(0, 4)
-    r = override_pickup or RESTAURANTS[idx]
-    c = CUSTOMERS[idx]
-    d = override_dropoff or DROPOFFS[idx]
-    items = ITEM_SETS[idx]
-    distance = round(random.uniform(1.4, 5.2), 1)
-    eta = int(distance * 4) + random.randint(3, 8)
-    earnings = round(random.uniform(8.5, 22.5), 2)
-    tip = round(random.uniform(0, 4.5), 2)
+def build_logistics_order(status: OrderStatus = "pending", completed_offset_hours: Optional[int] = None, override_pickup: dict = None, override_dropoff: dict = None, shipper_id: Optional[str] = None) -> dict:
+    """Build a logistics order with realistic cargo data."""
+    pickup_idx = random.randint(0, len(LOGISTICS_PICKUPS) - 1)
+    dropoff_idx = random.randint(0, len(LOGISTICS_DROPOFFS) - 1)
+    customer_idx = random.randint(0, len(LOGISTICS_CUSTOMERS) - 1)
+    cargo_idx = random.randint(0, len(CARGO_DESCRIPTIONS) - 1)
+    
+    pickup = override_pickup or LOGISTICS_PICKUPS[pickup_idx]
+    dropoff_data = override_dropoff or LOGISTICS_DROPOFFS[dropoff_idx]
+    customer = LOGISTICS_CUSTOMERS[customer_idx]
+    cargo = CARGO_DESCRIPTIONS[cargo_idx]
+    
+    # Calculate distance based on coordinates
+    lat_diff = abs(pickup["lat"] - dropoff_data["lat"])
+    lng_diff = abs(pickup["lng"] - dropoff_data["lng"])
+    distance = round((lat_diff + lng_diff) * 111, 1)  # Rough km conversion
+    distance = max(5.0, min(distance, 50.0))  # Clamp between 5-50km
+    
+    # Calculate pricing based on vehicle type and distance
+    vehicle_type = cargo["vehicle"]
+    vehicle_info = VEHICLE_TYPES.get(vehicle_type, VEHICLE_TYPES["cargo_van"])
+    base_rate = vehicle_info["base_rate_per_km"]
+    earnings = round(distance * base_rate + random.uniform(5, 25), 2)
+    
+    eta = int(distance * 2.5) + random.randint(10, 30)  # ~2.5 min per km + loading time
+    
     created = datetime.now(timezone.utc)
     completed = None
     if completed_offset_hours is not None:
         created = created - timedelta(hours=completed_offset_hours, minutes=random.randint(10, 50))
-        completed = (created + timedelta(minutes=random.randint(18, 45))).isoformat()
+        completed = (created + timedelta(minutes=random.randint(45, 180))).isoformat()
+    
     order = Order(
-        order_number=f"#{random.choice(['A','B','C','D'])}{random.randint(100,999)}{random.choice(['X','Y','Z','K'])}",
+        order_number=f"LD-{random.randint(10000, 99999)}",
         status=status,
-        pickup=GeoPoint(lat=r["lat"], lng=r["lng"], address=r["address"], name=r["name"]),
-        dropoff=GeoPoint(lat=d["lat"], lng=d["lng"], address=d["address"], name=c["name"]),
-        customer=Customer(
-            name=c["name"], rating=c["rating"], phone=c["phone"],
-            apartment=d["apt"], gate_code=str(random.randint(1000, 9999)),
-            notes=random.choice(NOTES),
+        pickup=GeoPoint(
+            lat=pickup["lat"], 
+            lng=pickup["lng"], 
+            address=pickup["address"], 
+            name=pickup["name"]
         ),
-        items=[OrderItem(**i) for i in items],
+        dropoff=GeoPoint(
+            lat=dropoff_data["lat"], 
+            lng=dropoff_data["lng"], 
+            address=dropoff_data["address"], 
+            name=dropoff_data["name"]
+        ),
+        customer=Customer(
+            name=customer["name"], 
+            rating=customer["rating"], 
+            phone=customer["phone"],
+            apartment=dropoff_data.get("contact", "Loading Dock"),
+            gate_code=str(random.randint(1000, 9999)) if random.random() > 0.5 else None,
+            notes=random.choice(LOGISTICS_NOTES),
+        ),
+        items=[OrderItem(**i) for i in cargo["items"]],
         distance_km=distance,
         eta_minutes=eta,
         earnings=earnings,
-        tip=tip,
+        tip=0.0,  # B2B logistics typically no tips
         pickup_otp=f"{random.randint(1000, 9999)}",
         dropoff_otp=f"{random.randint(1000, 9999)}",
         pickup_otp_verified=(status not in ("pending", "rejected", "accepted", "enroute_pickup", "arrived_pickup")),
@@ -635,78 +754,84 @@ def build_order(status: OrderStatus = "pending", completed_offset_hours: Optiona
         created_at=created.isoformat(),
         completed_at=completed,
         rating_given=random.choice([1, 1, 1, -1]) if completed else None,
+        # Logistics-specific fields
+        shipper_id=shipper_id,
+        vehicle_type=vehicle_type,
+        cargo_weight_kg=cargo["weight_kg"],
+        cargo_type=cargo["type"],
+        special_requirements=random.sample(SPECIAL_REQUIREMENTS, k=random.randint(0, 2)) if random.random() > 0.5 else None,
     ).model_dump()
     return order
 
 
-# Additional pickup locations around Helsinki for map-based job discovery
-ADDITIONAL_PICKUPS = [
-    {"lat": 60.1872, "lng": 24.9543, "address": "Kaisaniemenkatu 3", "name": "DHL Express"},
-    {"lat": 60.1695, "lng": 24.9354, "address": "Mannerheimintie 22", "name": "PostNord Hub"},
-    {"lat": 60.1795, "lng": 24.9208, "address": "Töölönkatu 8", "name": "UPS Center"},
-    {"lat": 60.1645, "lng": 24.9411, "address": "Bulevardi 14", "name": "Matkahuolto"},
-    {"lat": 60.1732, "lng": 24.9621, "address": "Hakaniementori 1", "name": "DB Schenker"},
-    # Clustered locations (same spot, multiple orders)
-    {"lat": 60.1699, "lng": 24.9384, "address": "Rautatientori 5", "name": "Helsinki Central Station"},  # Multiple orders here
-    {"lat": 60.1699, "lng": 24.9384, "address": "Rautatientori 5", "name": "Helsinki Central Station"},  # Multiple orders here
-    {"lat": 60.1699, "lng": 24.9384, "address": "Rautatientori 5", "name": "Helsinki Central Station"},  # Multiple orders here
-    {"lat": 60.1589, "lng": 24.9222, "address": "Lapinlahdenkatu 16", "name": "Jätkäsaari Terminal"},
-    {"lat": 60.1589, "lng": 24.9222, "address": "Lapinlahdenkatu 16", "name": "Jätkäsaari Terminal"},
-]
+# Keep old function name for backwards compatibility
+def build_order(status: OrderStatus = "pending", completed_offset_hours: Optional[int] = None, override_pickup: dict = None, override_dropoff: dict = None) -> dict:
+    """Build a logistics order (legacy wrapper)."""
+    return build_logistics_order(status, completed_offset_hours, override_pickup, override_dropoff)
 
-ADDITIONAL_DROPOFFS = [
-    {"lat": 60.1922, "lng": 24.9543, "address": "Kalasatamankatu 12", "name": "Kalasatama", "apt": "4B"},
-    {"lat": 60.1755, "lng": 24.9094, "address": "Meilahti 8", "name": "Meilahti", "apt": "2A"},
-    {"lat": 60.1645, "lng": 24.9611, "address": "Sörnäinen 15", "name": "Sörnäinen", "apt": "6C"},
-    {"lat": 60.1712, "lng": 24.9411, "address": "Kamppi Center", "name": "Kamppi", "apt": "1D"},
-    {"lat": 60.1822, "lng": 24.9698, "address": "Siltasaari 3", "name": "Siltasaari", "apt": "3B"},
-    {"lat": 60.1855, "lng": 24.9555, "address": "Toinen linja 10", "name": "Sörnainen", "apt": "5A"},
-    {"lat": 60.1855, "lng": 24.9555, "address": "Toinen linja 10", "name": "Sörnainen", "apt": "5A"},
-    {"lat": 60.1855, "lng": 24.9555, "address": "Toinen linja 10", "name": "Sörnainen", "apt": "5A"},
-    {"lat": 60.1622, "lng": 24.9311, "address": "Hietalahti 7", "name": "Hietalahti", "apt": "2F"},
-    {"lat": 60.1622, "lng": 24.9311, "address": "Hietalahti 7", "name": "Hietalahti", "apt": "2F"},
-]
+
+# Additional pickup/dropoff locations for map-based job discovery
+# These use the logistics locations for variety
+ADDITIONAL_PICKUPS = LOGISTICS_PICKUPS.copy()
+ADDITIONAL_DROPOFFS = LOGISTICS_DROPOFFS.copy()
 
 
 async def seed_multiple_pending_orders():
-    """Seed multiple pending orders at different locations for map-based job discovery."""
+    """Seed multiple pending logistics orders at different locations for map-based job discovery."""
     for i, pickup in enumerate(ADDITIONAL_PICKUPS):
         dropoff = ADDITIONAL_DROPOFFS[i % len(ADDITIONAL_DROPOFFS)]
-        order = build_order("pending", override_pickup=pickup, override_dropoff=dropoff)
+        order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff)
         await db.orders.insert_one(order)
-    logger.info(f"Seeded {len(ADDITIONAL_PICKUPS)} pending orders for map discovery")
+    logger.info(f"Seeded {len(ADDITIONAL_PICKUPS)} pending logistics orders for map discovery")
+
+
+async def create_database_indexes():
+    """Create MongoDB indexes for optimal query performance."""
+    try:
+        # Orders collection indexes
+        await db.orders.create_index("id", unique=True)
+        await db.orders.create_index("status")
+        await db.orders.create_index("shipper_id")
+        await db.orders.create_index("driver_id")
+        await db.orders.create_index("created_at")
+        await db.orders.create_index([("status", 1), ("created_at", -1)])
+        await db.orders.create_index([("shipper_id", 1), ("status", 1)])
+        await db.orders.create_index([("driver_id", 1), ("status", 1)])
+        
+        # Drivers collection indexes
+        await db.drivers.create_index("id", unique=True)
+        await db.drivers.create_index("email", unique=True)
+        await db.drivers.create_index("is_online")
+        await db.drivers.create_index([("is_online", 1), ("vehicle_type", 1)])
+        
+        # Shippers collection indexes
+        await db.shippers.create_index("id", unique=True)
+        await db.shippers.create_index("email", unique=True)
+        
+        # KYC collections indexes
+        await db.kyc_status.create_index("driver_id", unique=True)
+        await db.kyc_documents.create_index("driver_id")
+        
+        # Transactions collection indexes
+        await db.transactions.create_index("user_id")
+        await db.transactions.create_index([("user_id", 1), ("created_at", -1)])
+        await db.transactions.create_index("type")
+        
+        # Notifications collection indexes
+        await db.notifications.create_index("recipient_id")
+        await db.notifications.create_index([("recipient_id", 1), ("read", 1)])
+        await db.notifications.create_index([("recipient_id", 1), ("created_at", -1)])
+        
+        logger.info("Database indexes created successfully")
+    except Exception as e:
+        logger.warning(f"Error creating indexes (may already exist): {e}")
 
 
 async def ensure_seed():
-    # Detect a seed version bump (e.g., locale change Stockholm → Helsinki) and wipe stale data
-    meta = await db.meta.find_one({"_id": "seed"})
-    current_version = (meta or {}).get("version", 0)
-    if current_version < SEED_VERSION:
-        logger.info("Seed version bump %s -> %s: wiping orders + driver", current_version, SEED_VERSION)
-        await db.orders.delete_many({})
-        await db.drivers.delete_many({})
-        await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)
-
-    driver = await db.drivers.find_one({"id": DRIVER_ID}, {"_id": 0})
-    if not driver:
-        await db.drivers.insert_one(SEED_DRIVER.copy())
-        logger.info("Seeded driver")
-    else:
-        # Migrate missing fields into existing driver doc
-        missing = {k: v for k, v in SEED_DRIVER.items() if k not in driver or driver.get(k) in (None, "")}
-        # Don't overwrite live numeric state
-        for k in ("is_online", "earnings_today", "deliveries_today", "acceptance_rate", "rating"):
-            missing.pop(k, None)
-        if missing:
-            await db.drivers.update_one({"id": DRIVER_ID}, {"$set": missing})
-            logger.info("Migrated driver fields: %s", list(missing.keys()))
-
-    pending = await db.orders.find_one({"status": "pending"}, {"_id": 0})
-    if not pending:
-        # Seed multiple pending orders at different locations for map-based discovery
-        await seed_multiple_pending_orders()
-        logger.info("Seeded multiple pending orders for map discovery")
-
+    """Legacy seed function - now just ensures indexes and basic data migration."""
+    # Create indexes
+    await create_database_indexes()
+    
     # Migrate any orders missing OTPs (added in a later version)
     missing_otp = await db.orders.update_many(
         {"$or": [{"pickup_otp": {"$exists": False}}, {"pickup_otp": ""}]},
@@ -726,36 +851,184 @@ async def ensure_seed():
         {"$set": {"delivery_photo": None}},
     )
 
-    history_count = await db.orders.count_documents({"status": "delivered"})
-    if history_count < 6:
-        for i in range(8):
-            await db.orders.insert_one(build_order("delivered", completed_offset_hours=i * 6 + random.randint(1, 5)))
-        logger.info("Seeded delivery history")
-
 
 # ===================== Routes =====================
 
 @api_router.get("/")
 async def root():
-    return {"message": "Driver delivery API"}
+    return {"message": "NadaRuns Logistics API - Production Ready"}
+
+
+@api_router.post("/seed-demo")
+async def seed_demo_data():
+    """
+    Seed demo data for testing purposes.
+    Creates a demo driver, demo shipper, and sample logistics orders.
+    WARNING: This is for development/testing only!
+    """
+    result = {
+        "message": "Demo data seeded successfully",
+        "created": {
+            "driver": None,
+            "shipper": None,
+            "orders": 0,
+            "history": 0,
+        }
+    }
+    
+    # Create demo driver if not exists
+    demo_driver_email = "demo.driver@nadaruns.com"
+    existing_driver = await db.drivers.find_one({"email": demo_driver_email})
+    if not existing_driver:
+        demo_driver_id = str(uuid.uuid4())
+        demo_driver = Driver(
+            id=demo_driver_id,
+            name="Demo Driver",
+            rating=4.85,
+            avatar=f"https://api.dicebear.com/7.x/avataaars/png?seed={demo_driver_id}",
+            vehicle="Cargo Van • DEMO-001",
+            vehicle_type="cargo_van",
+            vehicle_capacity_kg=1500,
+            plate="DEMO-001",
+            email=demo_driver_email,
+            phone="+358 40 123 4567",
+            password_hash=hash_password("demo1234"),
+            is_online=False,
+            earnings_today=0.0,
+            deliveries_today=0,
+            acceptance_rate=95.0,
+        )
+        await db.drivers.insert_one(demo_driver.model_dump())
+        result["created"]["driver"] = {"email": demo_driver_email, "password": "demo1234"}
+        logger.info(f"Created demo driver: {demo_driver_email}")
+    
+    # Create demo shipper if not exists
+    demo_shipper_email = "demo.shipper@nadaruns.com"
+    existing_shipper = await db.shippers.find_one({"email": demo_shipper_email})
+    if not existing_shipper:
+        demo_shipper_id = str(uuid.uuid4())
+        demo_shipper = Shipper(
+            id=demo_shipper_id,
+            company_name="Demo Logistics Co",
+            contact_name="Demo Manager",
+            email=demo_shipper_email,
+            phone="+358 40 987 6543",
+            password_hash=hash_password("demo1234"),
+            avatar="https://api.dicebear.com/7.x/initials/png?seed=DemoLogistics",
+            is_verified=True,
+            total_shipments=0,
+        )
+        await db.shippers.insert_one(demo_shipper.model_dump())
+        result["created"]["shipper"] = {"email": demo_shipper_email, "password": "demo1234"}
+        logger.info(f"Created demo shipper: {demo_shipper_email}")
+    
+    # Seed pending orders if none exist
+    pending_count = await db.orders.count_documents({"status": "pending"})
+    if pending_count < 5:
+        await seed_multiple_pending_orders()
+        result["created"]["orders"] = len(ADDITIONAL_PICKUPS)
+        logger.info(f"Seeded {len(ADDITIONAL_PICKUPS)} pending logistics orders")
+    
+    # Seed delivery history if none exists
+    history_count = await db.orders.count_documents({"status": "delivered"})
+    if history_count < 6:
+        for i in range(8):
+            await db.orders.insert_one(build_logistics_order("delivered", completed_offset_hours=i * 6 + random.randint(1, 5)))
+        result["created"]["history"] = 8
+        logger.info("Seeded delivery history")
+    
+    return result
+
+
+@api_router.delete("/seed-demo")
+async def clear_demo_data():
+    """
+    Clear all demo data.
+    WARNING: This will delete orders, drivers, and shippers!
+    """
+    deleted = {
+        "orders": 0,
+        "drivers": 0,
+        "shippers": 0,
+    }
+    
+    # Delete all orders
+    orders_result = await db.orders.delete_many({})
+    deleted["orders"] = orders_result.deleted_count
+    
+    # Delete demo driver (but keep real registered users)
+    drivers_result = await db.drivers.delete_many({"email": {"$regex": "demo"}})
+    deleted["drivers"] = drivers_result.deleted_count
+    
+    # Delete demo shipper
+    shippers_result = await db.shippers.delete_many({"email": {"$regex": "demo"}})
+    deleted["shippers"] = shippers_result.deleted_count
+    
+    logger.info(f"Cleared demo data: {deleted}")
+    return {"message": "Demo data cleared", "deleted": deleted}
 
 
 @api_router.get("/driver/me", response_model=Driver)
-async def get_driver():
-    driver = await db.drivers.find_one({"id": DRIVER_ID}, {"_id": 0})
+async def get_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get current driver profile. Requires authentication."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required. Please login first.")
+    
+    payload = decode_token(credentials.credentials)
+    driver_id = payload.get("sub")
+    user_type = payload.get("type")
+    
+    if user_type != "driver":
+        raise HTTPException(403, "Driver access required")
+    
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
     if not driver:
-        await ensure_seed()
-        driver = await db.drivers.find_one({"id": DRIVER_ID}, {"_id": 0})
+        raise HTTPException(404, "Driver not found. Please register or login again.")
+    
     return Driver(**driver)
 
 
 @api_router.post("/driver/toggle-online", response_model=Driver)
-async def toggle_online():
-    driver = await db.drivers.find_one({"id": DRIVER_ID}, {"_id": 0})
+async def toggle_online(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Toggle driver online/offline status. Requires authentication."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    driver_id = payload.get("sub")
+    user_type = payload.get("type")
+    
+    if user_type != "driver":
+        raise HTTPException(403, "Driver access required")
+    
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+    
     new_state = not driver["is_online"]
-    await db.drivers.update_one({"id": DRIVER_ID}, {"$set": {"is_online": new_state}})
+    await db.drivers.update_one({"id": driver_id}, {"$set": {"is_online": new_state}})
     driver["is_online"] = new_state
+    
+    # Broadcast status change to connected clients
+    await broadcast_driver_status(driver_id, new_state)
+    
     return Driver(**driver)
+
+
+async def broadcast_driver_status(driver_id: str, is_online: bool):
+    """Broadcast driver online/offline status to relevant WebSocket clients."""
+    message = json.dumps({
+        "type": "driver_status",
+        "driver_id": driver_id,
+        "is_online": is_online,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+    # Broadcast to all connected clients (for admin dashboard, shippers, etc.)
+    for ws in list(active_connections):
+        try:
+            await ws.send_text(message)
+        except Exception:
+            pass
 
 
 @api_router.get("/orders/pending", response_model=Optional[Order])
@@ -998,12 +1271,41 @@ async def attach_pickup_photo(order_id: str, body: PhotoRequest):
     await db.orders.update_one({"id": order_id}, {"$set": {"pickup_photo": photo}})
     order["pickup_photo"] = photo
     return Order(**order)
-async def get_wallet():
-    history = await db.orders.find({"status": "delivered"}, {"_id": 0}).sort("completed_at", -1).limit(40).to_list(40)
+
+
+# ===================== Wallet Endpoints =====================
+
+@api_router.get("/driver/wallet")
+async def get_driver_wallet(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get driver's wallet with transaction history."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    driver_id = payload.get("sub")
+    user_type = payload.get("type")
+    
+    if user_type != "driver":
+        raise HTTPException(403, "Driver access required")
+    
+    # Get all delivered orders for this driver
+    history = await db.orders.find(
+        {"status": "delivered", "driver_id": driver_id}, 
+        {"_id": 0}
+    ).sort("completed_at", -1).limit(100).to_list(100)
+    
+    # Also get orders without driver_id for backward compatibility with seeded data
+    if not history:
+        history = await db.orders.find(
+            {"status": "delivered"}, 
+            {"_id": 0}
+        ).sort("completed_at", -1).limit(40).to_list(40)
+    
     txns: List[dict] = []
     available = 0.0
     pending = 0.0
     now = datetime.now(timezone.utc)
+    
     for o in history:
         ts = o.get("completed_at") or o.get("created_at")
         try:
@@ -1032,25 +1334,176 @@ async def get_wallet():
                 timestamp=ts,
             ).model_dump())
 
-    # Add a fake recent payout
-    payout_ts = (now - timedelta(days=3)).isoformat()
-    txns.append(WalletTransaction(
-        type="payout",
-        amount=-min(available * 0.6, 240.0) if available > 0 else -120.0,
-        description="Weekly payout to **** 4422",
-        timestamp=payout_ts,
-    ).model_dump())
+    # Check for actual payouts in transactions collection
+    actual_payouts = await db.transactions.find(
+        {"user_id": driver_id, "type": "payout"}
+    ).sort("created_at", -1).limit(10).to_list(10)
+    
+    for payout in actual_payouts:
+        txns.append(WalletTransaction(
+            type="payout",
+            amount=-abs(payout.get("amount", 0)),
+            description=payout.get("description", "Payout"),
+            timestamp=payout.get("created_at"),
+        ).model_dump())
 
     txns.sort(key=lambda t: t["timestamp"], reverse=True)
     next_payout = (now + timedelta(days=(7 - now.weekday()) % 7 or 7)).date().isoformat()
 
-    return Wallet(
-        available_balance=round(available, 2),
-        pending_balance=round(pending, 2),
-        payout_schedule="Weekly • Mondays",
-        next_payout_date=next_payout,
-        transactions=[WalletTransaction(**t) for t in txns],
+    return {
+        "available_balance": round(available, 2),
+        "pending_balance": round(pending, 2),
+        "payout_schedule": "Weekly • Mondays",
+        "next_payout_date": next_payout,
+        "transactions": [WalletTransaction(**t) for t in txns],
+    }
+
+
+@api_router.post("/driver/wallet/payout")
+async def request_payout(request: PayoutRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Request a payout from driver's wallet."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    driver_id = payload.get("sub")
+    
+    if request.amount <= 0:
+        raise HTTPException(400, "Payout amount must be positive")
+    
+    # Create payout transaction
+    transaction = Transaction(
+        user_id=driver_id,
+        user_type="driver",
+        type="payout",
+        amount=-abs(request.amount),
+        description=f"Payout via {request.method}",
+        status="pending",
     )
+    await db.transactions.insert_one(transaction.model_dump())
+    
+    # Create notification
+    notification = Notification(
+        recipient_id=driver_id,
+        recipient_type="driver",
+        type="payment",
+        title="Payout Requested",
+        message=f"Your payout of €{request.amount:.2f} is being processed.",
+        data={"transaction_id": transaction.id},
+    )
+    await db.notifications.insert_one(notification.model_dump())
+    
+    return {"message": "Payout requested successfully", "transaction_id": transaction.id}
+
+
+# ===================== Notification Endpoints =====================
+
+@api_router.get("/notifications")
+async def get_notifications(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    unread_only: bool = False,
+    limit: int = 50,
+):
+    """Get notifications for the authenticated user."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    user_id = payload.get("sub")
+    
+    query = {"recipient_id": user_id}
+    if unread_only:
+        query["read"] = False
+    
+    notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    return {"notifications": notifications, "unread_count": len([n for n in notifications if not n.get("read")])}
+
+
+@api_router.post("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Mark a notification as read."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    user_id = payload.get("sub")
+    
+    result = await db.notifications.update_one(
+        {"id": notification_id, "recipient_id": user_id},
+        {"$set": {"read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(404, "Notification not found")
+    
+    return {"message": "Notification marked as read"}
+
+
+@api_router.post("/notifications/read-all")
+async def mark_all_notifications_read(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Mark all notifications as read for the authenticated user."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    user_id = payload.get("sub")
+    
+    result = await db.notifications.update_many(
+        {"recipient_id": user_id, "read": False},
+        {"$set": {"read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": f"Marked {result.modified_count} notifications as read"}
+
+
+@api_router.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Delete a notification."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    
+    payload = decode_token(credentials.credentials)
+    user_id = payload.get("sub")
+    
+    result = await db.notifications.delete_one({"id": notification_id, "recipient_id": user_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Notification not found")
+    
+    return {"message": "Notification deleted"}
+
+
+async def create_notification(
+    recipient_id: str,
+    recipient_type: str,
+    notification_type: str,
+    title: str,
+    message: str,
+    data: Optional[Dict] = None,
+):
+    """Helper function to create and store a notification."""
+    notification = Notification(
+        recipient_id=recipient_id,
+        recipient_type=recipient_type,
+        type=notification_type,
+        title=title,
+        message=message,
+        data=data,
+    )
+    await db.notifications.insert_one(notification.model_dump())
+    
+    # Broadcast to WebSocket if user is connected
+    for ws in list(active_connections):
+        try:
+            await ws.send_text(json.dumps({
+                "type": "notification",
+                "notification": notification.model_dump(),
+            }))
+        except Exception:
+            pass
+    
+    return notification
 
 
 @api_router.post("/orders/seed-new-pending", response_model=Order)
@@ -2595,6 +3048,9 @@ class ConnectionManager:
 
 # Global connection manager instance
 ws_manager = ConnectionManager()
+
+# Global set for tracking all active WebSocket connections (for broadcasts)
+active_connections: Set[WebSocket] = set()
 
 
 @app.websocket("/ws/track/{order_id}")

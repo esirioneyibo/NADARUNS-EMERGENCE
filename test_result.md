@@ -168,6 +168,18 @@ backend:
           agent: "testing"
           comment: "Tested GET /api/orders/available?vehicle_type=cargo_van endpoint. Successfully returns orders filtered by vehicle type. Returns orders that either match the specified vehicle type or have no vehicle type requirement (null/undefined). Found 9 available orders, all matching the filter criteria."
 
+  - task: "MongoDB Migration for NadaRuns Logistics Platform"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Completed comprehensive MongoDB migration testing. All 9 test cases passed: (1) POST /api/seed-demo successfully creates demo driver (demo.driver@nadaruns.com), demo shipper (demo.shipper@nadaruns.com), and 10 logistics orders with 8 history records, (2) POST /api/auth/login returns valid JWT token for driver authentication, (3) GET /api/driver/me returns complete driver profile from MongoDB with vehicle_type, email, name, and vehicle_capacity_kg, (4) POST /api/driver/toggle-online successfully toggles driver online/offline status, (5) GET /api/driver/wallet returns available_balance, pending_balance, and transactions list (8 transactions with €377.71 pending), (6) GET /api/notifications returns notifications list and unread_count (0 notifications as expected), (7) GET /api/orders/available returns 10 pending logistics orders with proper structure including cargo_weight_kg, vehicle_type, cargo_type, and special_requirements fields, (8) POST /api/auth/shipper-login successfully authenticates shipper and returns valid token, (9) POST /api/auth/admin-login successfully authenticates admin with is_admin: true. All data is properly stored and retrieved from MongoDB (not hardcoded). Logistics order data is correctly structured with vehicle types (cargo_van, refrigerated, flatbed_truck, hazmat, box_truck), cargo weights (500-5000 kg), and cargo types (general, perishable, oversized, hazardous, fragile). Authentication flows work correctly for all user types (driver, shipper, admin)."
+
 frontend:
   - task: "PhotoCapture component + dropoff integration"
     implemented: true
@@ -195,16 +207,13 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.2"
-  test_sequence: 1
+  version: "1.3"
+  test_sequence: 2
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Logistics vehicle types endpoint (GET /api/shipper/vehicle-types)"
-    - "Driver registration with vehicle type validation"
-    - "Driver profile update with vehicle type"
-    - "Available orders filtering by vehicle type"
+    - "MongoDB Migration for NadaRuns Logistics Platform"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -214,3 +223,5 @@ agent_communication:
       message: "Implemented Photo Proof at Delivery (feature a). Backend has new POST /api/orders/{id}/photo endpoint and delivery_photo field on Order. Please run backend tests focusing on the new endpoint: valid base64, raw base64 (no data: prefix should be normalised), unknown order id (404), oversized payload (>7.5MB → 413), empty photo (400). Existing endpoints must still pass."
     - agent: "testing"
       message: "Completed backend testing for logistics vehicle types implementation. All 6 test cases passed successfully: (1) Vehicle types endpoint returns 11 vehicle types with correct structure, (2) Driver registration with valid vehicle types (semi_truck, tanker) works correctly, (3) Invalid vehicle types (bicycle) are properly rejected with 400 error, (4) Available orders endpoint filters by vehicle type correctly, (5) Driver profile update with vehicle type and capacity works, (6) Simple driver registration with vehicle type works. All vehicle type validation, capacity setting based on vehicle type, and order filtering functionality is working as expected. No issues found."
+    - agent: "testing"
+      message: "Completed MongoDB migration testing for NadaRuns Logistics Platform. All 9 test cases passed successfully. Authentication works correctly for all user types (driver, shipper, admin). All data is properly stored and retrieved from MongoDB. Seed demo endpoint creates demo accounts and logistics orders correctly. Driver profile, wallet, notifications, and toggle online endpoints all working. Available orders endpoint returns logistics orders with proper structure (cargo_weight_kg, vehicle_type, cargo_type). No issues found - MongoDB integration is fully functional."
