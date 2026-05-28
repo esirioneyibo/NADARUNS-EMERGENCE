@@ -22,6 +22,7 @@ import { api } from "../src/api";
 import { Driver, Order } from "../src/types";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { useAuth } from "../src/contexts/AuthContext";
 import MapView from "../src/components/MapView";
 import SlideToGoOnline from "../src/components/SlideToGoOnline";
 import { useDriverLocation } from "../src/hooks/useWebSocket";
@@ -54,12 +55,14 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const [driver, setDriver] = useState<Driver | null>(null);
   const [pending, setPending] = useState<Order | null>(null);
   const [active, setActive] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   
   // Map-based job discovery state
   const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
@@ -126,7 +129,26 @@ export default function HomeScreen() {
   }, [active?.id, driver?.is_online, wsConnected, sendLocation]);
 
   const load = useCallback(async () => {
+    // Don't load if auth is still loading or user is not authenticated
+    if (authLoading) {
+      return;
+    }
+    
+    if (!isAuthenticated) {
+      setAuthError("Please login to continue");
+      setLoading(false);
+      return;
+    }
+    
+    // Check if user is a driver
+    if (user?.type !== "driver") {
+      setAuthError("Please login as a driver");
+      setLoading(false);
+      return;
+    }
+    
     try {
+      setAuthError(null);
       const [d, p, a, available] = await Promise.all([
         api.getDriver(), 
         api.getPending(), 
@@ -137,17 +159,23 @@ export default function HomeScreen() {
       setPending(p);
       setActive(a);
       setAvailableOrders(available || []);
-    } catch (e) {
+    } catch (e: any) {
       console.warn("Home load failed", e);
+      // If 401 or 403, redirect to login
+      if (e.message?.includes("401") || e.message?.includes("403") || e.message?.includes("Authentication")) {
+        setAuthError("Session expired. Please login again.");
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authLoading, isAuthenticated, user?.type]);
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load])
+      if (!authLoading) {
+        load();
+      }
+    }, [load, authLoading])
   );
 
   // Register for push notifications when driver is loaded
@@ -275,6 +303,35 @@ export default function HomeScreen() {
     setShowJobSheet(false);
     setSelectedOrders([]);
   }, []);
+
+  // === ALL HOOKS MUST BE ABOVE THIS LINE ===
+  
+  // Show login prompt if not authenticated
+  if (!authLoading && (!isAuthenticated || authError)) {
+    return (
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.xl }]}>
+        <Ionicons name="person-circle-outline" size={80} color={theme.textSecondary} />
+        <Text style={{ fontSize: 20, fontWeight: "700", color: theme.textPrimary, marginTop: spacing.lg, textAlign: "center" }}>
+          {authError || "Login Required"}
+        </Text>
+        <Text style={{ fontSize: 14, color: theme.textSecondary, marginTop: spacing.sm, textAlign: "center" }}>
+          Please login with your driver account to access the dashboard
+        </Text>
+        <TouchableOpacity 
+          style={{ 
+            marginTop: spacing.xl, 
+            backgroundColor: theme.primary, 
+            paddingHorizontal: 40, 
+            paddingVertical: 16, 
+            borderRadius: radius.pill 
+          }}
+          onPress={() => router.push("/login")}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>Go to Login</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (loading || !driver) {
     return (
