@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import { View, Platform, StyleSheet, Text, ActivityIndicator } from "react-native";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
-import { AuthProvider } from "../src/contexts/AuthContext";
+import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 
 // Prevent splash screen from auto-hiding until app is ready
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -17,6 +17,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 function TabsNavigator() {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
+  const { user } = useAuth();
+
+  // Role-aware tabs: drivers and shippers each get their own bottom navigation.
+  const role = user?.type;
+  const isDriver = role === "driver";
+  const isShipper = role === "shipper";
   
   // Simplified padding - use system insets directly
   // Add small extra padding for better visual spacing
@@ -50,52 +56,75 @@ function TabsNavigator() {
           },
         }}
       >
-        {/* Welcome/Role Selection Screen - No tab bar */}
+        {/* Welcome/Role Selection Screen - never in tab bar */}
         <Tabs.Screen
           name="index"
-          options={{
-            href: null,
-            tabBarStyle: { display: "none" },
-          }}
+          options={{ href: null, tabBarStyle: { display: "none" } }}
         />
-        
-        {/* Driver App Screens */}
+
+        {/* ---------- Driver tabs ---------- */}
         <Tabs.Screen
           name="driver-home"
           options={{
             title: "Home",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="home" size={size} color={color} />
-            ),
+            href: isDriver ? undefined : null,
+            tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
           name="history"
           options={{
             title: "History",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="time-outline" size={size} color={color} />
-            ),
+            href: isDriver ? undefined : null,
+            tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
           name="wallet"
           options={{
             title: "Wallet",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="wallet-outline" size={size} color={color} />
-            ),
+            href: isDriver ? undefined : null,
+            tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
           name="settings"
           options={{
             title: "Profile",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="person-outline" size={size} color={color} />
-            ),
+            href: isDriver ? undefined : null,
+            tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
           }}
         />
+
+        {/* ---------- Shipper (Business) tabs ---------- */}
+        <Tabs.Screen
+          name="shipper-home"
+          options={{
+            title: "Home",
+            href: isShipper ? undefined : null,
+            tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="shipper-create"
+          options={{
+            title: "New",
+            href: isShipper ? undefined : null,
+            // Full-screen wizard: hide the tab bar while creating a shipment
+            // so it doesn't collide with the wizard's fixed bottom action bar.
+            tabBarStyle: { display: "none" },
+            tabBarIcon: ({ color, size }) => <Ionicons name="add-circle" size={size + 4} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="shipper-settings"
+          options={{
+            title: "Profile",
+            href: isShipper ? undefined : null,
+            tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
+          }}
+        />
+
         {/* Hidden screens - accessible via navigation but not in tab bar */}
         <Tabs.Screen name="order" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="earnings" options={{ href: null, tabBarStyle: { display: "none" } }} />
@@ -104,11 +133,8 @@ function TabsNavigator() {
         <Tabs.Screen name="onboarding" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="login" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="chat" options={{ href: null, tabBarStyle: { display: "none" } }} />
-        <Tabs.Screen name="shipper-home" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="shipper-login" options={{ href: null, tabBarStyle: { display: "none" } }} />
-        <Tabs.Screen name="shipper-create" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="shipper-tracking" options={{ href: null, tabBarStyle: { display: "none" } }} />
-        <Tabs.Screen name="shipper-settings" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="admin" options={{ href: null, tabBarStyle: { display: "none" } }} />
       </Tabs>
     </>

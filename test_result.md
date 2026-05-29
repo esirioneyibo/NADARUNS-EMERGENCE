@@ -332,6 +332,19 @@ frontend:
           agent: "main"
           comment: "Backend data path tested 9/9 (iteration 7). Self-verified on web: error/empty state renders correctly for an unknown shipment id (cloud icon, 'Couldn't load shipment', working Retry button, Go back). Added testIDs (tracking-skeleton, tracking-error, tracking-retry, eta-card, off-route-banner). Skeleton shows before content; LIVE ETA card is driven by the tested driver-location fields. Existing timeline/map/cancel preserved."
 
+  - task: "Navigation fix: no role-selection after login + shipper bottom nav (Home/New/Profile)"
+    implemented: true
+    working: true
+    file: "frontend/app/_layout.tsx, frontend/app/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Root cause: index (role-selection) was the navigator's initial route, so any router.back() landed there. FIX: (1) index.tsx now has an auth-redirect guard - logged-in users are <Redirect>'d to their home (driver-home/shipper-home/admin) and a loader shows while auth is resolving, so the selection screen is unreachable once authenticated. (2) _layout TabsNavigator is now role-aware via useAuth(): drivers get Home/History/Wallet/Profile tabs; shippers get Home/New/Profile tabs (shipper-create as 'New' with the tab bar hidden while the wizard is open so it doesn't collide with the wizard's bottom action bar); shipper-settings is the shipper Profile tab. VERIFIED ON WEB for BOTH roles: after login, navigating to '/' shows SHOWS_SELECTION_SCREEN=False and lands on the role home; shipper tab bar = [Home, New, Profile]; driver tab bar = [Home, History, Wallet, Profile]."
+
+
 
 
   - task: "PhotoCapture component + dropoff integration"

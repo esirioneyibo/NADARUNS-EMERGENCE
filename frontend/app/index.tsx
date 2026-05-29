@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   StyleSheet,
   Text,
@@ -7,7 +8,7 @@ import {
   View,
   Image,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, Redirect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp, FadeIn } from "react-native-reanimated";
@@ -15,6 +16,7 @@ import * as Haptics from "expo-haptics";
 
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { useAuth } from "../src/contexts/AuthContext";
 
 const { width } = Dimensions.get("window");
 
@@ -22,8 +24,24 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { isAuthenticated, user, isLoading } = useAuth();
 
   const styles = createStyles(theme);
+
+  // Auth guard: a logged-in user must NEVER see the role-selection screen.
+  // Even if a back action lands here, immediately redirect to their home.
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
+  if (isAuthenticated && user) {
+    const home =
+      user.type === "shipper" ? "/shipper-home" : user.type === "admin" ? "/admin" : "/driver-home";
+    return <Redirect href={home} />;
+  }
 
   const handleDriverPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
