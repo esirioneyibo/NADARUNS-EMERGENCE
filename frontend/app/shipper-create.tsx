@@ -1148,6 +1148,8 @@ export default function ShipperCreateScreen() {
 
   const renderStep6 = () => {
     const slot = scheduleSlots.find((sl) => sl.id === scheduleSlotId);
+    const offerNum = Math.max(0, parseFloat(shipperOffer) || 0);
+    const reviewTotal = quote ? quote.total_price + offerNum : 0;
     const warnings: string[] = [];
     if (quote && quote.distance_km > 100)
       warnings.push(`Long-distance delivery (~${quote.distance_km.toFixed(0)} km). Allow extra time.`);
@@ -1211,10 +1213,11 @@ export default function ShipperCreateScreen() {
               <Text style={styles.editBtnText}>Details</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.priceBigSmall}>€{quote ? quote.total_price.toFixed(2) : "--"}</Text>
+          <Text style={styles.priceBigSmall}>€{quote ? reviewTotal.toFixed(2) : "--"}</Text>
           {quote && (
             <Text style={styles.summarySub}>
               {quote.distance_km.toFixed(1)} km · ~{quote.estimated_duration_minutes} min
+              {offerNum > 0 ? ` · incl. €${offerNum.toFixed(2)} bonus` : ""}
             </Text>
           )}
         </View>
