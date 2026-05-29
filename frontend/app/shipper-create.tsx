@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -187,6 +186,18 @@ export default function ShipperCreateScreen() {
   // Saved addresses
   const [savedAddresses, setSavedAddresses] = useState<{ address: string; coords: Coords }[]>([]);
 
+  // Cross-platform feedback banner (RN Web doesn't render Alert.alert)
+  const [banner, setBanner] = useState<{ msg: string; type: "error" | "success" | "info" } | null>(null);
+  const bannerTimer = useRef<any>(null);
+  const showBanner = useCallback(
+    (msg: string, type: "error" | "success" | "info" = "info", autoHide = true) => {
+      if (bannerTimer.current) clearTimeout(bannerTimer.current);
+      setBanner({ msg, type });
+      if (autoHide) bannerTimer.current = setTimeout(() => setBanner(null), 3200);
+    },
+    [],
+  );
+
   // Picker modals
   const [showPickupPicker, setShowPickupPicker] = useState(false);
   const [showDropoffPicker, setShowDropoffPicker] = useState(false);
@@ -344,7 +355,7 @@ export default function ShipperCreateScreen() {
     const err = validateStep(step);
     if (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert("Almost there", err);
+      showBanner(err, "error");
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -370,7 +381,7 @@ export default function ShipperCreateScreen() {
     for (let s = 1; s <= 3; s++) {
       const err = validateStep(s);
       if (err) {
-        Alert.alert("Missing information", err);
+        showBanner(err, "error");
         setStep(s);
         return;
       }
@@ -378,10 +389,8 @@ export default function ShipperCreateScreen() {
 
     const token = getAuthToken();
     if (!token) {
-      Alert.alert("Sign in required", "Please sign in to create shipments.", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Sign In", onPress: () => router.push("/shipper-login") },
-      ]);
+      showBanner("Please sign in to create shipments.", "error");
+      setTimeout(() => router.push("/shipper-login"), 900);
       return;
     }
 
@@ -432,18 +441,15 @@ export default function ShipperCreateScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         await clearDraft();
         idempotencyKey.current = genId(); // fresh key for next shipment
-        Alert.alert(
-          "Shipment created!",
-          `Order ${data.order_number} is live. We're finding a driver for you.`,
-          [{ text: "Done", onPress: () => router.back() }],
-        );
+        showBanner(`Shipment ${data.order_number} created! Finding a driver for you…`, "success", false);
+        setTimeout(() => router.back(), 1400);
       } else {
         const err = await res.json().catch(() => ({}));
-        Alert.alert("Error", err.detail || "Failed to create shipment");
+        showBanner(err.detail || "Failed to create shipment", "error");
       }
     } catch (e) {
       console.warn("Create shipment error:", e);
-      Alert.alert("Error", "Failed to create shipment. Please check your connection and try again.");
+      showBanner("Failed to create shipment. Please check your connection and try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -1127,6 +1133,31 @@ export default function ShipperCreateScreen() {
         </View>
       </View>
 
+      {banner && (
+        <Animated.View
+          entering={FadeInDown.duration(200)}
+          style={[
+            styles.banner,
+            banner.type === "error" && styles.bannerError,
+            banner.type === "success" && styles.bannerSuccess,
+            banner.type === "info" && styles.bannerInfo,
+          ]}
+        >
+          <Ionicons
+            name={
+              banner.type === "success"
+                ? "checkmark-circle"
+                : banner.type === "error"
+                ? "alert-circle"
+                : "information-circle"
+            }
+            size={18}
+            color="#fff"
+          />
+          <Text style={styles.bannerText}>{banner.msg}</Text>
+        </Animated.View>
+      )}
+
       <ScrollView
         contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + 130 }}
         showsVerticalScrollIndicator={false}
@@ -1504,4 +1535,24 @@ const createStyles = (theme: any) =>
     },
     nextBtnDisabled: { opacity: 0.6 },
     nextBtnText: { color: "#fff", fontWeight: "800", fontSize: 16 },
+
+    banner: {
+      position: "absolute",
+      top: spacing.xl * 3.2,
+      left: spacing.xl,
+      right: spacing.xl,
+      zIndex: 100,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: radius.lg,
+      backgroundColor: "#334155",
+      ...shadows.md,
+    },
+    bannerError: { backgroundColor: "#DC2626" },
+    bannerSuccess: { backgroundColor: "#16A34A" },
+    bannerInfo: { backgroundColor: "#334155" },
+    bannerText: { flex: 1, color: "#fff", fontSize: 13.5, fontWeight: "700", lineHeight: 18 },
   });

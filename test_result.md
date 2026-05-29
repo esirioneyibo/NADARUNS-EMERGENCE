@@ -256,15 +256,22 @@ backend:
 frontend:
   - task: "Shipper 6-step Order-Creation Wizard (rebuild)"
     implemented: true
-    working: "NA"
+    working: true
     file: "frontend/app/shipper-create.tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
-          comment: "Rebuilt shipper-create.tsx from a 3-step form into a 6-step wizard: Pickup, Dropoff, Package, Price, When, Review. Pricing is now IMMUTABLE (removed the 'Set Custom' toggle); Price step fetches POST /api/shipper/quote with coords and shows a read-only breakdown. Package step adds over-capacity validation, cargo-type chips, priority toggle, dimensions + special-handling expander. Scheduling step (ASAP vs presets). Review step has per-section Edit buttons + risk warnings. Draft auto-save (AsyncStorage), saved addresses, and Idempotency-Key on submit. Verify full happy path creates a shipment."
+          comment: "Rebuilt shipper-create.tsx from a 3-step form into a 6-step wizard: Pickup, Dropoff, Package, Price, When, Review. Pricing is now IMMUTABLE (removed the 'Set Custom' toggle); Price step fetches POST /api/shipper/quote with coords and shows a read-only breakdown. Package step adds over-capacity validation, cargo-type chips, priority toggle, dimensions + special-handling expander. Scheduling step (ASAP vs presets). Review step has per-section Edit buttons + risk warnings. Draft auto-save (AsyncStorage), saved addresses, and Idempotency-Key on submit."
+        - working: true
+          agent: "testing"
+          comment: "Iteration 5: all 9 acceptance criteria passed on Expo web (login->wizard, step validation, over-capacity block, immutable price with breakdown + lock note and ZERO custom-price inputs, scheduling, review edit jumps, Confirm&Create creates shipment visible on shipper-home, draft auto-save restores). One MEDIUM web-only issue: Alert.alert doesn't render on RN Web so validation/success feedback was invisible on web (native fine)."
+        - working: true
+          agent: "main"
+          comment: "Fixed the RN-Web Alert issue: replaced all Alert.alert calls with a cross-platform inline banner (error=red, success=green) that works on web AND native. Verified on web - tapping Continue with empty fields now shows a red banner 'Please select or enter the pickup address.'; success path shows a green 'Shipment created' banner then navigates back. Wizard fully functional."
+
   - task: "PhotoCapture component + dropoff integration"
     implemented: true
     working: true
