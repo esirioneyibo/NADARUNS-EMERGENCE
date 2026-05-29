@@ -253,6 +253,18 @@ backend:
           agent: "main"
           comment: "POST /api/shipper/shipments accepts an optional Idempotency-Key header. Repeating a request with the same key replays the stored response (no duplicate job). Without the header, behavior is unchanged. Keys auto-expire after 24h via TTL index. NEEDS TESTING: two POST /shipper/shipments with identical Idempotency-Key create exactly ONE order and return the same order_id; without the header two calls create two orders (backward compatible)."
 
+  - task: "Driver performance dashboard endpoint (GET /api/driver/performance)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "New GET /api/driver/performance (driver JWT required). Returns {status, is_online, rating, acceptance_rate, completion_rate, earnings:{today,week,total}, deliveries:{today,week,total}, recent_deliveries:[]}. Earnings/deliveries aggregated from delivered orders for the authenticated driver (fallback to global delivered for legacy/demo data). acceptance_rate = accepted/(accepted+rejected) and completion_rate = delivered/(delivered+cancelled) derived from the order_events audit log (fallback to stored driver fields). 'status' derived: offline if not online, the active order's lifecycle status if on a delivery, else 'online'. Also added completion_rate (default 98.0) to the Driver model. NEEDS TESTING: returns 401 without auth, 200 with driver token, correct numeric shapes; after completing a delivery the driver's totals reflect it."
+
 frontend:
   - task: "Shipper 6-step Order-Creation Wizard (rebuild)"
     implemented: true
@@ -271,6 +283,19 @@ frontend:
         - working: true
           agent: "main"
           comment: "Fixed the RN-Web Alert issue: replaced all Alert.alert calls with a cross-platform inline banner (error=red, success=green) that works on web AND native. Verified on web - tapping Continue with empty fields now shows a red banner 'Please select or enter the pickup address.'; success path shows a green 'Shipment created' banner then navigates back. Wizard fully functional."
+
+  - task: "Driver Experience: performance dashboard, anti-mistap accept, status system, reconnect, nav handoff"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/earnings.tsx, frontend/app/driver-home.tsx, frontend/src/components/JobDetailSheet.tsx, frontend/src/components/NavigateButton.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Login as DRIVER (eero.virtanen@driver.app/driver123 or demo.driver@nadaruns.com/demo1234). TEST: (1) PERFORMANCE DASHBOARD - new /earnings screen reachable from driver-home: when OFFLINE tap 'Performance & earnings' card; when ONLINE tap the stats row or 'View performance & earnings' link. Screen shows period tabs (Today/This week/All time) switching the earnings hero, metric cards (Acceptance, Completion, Rating, Total trips), recent-deliveries timeline (or 'No deliveries yet' empty state), skeleton loaders while loading, and pull-to-refresh. It must NOT appear as a bottom tab. (2) ANTI-MISTAP ACCEPT - go online, tap a job marker; JobDetailSheet now requires a SWIPE ('Swipe to accept') instead of a single tap, with a 'Decline' link below. (3) DRIVER STATUS SYSTEM - the online status pill shows 'You're online' when idle and the live lifecycle label (e.g. 'En route to pickup', 'Cargo on board') with an amber dot during an active delivery. (4) NAVIGATION HANDOFF - on the active order the Navigate button opens a chooser modal (Google Maps / Waze / Apple Maps on iOS). (5) OFFLINE RECOVERY - a 'Reconnecting…' banner appears when polling fails and clears on reconnect. Verify nothing in the existing driver flow regressed."
+
 
   - task: "PhotoCapture component + dropoff integration"
     implemented: true

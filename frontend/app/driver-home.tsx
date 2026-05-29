@@ -51,6 +51,16 @@ function formatDate() {
   });
 }
 
+// Live driver status labels derived from the active order's lifecycle state
+const STATUS_LABELS: Record<string, string> = {
+  accepted: "Job accepted",
+  enroute_pickup: "En route to pickup",
+  arrived_pickup: "At pickup",
+  picked_up: "Cargo on board",
+  enroute_dropoff: "En route to dropoff",
+  arrived_dropoff: "At dropoff",
+};
+
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -63,6 +73,7 @@ export default function HomeScreen() {
   const [toggling, setToggling] = useState(false);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [connectionLost, setConnectionLost] = useState(false);
   
   // Map-based job discovery state
   const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
@@ -159,11 +170,14 @@ export default function HomeScreen() {
       setPending(p);
       setActive(a);
       setAvailableOrders(available || []);
+      setConnectionLost(false);
     } catch (e: any) {
       console.warn("Home load failed", e);
       // If 401 or 403, redirect to login
       if (e.message?.includes("401") || e.message?.includes("403") || e.message?.includes("Authentication")) {
         setAuthError("Session expired. Please login again.");
+      } else {
+        setConnectionLost(true);
       }
     } finally {
       setLoading(false);
@@ -228,7 +242,10 @@ export default function HomeScreen() {
         setPending(p);
         setActive(a);
         setAvailableOrders(available || []);
-      } catch {}
+        setConnectionLost(false);
+      } catch {
+        setConnectionLost(true);
+      }
     }, 4000);
     return () => clearInterval(id);
   }, [driver?.is_online]);
@@ -414,6 +431,24 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
 
+          {/* Performance dashboard entry */}
+          <Animated.View entering={FadeInUp.delay(350).duration(400)}>
+            <TouchableOpacity
+              style={[styles.offlinePerfBtn, shadows.sm]}
+              onPress={() => router.push("/earnings")}
+              testID="open-performance-offline"
+            >
+              <View style={[styles.statIconCircle, { backgroundColor: "#EDE9FE", width: 40, height: 40, marginBottom: 0 }]}>
+                <Ionicons name="stats-chart" size={20} color="#6366F1" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.offlinePerfTitle}>Performance &amp; earnings</Text>
+                <Text style={styles.offlinePerfSub}>Trips, acceptance & completion rates</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </Animated.View>
+
           {/* Ready Message */}
           <Animated.View entering={FadeIn.delay(400).duration(400)} style={styles.readyMessageBox}>
             <Ionicons name="location-outline" size={22} color={theme.textSecondary} />
@@ -506,10 +541,20 @@ export default function HomeScreen() {
           entering={FadeIn.delay(120)}
           style={[styles.statusPill, { top: insets.top + 90 }, shadows.sm]}
         >
-          <View style={[styles.dot, { backgroundColor: theme.success }]} />
-          <Text style={styles.statusText}>You're online</Text>
+          <View style={[styles.dot, { backgroundColor: active ? theme.warning : theme.success }]} />
+          <Text style={styles.statusText}>
+            {active ? (STATUS_LABELS[active.status] || "On a delivery") : "You're online"}
+          </Text>
           <View style={styles.brandSep} />
           <Text style={styles.brandText}>NadaRuns</Text>
+        </Animated.View>
+      )}
+
+      {/* Reconnecting banner - shown when polling/load fails (offline recovery) */}
+      {connectionLost && (
+        <Animated.View entering={FadeInDown.duration(200)} style={[styles.reconnectBanner, { top: insets.top + 140 }]}>
+          <ActivityIndicator size="small" color="#fff" />
+          <Text style={styles.reconnectText}>Reconnecting…</Text>
         </Animated.View>
       )}
 
@@ -540,7 +585,12 @@ export default function HomeScreen() {
             </Animated.View>
           ) : (
             <>
-              <View style={styles.statsRow}>
+              <TouchableOpacity
+                style={styles.statsRow}
+                activeOpacity={0.7}
+                onPress={() => router.push("/earnings")}
+                testID="open-performance"
+              >
                 <View style={styles.statBox}>
                   <Text style={styles.statValue} testID="earnings-today">
                     €{driver.earnings_today.toFixed(2)}
@@ -557,7 +607,17 @@ export default function HomeScreen() {
                   <Text style={styles.statValue}>{driver.acceptance_rate.toFixed(0)}%</Text>
                   <Text style={styles.statLabel}>Accept rate</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.perfLink}
+                onPress={() => router.push("/earnings")}
+                testID="open-performance-link"
+              >
+                <Ionicons name="stats-chart" size={15} color={theme.primary} />
+                <Text style={styles.perfLinkText}>View performance &amp; earnings</Text>
+                <Ionicons name="chevron-forward" size={15} color={theme.primary} />
+              </TouchableOpacity>
 
               <View style={styles.waitingMessage}>
                 <Ionicons name="map" size={20} color={theme.primary} />
@@ -1061,4 +1121,40 @@ const createStyles = (theme: any) => StyleSheet.create({
   slideContainerOffline: {
     paddingHorizontal: 0,
   },
+
+  reconnectBanner: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#475569",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    zIndex: 30,
+  },
+  reconnectText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+
+  perfLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    marginTop: 2,
+  },
+  perfLinkText: { fontSize: 13, fontWeight: "700", color: theme.primary },
+
+  offlinePerfBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: theme.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  offlinePerfTitle: { fontSize: 15, fontWeight: "700", color: theme.textPrimary },
+  offlinePerfSub: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
 });

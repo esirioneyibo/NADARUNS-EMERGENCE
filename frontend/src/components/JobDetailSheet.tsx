@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Order } from "../types";
 import { radius, shadows, spacing } from "../theme";
+import SwipeToConfirm from "./SwipeToConfirm";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SHEET_HEIGHT = 360;
@@ -224,30 +225,29 @@ export default function JobDetailSheet({
         </View>
       </View>
 
-      {/* Action buttons */}
+      {/* Action buttons - swipe to accept prevents accidental taps */}
       <View style={styles.actions}>
+        {accepting === currentOrder.id ? (
+          <View style={styles.acceptingRow}>
+            <ActivityIndicator color="#10B981" size="small" />
+            <Text style={styles.acceptingText}>Accepting…</Text>
+          </View>
+        ) : (
+          <SwipeToConfirm
+            label="Swipe to accept"
+            color="#10B981"
+            onComplete={() => handleAccept(currentOrder.id)}
+            testID="swipe-to-accept"
+          />
+        )}
         <TouchableOpacity
-          style={styles.declineBtn}
+          style={styles.declineLink}
           onPress={handleClose}
           disabled={accepting !== null}
+          testID="decline-order-button"
         >
-          <Ionicons name="close" size={24} color={theme.error} />
+          <Ionicons name="close" size={16} color={theme.error} />
           <Text style={styles.declineBtnText}>Decline</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.acceptBtn, accepting && styles.acceptBtnDisabled]}
-          onPress={() => handleAccept(currentOrder.id)}
-          disabled={accepting !== null}
-        >
-          {accepting === currentOrder.id ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Ionicons name="checkmark" size={24} color="#fff" />
-              <Text style={styles.acceptBtnText}>Accept</Text>
-            </>
-          )}
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -396,9 +396,25 @@ const createStyles = (theme: any) =>
       color: theme.textSecondary,
     },
     actions: {
-      flexDirection: "row",
       paddingHorizontal: spacing.lg,
-      gap: 12,
+      gap: 10,
+    },
+    acceptingRow: {
+      height: 64,
+      borderRadius: radius.pill,
+      backgroundColor: "#10B98122",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+    },
+    acceptingText: { fontSize: 16, fontWeight: "700", color: "#10B981" },
+    declineLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: 10,
     },
     declineBtn: {
       flex: 1,

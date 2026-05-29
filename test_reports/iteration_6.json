@@ -1,0 +1,69 @@
+{
+  "summary": "Tested NEW driver experience upgrade (backend + frontend). Backend: 10/10 new endpoint tests pass + 19/19 P0 regression pass = 29/29. NEW GET /api/driver/performance returns correct shape, types, percent-bounded rates (0-100), and monotonic earnings (total >= week >= today). Frontend: /earnings screen renders correctly with period tabs (Today/This week/All time), green earnings hero that updates per tab, four metric cards (Acceptance/Completion/Rating/Total trips), 'Recent deliveries' section with empty state, and back button. NavigateButton chooser modal works on order screen during enroute stages (Google Maps + Waze visible, Apple Maps correctly absent on web). Driver-home status pill shows lifecycle label ('Job accepted') with amber dot when on active delivery. ONE CRITICAL BUG: /earnings IS appearing as a 5th bottom tab on web preview despite href:null in _layout.tsx — violates the 'must NOT appear as a bottom tab' requirement. JobDetailSheet swipe-to-accept could not be exercised live because demo.driver already has an active in-progress order seeded, but code inspection confirms SwipeToConfirm + Decline link are wired correctly with testIDs. State machine advance accepted->enroute_pickup verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "_layout.tsx tab bar",
+        "issue": "On Expo web preview, the /earnings screen is rendered as a 5th bottom tab (label 'earnings' with chevron-down icon) even though `href: null` is set. Tab buttons array confirmed: ['home','history','wallet','profile','earnings']. Violates requirement 'It must NOT appear as a bottom tab'. Reference: frontend/app/_layout.tsx:101",
+        "testID": "n/a",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/earnings",
+        "issues": [
+          "Period tabs, hero card, and metric cards lack testID attributes — only the entry points on driver-home have testIDs. Recommend adding testID='period-tab-today|week|all', 'earnings-hero', 'metric-acceptance|completion|rating|trips' to enable robust UI tests."
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {
+        "component": "shadow style props",
+        "issue": "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Repeats across screens. Reference: any usage of shadows.sm/md/lg in StyleSheet."
+      },
+      {
+        "component": "pointerEvents prop",
+        "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'."
+      },
+      {
+        "component": "Expo Router +html route",
+        "issue": "Console warning: '[Layout children]: No route named \"+html\" exists in nested children'. The Tabs.Screen name='+html' declaration in _layout.tsx:113 does not match the actual file +html.tsx routing. Reference: frontend/app/_layout.tsx:113."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_driver_performance.py",
+    "/app/test_reports/pytest/driver_performance_results.xml"
+  ],
+  "action_items": [
+    "Fix /earnings bottom-tab leak on web: replace `href: null` with `tabBarButton: () => null` (or `tabBarItemStyle: { display: 'none' }`) for the earnings Tabs.Screen entry, OR move /earnings out of the (tabs) group entirely so it doesn't register a tab button. Verify with: log in as driver -> bottom bar must show only 4 items (Home, History, Wallet, Profile).",
+    "Apply the same fix to the other hidden-screen entries in _layout.tsx (order, summary, kyc, onboarding, login, chat, shipper-*, admin) — they may share the same web tab-leak issue. Test by inspecting `[role=\"tab\"]` list.",
+    "Add testID to /earnings interactive elements: period tabs, hero card, metric cards, recent-delivery rows (and empty state) for stable automated testing.",
+    "Clean up the '+html' Tabs.Screen entry in _layout.tsx:113 — currently triggers a React Native warning. Either remove the entry or rename to match an actual file.",
+    "Migrate deprecated `shadow*` style props in theme/shadows to `boxShadow` (or use Platform.select for web) and update `pointerEvents` prop to `style.pointerEvents`.",
+    "RETEST after fix: anti-mistap SwipeToConfirm could not be exercised live because demo.driver already has an active in-progress order. Either (a) seed-demo should reset demo driver to no-active-order state, or (b) create a fresh pending order as demo.shipper and ensure it surfaces to demo.driver on driver-home for the swipe-to-accept flow."
+  ],
+  "critical_code_review_comments": [
+    "frontend/app/_layout.tsx:99-112: hidden screens rely on `href: null` which does not hide tabs on web — switch to `tabBarButton: () => null`.",
+    "frontend/app/earnings.tsx: missing testIDs on period tabs and metric cards reduces testability.",
+    "backend/server.py is 4035 lines — exceeds 700-line guideline; should be split into routers (driver, shipper, orders, auth, performance) for maintainability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_driver_performance.py (new pytest suite, 10 tests, all passing)"
+  ],
+  "success_rate": {
+    "backend": "100% (29/29: 10 new + 19 P0 regression)",
+    "frontend": "85% (5/6 verified: /earnings UI ✓, status pill ✓, NavigateButton chooser ✓, no-bottom-tab ✗, swipe-to-accept could-not-test, regression ✓)"
+  },
+  "seed_data_creation": "Backend tests call POST /api/seed-demo (idempotent) once per session; shipment-creation tests prefix all data with TEST_ for easy cleanup. No persistent test data created beyond what seed-demo already provides.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Demo driver demo.driver@nadaruns.com / demo1234 starts in an ACTIVE order state (status=accepted, then advanced to enroute_pickup during my test). To exercise the JobDetailSheet swipe-to-accept, you must either (a) complete the current active order all the way to delivered first, or (b) hit POST /api/seed-demo to reset, then create a new pending shipment as demo.shipper. The /earnings screen is reachable at /earnings even when bottom-tab bug is fixed (linked via testID=open-performance-offline / open-performance / open-performance-link on driver-home). NavigateButton only renders when order.status is in ['enroute_pickup','enroute_dropoff'] — not in 'accepted'.",
+  "rca_of_issue": "Earnings bottom-tab leak — Expo Router on web does not hide Tabs.Screen entries that use `href: null`; it still renders a tab button using the screen name as label and a default chevron icon. Reproduction: log in as driver -> inspect document.querySelectorAll('[role=\"tab\"]') -> array contains 5 items including 'earnings'. Fix: replace `options={{ href: null, ... }}` with `options={{ href: null, tabBarButton: () => null }}` for every hidden screen in /app/frontend/app/_layout.tsx (lines 100-112)."
+}

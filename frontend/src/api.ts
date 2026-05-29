@@ -171,6 +171,7 @@ export const api = {
   toggleOnline: () => request<Driver>("/driver/toggle-online", { method: "POST" }),
   updateDriver: (update: DriverUpdate) =>
     request<Driver>("/driver/me", { method: "PATCH", body: JSON.stringify(update) }),
+  getDriverPerformance: () => request<DriverPerformance>("/driver/performance"),
   
   // Orders
   getPending: () => request<Order | null>("/orders/pending"),

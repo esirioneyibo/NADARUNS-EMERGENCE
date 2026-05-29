@@ -94,7 +94,26 @@ export interface Driver {
   earnings_today: number;
   deliveries_today: number;
   acceptance_rate: number;
+  completion_rate?: number;
   notifications: NotificationPrefs;
+}
+
+export interface DriverPerformance {
+  status: "offline" | "online" | "busy" | string;
+  is_online: boolean;
+  rating: number;
+  acceptance_rate: number;
+  completion_rate: number;
+  earnings: { today: number; week: number; total: number };
+  deliveries: { today: number; week: number; total: number };
+  recent_deliveries: {
+    order_number: string;
+    pickup_name: string;
+    dropoff_name: string;
+    earnings: number;
+    distance_km: number;
+    completed_at: string;
+  }[];
 }
 
 export interface DriverUpdate {

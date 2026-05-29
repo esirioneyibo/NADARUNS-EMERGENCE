@@ -475,6 +475,7 @@ class Driver(BaseModel):
     earnings_today: float = 0.0
     deliveries_today: int = 0
     acceptance_rate: float = 96.0
+    completion_rate: float = 98.0
     notifications: NotificationPrefs = Field(default_factory=NotificationPrefs)
 
 
@@ -1661,6 +1662,124 @@ async def get_driver_wallet(credentials: HTTPAuthorizationCredentials = Depends(
         "next_payout_date": next_payout,
         "transactions": [WalletTransaction(**t) for t in txns],
     }
+
+
+@api_router.get("/driver/performance")
+async def get_driver_performance(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Driver performance dashboard: earnings (today/week/total), acceptance &
+    completion rates (derived from the order audit log), rating, status, and a
+    recent-deliveries timeline."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+
+    payload = decode_token(credentials.credentials)
+    driver_id = payload.get("sub")
+    if payload.get("type") != "driver":
+        raise HTTPException(403, "Driver access required")
+
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+    today = now.date()
+
+    # Delivered orders for this driver (fallback to global for legacy/demo data).
+    delivered = await db.orders.find(
+        {"status": "delivered", "driver_id": driver_id}, {"_id": 0}
+    ).sort("completed_at", -1).to_list(500)
+    if not delivered:
+        delivered = await db.orders.find(
+            {"status": "delivered"}, {"_id": 0}
+        ).sort("completed_at", -1).to_list(200)
+
+    def parse_ts(ts):
+        if not ts:
+            return now
+        try:
+            return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        except Exception:
+            return now
+
+    total_earnings = week_earnings = today_earnings = 0.0
+    total_deliveries = week_deliveries = today_deliveries = 0
+    recent = []
+    for o in delivered:
+        amount = float(o.get("earnings", 0)) + float(o.get("tip", 0) or 0)
+        done = parse_ts(o.get("completed_at") or o.get("created_at"))
+        total_earnings += amount
+        total_deliveries += 1
+        if done >= week_ago:
+            week_earnings += amount
+            week_deliveries += 1
+        if done.date() == today:
+            today_earnings += amount
+            today_deliveries += 1
+        if len(recent) < 12:
+            recent.append({
+                "order_number": o.get("order_number"),
+                "pickup_name": (o.get("pickup") or {}).get("name", ""),
+                "dropoff_name": (o.get("dropoff") or {}).get("name", ""),
+                "earnings": round(amount, 2),
+                "distance_km": o.get("distance_km", 0),
+                "completed_at": o.get("completed_at") or o.get("created_at"),
+            })
+
+    # Acceptance & completion rates derived from the immutable audit log.
+    accepted = await db.order_events.count_documents(
+        {"actor_id": driver_id, "to_status": "accepted"}
+    )
+    rejected = await db.order_events.count_documents(
+        {"actor_id": driver_id, "event_type": "rejected"}
+    )
+    cancelled = await db.order_events.count_documents(
+        {"actor_id": driver_id, "to_status": "cancelled"}
+    )
+    delivered_events = await db.order_events.count_documents(
+        {"actor_id": driver_id, "to_status": "delivered"}
+    )
+
+    if accepted + rejected > 0:
+        acceptance_rate = round(accepted / (accepted + rejected) * 100, 1)
+    else:
+        acceptance_rate = float(driver.get("acceptance_rate", 96.0))
+
+    if delivered_events + cancelled > 0:
+        completion_rate = round(delivered_events / (delivered_events + cancelled) * 100, 1)
+    else:
+        completion_rate = float(driver.get("completion_rate", 98.0))
+
+    # Derived live status for the status system (offline/online/busy/en_route).
+    active = await db.orders.find_one(
+        {"driver_id": driver_id, "status": {"$in": list(sm.ACTIVE_STATES)}}, {"_id": 0}
+    )
+    if not driver.get("is_online"):
+        status = "offline"
+    elif active:
+        status = active["status"] if active["status"] in sm.ACTIVE_STATES else "busy"
+    else:
+        status = "online"
+
+    return {
+        "status": status,
+        "is_online": driver.get("is_online", False),
+        "rating": driver.get("rating", 5.0),
+        "acceptance_rate": acceptance_rate,
+        "completion_rate": completion_rate,
+        "earnings": {
+            "today": round(today_earnings, 2),
+            "week": round(week_earnings, 2),
+            "total": round(total_earnings, 2),
+        },
+        "deliveries": {
+            "today": today_deliveries,
+            "week": week_deliveries,
+            "total": total_deliveries,
+        },
+        "recent_deliveries": recent,
+    }
+
 
 
 @api_router.post("/driver/wallet/payout")

@@ -98,6 +98,7 @@ function TabsNavigator() {
         />
         {/* Hidden screens - accessible via navigation but not in tab bar */}
         <Tabs.Screen name="order" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="earnings" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="summary" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="kyc" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="onboarding" options={{ href: null, tabBarStyle: { display: "none" } }} />
