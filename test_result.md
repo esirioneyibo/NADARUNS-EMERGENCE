@@ -265,6 +265,21 @@ backend:
           agent: "main"
           comment: "New GET /api/driver/performance (driver JWT required). Returns {status, is_online, rating, acceptance_rate, completion_rate, earnings:{today,week,total}, deliveries:{today,week,total}, recent_deliveries:[]}. Earnings/deliveries aggregated from delivered orders for the authenticated driver (fallback to global delivered for legacy/demo data). acceptance_rate = accepted/(accepted+rejected) and completion_rate = delivered/(delivered+cancelled) derived from the order_events audit log (fallback to stored driver fields). 'status' derived: offline if not online, the active order's lifecycle status if on a delivery, else 'online'. Also added completion_rate (default 98.0) to the Driver model. NEEDS TESTING: returns 401 without auth, 200 with driver token, correct numeric shapes; after completing a delivery the driver's totals reflect it."
 
+  - task: "Real-time tracking: live ETA + route-deviation on GET /api/orders/{id}/driver-location"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Enhanced GET /api/orders/{order_id}/driver-location to additionally return eta_minutes, remaining_km, target ('pickup'|'dropoff'), and off_route (bool)."
+        - working: true
+          agent: "testing"
+          comment: "Iteration 7: 9/9 PASS. Graceful nulls when no driver location; target=pickup with positive eta/remaining in accepted & enroute_pickup; target flips to dropoff after picked_up; off_route=true on a ~3km-perpendicular point and false at midpoint; 404 unknown order; 401 unauthenticated; GET /api/driver/performance regression still 200. No bugs found."
+
 frontend:
   - task: "Shipper 6-step Order-Creation Wizard (rebuild)"
     implemented: true
@@ -301,6 +316,22 @@ frontend:
         - working: true
           agent: "main"
           comment: "Fixed the tab leak: reverted to href:null only (expo-router forbids combining href + tabBarButton) and removed the stray +html Tabs.Screen. Verified on web - tab bar now shows exactly Home/History/Wallet/Profile with NO earnings tab. Swipe-to-accept retest still pending a free pending order (code verified correct, testID swipe-to-accept present)."
+
+  - task: "Real-time tracking UI: live ETA, off-route banner, skeleton + error states (shipper-tracking)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/shipper-tracking.tsx, frontend/app/driver-home.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "shipper-tracking polls driver-location every 8s; LIVE ETA card, off-route banner, skeleton loaders, and error screen with Retry. driver-home location watcher throttles updates (balanced accuracy, 25m/8s, skip <20m) and prefers WS, HTTP fallback only when WS down."
+        - working: true
+          agent: "main"
+          comment: "Backend data path tested 9/9 (iteration 7). Self-verified on web: error/empty state renders correctly for an unknown shipment id (cloud icon, 'Couldn't load shipment', working Retry button, Go back). Added testIDs (tracking-skeleton, tracking-error, tracking-retry, eta-card, off-route-banner). Skeleton shows before content; LIVE ETA card is driven by the tested driver-location fields. Existing timeline/map/cancel preserved."
+
 
 
   - task: "PhotoCapture component + dropoff integration"

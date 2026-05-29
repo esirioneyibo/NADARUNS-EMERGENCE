@@ -3065,6 +3065,75 @@ def _haversine_km(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> flo
     return 2 * R * math.asin(math.sqrt(h))
 
 
+# Average urban driving speed (km/h) used to estimate live ETA.
+_AVG_SPEED_KMH = 32.0
+# Distance (km) the driver may stray from the pickup->dropoff corridor before
+# being flagged as off-route.
+_ROUTE_DEVIATION_KM = 3.0
+
+
+def _cross_track_km(p_lat, p_lng, a_lat, a_lng, b_lat, b_lng) -> float:
+    """Perpendicular (cross-track) distance in km from point P to the
+    great-circle path A->B. Used for lightweight route-deviation detection."""
+    import math
+    R = 6371.0
+    d13 = _haversine_km(a_lat, a_lng, p_lat, p_lng) / R  # angular distance A->P
+
+    def bearing(lat1, lng1, lat2, lng2):
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dl = math.radians(lng2 - lng1)
+        y = math.sin(dl) * math.cos(phi2)
+        x = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(dl)
+        return math.atan2(y, x)
+
+    theta13 = bearing(a_lat, a_lng, p_lat, p_lng)
+    theta12 = bearing(a_lat, a_lng, b_lat, b_lng)
+    try:
+        dxt = math.asin(math.sin(d13) * math.sin(theta13 - theta12)) * R
+    except ValueError:
+        return 0.0
+    return abs(dxt)
+
+
+# Statuses in which the driver is heading to the pickup vs. to the dropoff.
+_PICKUP_PHASE = {"accepted", "enroute_pickup", "arrived_pickup"}
+_DROPOFF_PHASE = {"picked_up", "enroute_dropoff", "arrived_dropoff"}
+
+
+def compute_live_tracking(order: dict, loc: dict) -> dict:
+    """Given an order and the driver's current location, compute the live ETA,
+    remaining distance, current target (pickup/dropoff) and an off-route flag."""
+    lat = loc.get("lat")
+    lng = loc.get("lng")
+    status = order.get("status")
+    pickup = order.get("pickup") or {}
+    dropoff = order.get("dropoff") or {}
+    if lat is None or lng is None or not pickup or not dropoff:
+        return {"eta_minutes": None, "remaining_km": None, "target": None, "off_route": False}
+
+    if status in _DROPOFF_PHASE:
+        target, t_lat, t_lng = "dropoff", dropoff.get("lat"), dropoff.get("lng")
+    else:
+        target, t_lat, t_lng = "pickup", pickup.get("lat"), pickup.get("lng")
+
+    remaining_km = _haversine_km(lat, lng, t_lat, t_lng)
+    eta_minutes = max(1, round(remaining_km / _AVG_SPEED_KMH * 60))
+
+    # Route-deviation: only meaningful once moving toward the dropoff.
+    off_route = False
+    if status in _DROPOFF_PHASE:
+        deviation = _cross_track_km(lat, lng, pickup.get("lat"), pickup.get("lng"), dropoff.get("lat"), dropoff.get("lng"))
+        off_route = deviation > _ROUTE_DEVIATION_KM
+
+    return {
+        "eta_minutes": eta_minutes,
+        "remaining_km": round(remaining_km, 2),
+        "target": target,
+        "off_route": off_route,
+    }
+
+
+
 @api_router.get("/orders/{order_id}/route", response_model=DirectionsResponse)
 async def get_route(order_id: str):
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
@@ -3787,12 +3856,22 @@ async def get_driver_location(order_id: str, user: dict = Depends(get_current_us
     driver = await db.drivers.find_one({"id": order["driver_id"]})
     if not driver:
         return {"driver_location": None, "message": "Driver not found"}
-    
+
+    loc = driver.get("current_location")
+    tracking = compute_live_tracking(order, loc) if loc else {
+        "eta_minutes": None, "remaining_km": None, "target": None, "off_route": False
+    }
+
     return {
         "driver_id": driver["id"],
         "driver_name": driver.get("name"),
-        "driver_location": driver.get("current_location"),
+        "driver_location": loc,
         "location_updated_at": driver.get("location_updated_at"),
+        "status": order.get("status"),
+        "eta_minutes": tracking["eta_minutes"],
+        "remaining_km": tracking["remaining_km"],
+        "target": tracking["target"],
+        "off_route": tracking["off_route"],
     }
 
 

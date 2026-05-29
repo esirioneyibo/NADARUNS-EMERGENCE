@@ -90,8 +90,15 @@ export default function ShipperTrackingScreen() {
   
   const [shipment, setShipment] = useState<ShipmentDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [liveDriverLocation, setLiveDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [tracking, setTracking] = useState<{
+    eta_minutes: number | null;
+    remaining_km: number | null;
+    off_route: boolean;
+    target: string | null;
+  } | null>(null);
 
   const styles = createStyles(theme);
 
@@ -119,15 +126,16 @@ export default function ShipperTrackingScreen() {
       const res = await fetch(`${BASE}/api/shipper/shipments/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       if (res.ok) {
         setShipment(await res.json());
+        setError(false);
       } else {
-        Alert.alert("Error", "Failed to load shipment details");
-        router.back();
+        setError(true);
       }
     } catch (e) {
       console.warn("Load shipment error:", e);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -135,10 +143,44 @@ export default function ShipperTrackingScreen() {
 
   useEffect(() => {
     loadShipment();
-    // Poll for updates every 10 seconds as fallback (WebSocket provides real-time)
+    // Poll for status updates every 10 seconds as a fallback (WebSocket is realtime)
     const interval = setInterval(loadShipment, 10000);
     return () => clearInterval(interval);
   }, [loadShipment]);
+
+  // Live ETA / route-deviation polling (HTTP fallback + ETA source).
+  const trackableStatuses = ["accepted", "enroute_pickup", "arrived_pickup", "picked_up", "enroute_dropoff", "arrived_dropoff"];
+  useEffect(() => {
+    if (!id || !shipment || !trackableStatuses.includes(shipment.status)) return;
+    let alive = true;
+    const pollLocation = async () => {
+      try {
+        const token = getAuthToken();
+        const res = await fetch(`${BASE}/api/orders/${id}/driver-location`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok && alive) {
+          const data = await res.json();
+          if (data.driver_location) setLiveDriverLocation(data.driver_location);
+          setTracking({
+            eta_minutes: data.eta_minutes ?? null,
+            remaining_km: data.remaining_km ?? null,
+            off_route: !!data.off_route,
+            target: data.target ?? null,
+          });
+        }
+      } catch {
+        /* keep last known tracking; WS may still deliver */
+      }
+    };
+    pollLocation();
+    const iv = setInterval(pollLocation, 8000);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, shipment?.status]);
 
   const handleCall = (phone: string) => {
     Linking.openURL(`tel:${phone}`);
@@ -183,10 +225,48 @@ export default function ShipperTrackingScreen() {
     );
   };
 
-  if (loading || !shipment) {
+  if (error && !shipment) {
     return (
-      <View style={[styles.loading, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color="#6366F1" />
+      <View style={[styles.centered, { paddingTop: insets.top }]} testID="tracking-error">
+        <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
+        <Text style={styles.errorTitle}>Couldn't load shipment</Text>
+        <Text style={styles.errorSub}>Check your connection and try again.</Text>
+        <TouchableOpacity
+          style={styles.retryBtn}
+          testID="tracking-retry"
+          onPress={() => {
+            setLoading(true);
+            setError(false);
+            loadShipment();
+          }}
+        >
+          <Ionicons name="refresh" size={16} color="#fff" />
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
+          <Text style={styles.errorBack}>Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (loading || !shipment) {
+    const Sk = ({ h, w, mt }: { h: number; w?: any; mt?: number }) => (
+      <View style={[styles.sk, { height: h, width: w ?? "100%", marginTop: mt ?? 0 }]} />
+    );
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]} testID="tracking-skeleton">
+        <View style={styles.header}>
+          <View style={[styles.iconBtn, { backgroundColor: theme.surfaceMuted }]} />
+          <Sk h={18} w={120} />
+          <View style={{ width: 44 }} />
+        </View>
+        <View style={{ paddingHorizontal: spacing.xl, gap: spacing.lg, marginTop: spacing.md }}>
+          <View style={[styles.sk, { height: 200, borderRadius: radius.xl }]} />
+          <View style={[styles.sk, { height: 120, borderRadius: radius.xl }]} />
+          <View style={[styles.sk, { height: 90, borderRadius: radius.xl }]} />
+          <View style={[styles.sk, { height: 140, borderRadius: radius.xl }]} />
+        </View>
       </View>
     );
   }
@@ -234,6 +314,36 @@ export default function ShipperTrackingScreen() {
                 <Text style={styles.liveText}>LIVE</Text>
               </View>
             )}
+          </Animated.View>
+        )}
+
+        {/* Off-route warning */}
+        {isActive && tracking?.off_route && (
+          <Animated.View entering={FadeInDown.duration(220)} style={styles.offRouteBanner} testID="off-route-banner">
+            <Ionicons name="warning" size={18} color="#fff" />
+            <Text style={styles.offRouteText}>Driver appears to be off the expected route</Text>
+          </Animated.View>
+        )}
+
+        {/* Live ETA */}
+        {isActive && tracking && tracking.eta_minutes != null && (
+          <Animated.View entering={FadeInUp.delay(120)} style={[styles.etaCard, shadows.sm]} testID="eta-card">
+            <View style={styles.etaIcon}>
+              <Ionicons name="time" size={22} color="#6366F1" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.etaValue}>
+                {tracking.eta_minutes} min{" "}
+                <Text style={styles.etaUnit}>{tracking.target === "dropoff" ? "to dropoff" : "to pickup"}</Text>
+              </Text>
+              <Text style={styles.etaSub}>
+                {tracking.remaining_km != null ? `${tracking.remaining_km.toFixed(1)} km remaining` : "Calculating…"}
+              </Text>
+            </View>
+            <View style={styles.etaLive}>
+              <View style={styles.liveDot} />
+              <Text style={styles.etaLiveText}>LIVE</Text>
+            </View>
           </Animated.View>
         )}
 
@@ -393,6 +503,48 @@ export default function ShipperTrackingScreen() {
 const createStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.background },
+
+  // Skeleton + error/empty states
+  sk: { backgroundColor: theme.surfaceMuted, borderRadius: 8, opacity: 0.7 },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, backgroundColor: theme.background, gap: 6 },
+  errorTitle: { fontSize: 18, fontWeight: "800", color: theme.textPrimary, marginTop: 8 },
+  errorSub: { fontSize: 14, color: theme.textSecondary, textAlign: "center", marginBottom: 8 },
+  retryBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#6366F1", paddingHorizontal: 24, paddingVertical: 12, borderRadius: radius.pill, marginTop: 8 },
+  retryBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  errorBack: { color: theme.textSecondary, fontWeight: "700", fontSize: 14 },
+
+  // Off-route banner
+  offRouteBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#F59E0B",
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+  },
+  offRouteText: { flex: 1, color: "#fff", fontSize: 13.5, fontWeight: "700" },
+
+  // Live ETA card
+  etaCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: theme.surface,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.xl,
+  },
+  etaIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" },
+  etaValue: { fontSize: 20, fontWeight: "800", color: theme.textPrimary },
+  etaUnit: { fontSize: 14, fontWeight: "600", color: theme.textSecondary },
+  etaSub: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
+  etaLive: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#10B98115", paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius.pill },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#10B981" },
+  etaLiveText: { fontSize: 10, fontWeight: "800", color: "#10B981", letterSpacing: 0.5 },
   
   header: {
     flexDirection: "row",

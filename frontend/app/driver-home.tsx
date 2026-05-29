@@ -105,24 +105,42 @@ export default function HomeScreen() {
         }
         setLocationPermission(true);
 
-        // Start watching location
+        // Battery-friendly throttling: only emit when the driver has moved a
+        // meaningful distance or enough time has elapsed since the last send.
+        let lastSent: { lat: number; lng: number; t: number } | null = null;
+        const movedMeters = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+          const R = 6371000;
+          const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+          const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+          const h =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+          return 2 * R * Math.asin(Math.sqrt(h));
+        };
+
+        // Start watching location (balanced accuracy = lower battery drain)
         locationSubscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 5000, // Update every 5 seconds
-            distanceInterval: 10, // Or when moved 10 meters
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 8000, // Update every 8 seconds
+            distanceInterval: 25, // Or when moved 25 meters
           },
           (location) => {
             const { latitude: lat, longitude: lng } = location.coords;
-            console.log('[Location] Update:', { lat, lng });
-            
-            // Send via WebSocket if connected
+            const now = Date.now();
+
+            // Throttle: skip if barely moved and sent recently.
+            if (lastSent && movedMeters(lastSent, { lat, lng }) < 20 && now - lastSent.t < 8000) {
+              return;
+            }
+            lastSent = { lat, lng, t: now };
+
+            // Prefer WebSocket; fall back to HTTP only when WS is down.
             if (wsConnected) {
               sendLocation({ lat, lng });
+            } else {
+              api.updateDriverLocation({ lat, lng }, active.id).catch(() => {});
             }
-            
-            // Also send via HTTP as fallback
-            api.updateDriverLocation({ lat, lng }, active.id).catch(() => {});
           }
         );
       } catch (e) {
