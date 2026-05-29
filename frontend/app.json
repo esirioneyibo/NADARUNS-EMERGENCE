@@ -83,7 +83,11 @@
     "extra": {
       "apiUrl": "https://api.nadaruns.com",
       "adminUrl": "https://admin.nadaruns.com",
-      "websiteUrl": "https://nadaruns.com"
+      "websiteUrl": "https://nadaruns.com",
+      "backendUrl": "https://api.nadaruns.com",
+      "eas": {
+        "projectId": "bbac3d10-9911-44ff-9079-8a6e544f7f45"
+      }
     }
   }
 }
