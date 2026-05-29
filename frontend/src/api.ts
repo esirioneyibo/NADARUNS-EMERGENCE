@@ -1,12 +1,30 @@
+import Constants from "expo-constants";
 import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet } from "./types";
 
-// Get BASE URL from environment, with fallback and cleanup
-const rawBase = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+// Get BASE URL from environment with multiple fallback options
+// Priority: 1. EXPO_PUBLIC_BACKEND_URL env var, 2. Extra config, 3. Hardcoded production URL
+const getBaseUrl = (): string => {
+  // Try environment variable first (works in development)
+  if (process.env.EXPO_PUBLIC_BACKEND_URL) {
+    return process.env.EXPO_PUBLIC_BACKEND_URL;
+  }
+  
+  // Try Expo Constants extra config (works in EAS builds)
+  const extra = Constants.expoConfig?.extra;
+  if (extra?.backendUrl) {
+    return extra.backendUrl;
+  }
+  
+  // Fallback to production URL for standalone builds
+  // IMPORTANT: Change this to your production API URL
+  return "https://api.nadaruns.com";
+};
+
+const rawBase = getBaseUrl();
 // Remove trailing slash if present
 const BASE = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
 
-// API prefix - set to empty string if your backend URL already includes /api
-// or if your Nginx rewrites add the /api prefix automatically
+// API prefix - your backend routes are at /api/*
 const API_PREFIX = "/api";
 
 // Token storage for authenticated requests
