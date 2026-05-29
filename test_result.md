@@ -242,6 +242,18 @@ frontend:
           agent: "main"
           comment: "Settings screen already had vehicle type selection with categories and capacity display. Updated to use vehicle_capacity_kg from Driver type. Vehicle type changes trigger saveField with vehicle_type, vehicle_capacity_kg, and vehicle string."
 
+  - task: "Map Location Picker for Shipper Create Shipment"
+    implemented: true
+    working: false
+    file: "frontend/src/components/MapLocationPicker.tsx, frontend/app/shipper-create.tsx"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: false
+          agent: "testing"
+          comment: "CRITICAL: MapLocationPicker.tsx directly imports 'react-native-maps' which is a native-only library and does not work on web. When testing on web browser (even with mobile viewport), the app shows red screen error: 'Importing native-only module react-native/Libraries/Utilities/codegenNativeCommands on web from: node_modules/react-native-maps/lib/MapMarkerNativeComponent.js'. The component needs to be refactored to use platform-specific implementations similar to the existing MapView.tsx component which uses SvgMapView for web and NativeMapView for native. The shipper-create.tsx page imports MapLocationPicker which causes the entire page to crash on web. This blocks all testing of the Map Location Picker functionality on web browsers. Recommendation: Create a web-compatible version of MapLocationPicker or use a web-compatible map library like react-leaflet or Google Maps JavaScript API for web platform."
+
 metadata:
   created_by: "main_agent"
   version: "1.3"
@@ -250,8 +262,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "MongoDB Migration for NadaRuns Logistics Platform"
-  stuck_tasks: []
+    - "Map Location Picker for Shipper Create Shipment"
+  stuck_tasks:
+    - "Map Location Picker for Shipper Create Shipment"
   test_all: false
   test_priority: "high_first"
 
@@ -262,6 +275,7 @@ agent_communication:
       message: "Completed backend testing for logistics vehicle types implementation. All 6 test cases passed successfully: (1) Vehicle types endpoint returns 11 vehicle types with correct structure, (2) Driver registration with valid vehicle types (semi_truck, tanker) works correctly, (3) Invalid vehicle types (bicycle) are properly rejected with 400 error, (4) Available orders endpoint filters by vehicle type correctly, (5) Driver profile update with vehicle type and capacity works, (6) Simple driver registration with vehicle type works. All vehicle type validation, capacity setting based on vehicle type, and order filtering functionality is working as expected. No issues found."
     - agent: "testing"
       message: "Completed MongoDB migration testing for NadaRuns Logistics Platform. All 9 test cases passed successfully. Authentication works correctly for all user types (driver, shipper, admin). All data is properly stored and retrieved from MongoDB. Seed demo endpoint creates demo accounts and logistics orders correctly. Driver profile, wallet, notifications, and toggle online endpoints all working. Available orders endpoint returns logistics orders with proper structure (cargo_weight_kg, vehicle_type, cargo_type). No issues found - MongoDB integration is fully functional."
-
     - agent: "testing"
       message: "Completed testing of shipper shipment creation flow. All 4 test cases passed successfully: (1) Shipper login endpoint works correctly with demo credentials, (2) Shipment creation endpoint creates orders with proper structure and logistics data, (3) Shipper shipments list endpoint returns all shipments for authenticated shipper, (4) Created orders appear in available orders list for drivers. The complete flow from shipper authentication to order creation and driver visibility is working correctly. No issues found."
+    - agent: "testing"
+      message: "CRITICAL BLOCKER: Map Location Picker cannot be tested on web. The MapLocationPicker.tsx component directly imports 'react-native-maps' which is a native-only library that does not work on web browsers. When attempting to test the shipper create shipment page on web (even with mobile viewport), the app crashes with red screen error: 'Importing native-only module react-native/Libraries/Utilities/codegenNativeCommands on web'. The existing codebase has a pattern for handling this - MapView.tsx uses Platform.OS to conditionally render SvgMapView for web and NativeMapView for native. MapLocationPicker needs the same treatment. RECOMMENDATION: Use WEBSEARCH TOOL to find best practices for implementing a cross-platform map location picker in React Native/Expo that works on both web and native. Consider solutions like: (1) Creating MapLocationPicker.web.tsx with react-leaflet or Google Maps JavaScript API, (2) Using expo-location with a web-compatible map library, (3) Conditionally rendering different components based on Platform.OS. This is blocking all testing of the Map Location Picker feature."
