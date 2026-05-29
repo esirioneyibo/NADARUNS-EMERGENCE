@@ -32,6 +32,7 @@
     },
     "android": {
       "package": "com.nadaruns.driver",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
@@ -76,7 +77,9 @@
       ],
       "expo-secure-store",
       "expo-font",
-      "expo-audio"
+      "expo-audio",
+      "expo-notifications",
+      "./plugins/withSuprSendFcm"
     ],
     "experiments": {
       "typedRoutes": true

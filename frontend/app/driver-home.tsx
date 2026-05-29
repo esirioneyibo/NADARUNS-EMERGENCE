@@ -27,11 +27,6 @@ import { useAuth } from "../src/contexts/AuthContext";
 import MapView from "../src/components/MapView";
 import SlideToGoOnline from "../src/components/SlideToGoOnline";
 import { useDriverLocation } from "../src/hooks/useWebSocket";
-import { 
-  registerForPushNotifications, 
-  registerPushTokenWithBackend,
-  addNotificationResponseListener 
-} from "../src/services/notifications";
 import JobMarker from "../src/components/JobMarker";
 import JobDetailSheet from "../src/components/JobDetailSheet";
 
@@ -213,43 +208,6 @@ export default function HomeScreen() {
       }
     }, [load, authLoading])
   );
-
-  // Register for push notifications when driver is loaded
-  useEffect(() => {
-    if (!driver?.id) return;
-
-    const setupPushNotifications = async () => {
-      try {
-        const token = await registerForPushNotifications();
-        if (token) {
-          await registerPushTokenWithBackend(token, driver.id, "driver");
-          console.log("[Notifications] Registered for push notifications");
-        }
-      } catch (e) {
-        console.warn("[Notifications] Setup failed:", e);
-      }
-    };
-
-    setupPushNotifications();
-
-    // Handle notification taps
-    const subscription = addNotificationResponseListener((response) => {
-      const data = response.notification.request.content.data;
-      console.log("[Notifications] Response:", data);
-      
-      // Navigate based on notification type
-      if (data?.type === "new_order" && data?.order_id) {
-        // Will be picked up by pending order polling
-        load();
-      } else if (data?.type === "chat" && data?.order_id) {
-        router.push(`/chat?orderId=${data.order_id}`);
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [driver?.id, router, load]);
 
   // Auto-poll for pending order AND active order AND available orders while online
   useEffect(() => {

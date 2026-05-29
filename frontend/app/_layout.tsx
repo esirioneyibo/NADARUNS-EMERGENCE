@@ -1,10 +1,12 @@
 import React, { useEffect, useCallback, useState } from "react";
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
+import * as Notifications from "expo-notifications";
+import * as Linking from "expo-linking";
 import { View, Platform, StyleSheet, Text, ActivityIndicator } from "react-native";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
@@ -14,6 +16,54 @@ import { NotificationProvider } from "../src/contexts/NotificationContext";
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Ignore errors if splash screen is already hidden
 });
+
+// ---- Background push (Emergent / SuprSend) — module scope, before any component ----
+// Foreground handler: on Android suppress raw SuprSend data-only push (the native
+// SuprSendMessagingService renders it in every app state); show iOS normally.
+if (Platform.OS !== "web") {
+  Notifications.setNotificationHandler({
+    handleNotification: async (notification) => {
+      const data = notification.request.content.data || {};
+      if (Platform.OS === "android" && typeof data.supr_send_n_pl === "string") {
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    },
+  });
+}
+
+if (Platform.OS === "android") {
+  Notifications.setNotificationChannelAsync("default", {
+    name: "Default",
+    importance: Notifications.AndroidImportance.MAX,
+    sound: "default",
+  }).catch(() => {});
+}
+
+function resolveDeeplink(data: Record<string, any>): string | undefined {
+  let url = data.deeplink || data.action_url;
+  if (!url && typeof data.supr_send_n_pl === "string") {
+    try {
+      const parsed = JSON.parse(data.supr_send_n_pl);
+      url = parsed.deeplink || parsed.action_url;
+    } catch {
+      /* ignore malformed payload */
+    }
+  }
+  return url;
+}
 
 function TabsNavigator() {
   const insets = useSafeAreaInsets();
@@ -168,6 +218,31 @@ function LoadingScreen() {
 
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
+  const router = useRouter();
+
+  // Background-push tap handling (native only): route via deeplink/action_url.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    const tapSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data || {};
+      const url = resolveDeeplink(data);
+      if (!url) return;
+      url.startsWith("http") ? Linking.openURL(url) : router.push(url);
+    });
+
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (!response) return;
+      const data = response.notification.request.content.data || {};
+      const url = resolveDeeplink(data);
+      if (!url) return;
+      url.startsWith("http") ? Linking.openURL(url) : router.push(url);
+    });
+
+    return () => {
+      tapSub.remove();
+    };
+  }, [router]);
 
   // Hide splash screen after a short delay to ensure icons are loaded
   // @expo/vector-icons handles Ionicons font loading internally

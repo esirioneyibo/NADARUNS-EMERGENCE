@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 8 covered (a) regression that the new background push triggers (Emergent relay) do NOT block the order lifecycle, (b) presence + Pydantic validation of POST /api/register-push, and (c) frontend in-app lifecycle banner rendering on shipper-tracking. 30/30 backend tests passed (11 new + 19 existing P0 state-machine). Backend logs confirmed push triggers fire in background and fail with 'EMERGENT_PUSH_KEY missing or invalid' (placeholder env) WITHOUT affecting primary endpoint responses — exactly as designed. Frontend Expo web preview loaded cleanly with no crash from expo-audio / expo-notifications; the floating lifecycle banner was visually verified rendering with correct title 'Driver at pickup' on the shipper-tracking screen, and underlying page state transitioned correctly to Driver Assigned, Driver Arrived, and Delivered.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "shipper-tracking realtime",
+        "issue": "WebSocket wss://.../ws/track/{id} fails with 502 in the preview environment (likely k8s ingress not configured for WS upgrade). Polling fallback still works so tracking is functional, but real-time updates would be slower than designed. Pre-existing — unchanged this iteration.",
+        "affected_testIDs": []
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_push_and_lifecycle_regression.py",
+    "/app/test_reports/pytest/iter8_results.xml"
+  ],
+  "action_items": [
+    "Optional: in NotificationContext useEffect on shipper-tracking, the `prev === null` guard suppresses the very first transition the user lands on. If a shipper opens tracking AFTER the driver has already accepted, no 'Driver assigned' banner fires. Current behaviour is reasonable (prevents stale notifications on re-open) but worth confirming with product.",
+    "Optional: investigate the 502 on the /ws/track/{id} WebSocket upgrade in the preview ingress so the realtime path is also exercised; polling fallback already keeps the UI live."
+  ],
+  "critical_code_review_comments": [
+    "Push triggers use asyncio.create_task wrapped in try/except inside send_push() — verified at runtime that an upstream 401 from the relay only logs a warning and does NOT raise into the order endpoints. Pattern is correct.",
+    "POST /api/register-push relies on Pydantic for body validation (returns 422) before any relay call — confirmed.",
+    "alerts.ts uses expo-audio (the modern, non-deprecated package). Defensive require() wrapping ensures a missing module never crashes the JS bundle. Web has no haptics — also guarded.",
+    "Backend file server.py is 4228 lines — still flagged from prior iterations as oversized; recommend splitting (drivers, shipper, orders, push) into routers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_push_and_lifecycle_regression.py (new)",
+    "/app/test_reports/pytest/iter8_results.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (30/30: 11 new + 19 P0 regression)", "frontend": "100% smoke (banner render verified, no crash)"},
+  "seed_data_creation": "Used existing POST /api/seed-demo. New test fixtures create disposable shipments prefixed with 'TEST' to avoid polluting demo data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Push notification feature: backend endpoint /api/register-push exists with proper 422 validation; with EMERGENT_PUSH_KEY=placeholder the upstream relay rejects valid bodies with 401 and our endpoint returns 500 — this is EXPECTED per the request and not a bug. Background push triggers on accept/advance/create are fire-and-forget (asyncio.create_task) and proven NOT to affect order lifecycle responses. In-app banners (shipper-tracking + driver-home) are wired via NotificationContext + alerts.ts and verified to render in the web preview. WebSocket /ws/track/{id} returns 502 in this preview env (pre-existing); polling fallback works.",
+  "rca_of_issue": "N/A — no regressions found."
+}

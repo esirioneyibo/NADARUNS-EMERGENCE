@@ -280,6 +280,18 @@ backend:
           agent: "testing"
           comment: "Iteration 7: 9/9 PASS. Graceful nulls when no driver location; target=pickup with positive eta/remaining in accepted & enroute_pickup; target flips to dropoff after picked_up; off_route=true on a ~3km-perpendicular point and false at midpoint; 404 unknown order; 401 unauthenticated; GET /api/driver/performance regression still 200. No bugs found."
 
+  - task: "Background push (Emergent relay): /api/register-push + lifecycle send_push triggers"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added Emergent push relay (SuprSend): POST /api/register-push {user_id, platform, device_token} relays to the Emergent push service via EMERGENT_PUSH_KEY. send_push() helper triggers pushes (chunks 100 recipients). Background triggers added (all wrapped in try/except + asyncio.create_task so push failure NEVER blocks the primary op): (1) create_shipment -> push_new_job_to_online_drivers (online drivers matching vehicle type), (2) accept_order -> push_status_to_shipper(accepted), (3) advance_order -> push_status_to_shipper(arrived_pickup/arrived_dropoff/delivered). NOTE: In this env EMERGENT_PUSH_KEY=placeholder, so the upstream relay returns 401 and /api/register-push will return 500 (EXPECTED until deploy replaces the key) - this is fine. CRITICAL TEST FOCUS: the ORDER LIFECYCLE must be UNAFFECTED - POST /api/shipper/shipments (201/200 + order created), POST /api/orders/{id}/accept (driver JWT, binds driver, 200), POST /api/orders/{id}/advance through the full flow to delivered must ALL still return success despite push relay failing in the background. Also verify /api/register-push exists and returns 422 on missing fields."
+
 frontend:
   - task: "Shipper 6-step Order-Creation Wizard (rebuild)"
     implemented: true
@@ -434,10 +446,8 @@ metadata:
 
 test_plan:
   current_focus:
-    - "P0 Order State Machine (transition validation) on accept/advance"
-    - "P0 Driver binding + race-safe accept (atomic claim)"
-    - "P0 Audit trail (order_events) + GET /orders/{id}/events"
-    - "P0 Idempotency-Key on shipment creation"
+    - "Background push (Emergent relay): /api/register-push + lifecycle send_push triggers"
+    - "In-app event alerts: distinct sound + haptic + banner (driver & shipper)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"

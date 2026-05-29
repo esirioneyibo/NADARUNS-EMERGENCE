@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setAuthToken } from "../api";
+import { registerForPush } from "../services/push";
 
 const TOKEN_KEY = "nadaruns_auth_token";
 const USER_KEY = "nadaruns_user";
@@ -67,9 +68,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const savedUser = await getItem(USER_KEY);
         
         if (savedToken && savedUser) {
+          const parsed = JSON.parse(savedUser);
           setToken(savedToken);
-          setUser(JSON.parse(savedUser));
+          setUser(parsed);
           setAuthToken(savedToken);  // Restore token for API requests
+          // Re-register push on every app open (tokens can rotate).
+          registerForPush(parsed?.id);
         }
       } catch (e) {
         console.warn("Failed to load auth state:", e);
@@ -83,6 +87,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setToken(newToken);
     setUser(newUser);
     setAuthToken(newToken);  // Set token for API requests
+    registerForPush(newUser?.id);  // register device for background push (native only)
     
     try {
       await setItem(TOKEN_KEY, newToken);

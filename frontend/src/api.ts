@@ -79,6 +79,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
+// Register a native device push token with the backend (Emergent push relay).
+export async function registerPushToken(body: {
+  user_id: string;
+  platform: string;
+  device_token: string;
+}): Promise<{ status: string }> {
+  return request("/register-push", { method: "POST", body: JSON.stringify(body) });
+}
+
 // Auth types
 export interface LoginResponse {
   token: string;

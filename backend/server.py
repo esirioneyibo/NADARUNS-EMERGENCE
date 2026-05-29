@@ -1431,6 +1431,8 @@ async def accept_order(order_id: str, request: Request):
         from_status=current, to_status=sm.ACCEPTED,
         actor_id=driver_id, actor_type="driver",
     )
+    # Background push to the shipper: a driver has been assigned.
+    asyncio.create_task(push_status_to_shipper(order, "accepted"))
     return Order(**order)
 
 
@@ -1498,6 +1500,9 @@ async def advance_order(order_id: str, body: AdvanceRequest, request: Request):
         from_status=current, to_status=next_status,
         actor_id=driver_id, actor_type="driver",
     )
+    # Background push to the shipper on key lifecycle transitions.
+    if next_status in ("arrived_pickup", "arrived_dropoff", "delivered"):
+        asyncio.create_task(push_status_to_shipper(order, next_status))
     return Order(**order)
 
 
@@ -1956,6 +1961,112 @@ async def send_push_notification(
     except Exception as e:
         logger.error(f"Push notification error: {e}")
         return False
+
+
+# ===================== Emergent Push Notifications (SuprSend relay) =====================
+# Background push for delivery lifecycle events. The backend is the ONLY caller of the
+# Emergent relay; device tokens are resolved internally by the relay via user_id.
+EMERGENT_PUSH_BASE_URL = "https://integrations.emergentagent.com"
+EMERGENT_PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
+
+_push_client = httpx.AsyncClient(
+    base_url=EMERGENT_PUSH_BASE_URL,
+    headers={"X-Push-Key": EMERGENT_PUSH_KEY},
+    timeout=10.0,
+)
+
+
+class RegisterPushBody(BaseModel):
+    user_id: str
+    platform: str  # "android" | "ios"
+    device_token: str
+
+
+@api_router.post("/register-push", status_code=201)
+async def register_push(body: RegisterPushBody):
+    """Register a native device push token with the Emergent push relay (SuprSend)."""
+    try:
+        resp = await _push_client.post("/api/v1/push/users/register", json=body.model_dump())
+    except Exception as e:
+        logger.warning(f"register-push relay error (non-fatal): {e}")
+        raise HTTPException(502, "Push provider unavailable")
+    if resp.status_code == 401:
+        raise HTTPException(500, "EMERGENT_PUSH_KEY missing or invalid")
+    if resp.status_code >= 500:
+        raise HTTPException(502, "Push provider unavailable")
+    resp.raise_for_status()
+    return {"status": "registered"}
+
+
+async def send_push(recipients: list, data: dict, idempotency_key: Optional[str] = None) -> None:
+    """Trigger a push to a list of user ids via the Emergent relay.
+
+    `recipients` is a list of app user ids (driver_id / shipper_id). `data` must
+    include `title` and `message`. Chunks recipients to 100 per relay call.
+    Callers should wrap this in try/except so push failure never blocks the
+    primary operation.
+    """
+    if not recipients:
+        return
+    recipients = list(dict.fromkeys(recipients))  # dedupe, preserve order
+    if "title" not in data or "message" not in data:
+        raise ValueError("data must include title and message")
+    for i in range(0, len(recipients), 100):
+        chunk = recipients[i:i + 100]
+        payload: dict = {"recipients": chunk, "data": data}
+        if idempotency_key:
+            payload["$idempotency_key"] = f"{idempotency_key}:{i}"
+        resp = await _push_client.post("/api/v1/push/trigger", json=payload)
+        if resp.status_code == 401:
+            raise HTTPException(500, "EMERGENT_PUSH_KEY missing or invalid")
+        if resp.status_code >= 500:
+            raise HTTPException(502, "Push provider unavailable")
+        resp.raise_for_status()
+
+
+async def push_new_job_to_online_drivers(order: dict) -> None:
+    """Background push to online drivers (matching vehicle type) on new job."""
+    try:
+        query: dict = {"is_online": True}
+        if order.get("vehicle_type"):
+            query["vehicle_type"] = order["vehicle_type"]
+        driver_ids = [d["id"] async for d in db.drivers.find(query, {"_id": 0, "id": 1})]
+        if not driver_ids:
+            return
+        await send_push(
+            recipients=driver_ids,
+            data={
+                "title": "New delivery available",
+                "message": f"{order.get('order_number', 'New job')} \u2022 \u20ac{order.get('earnings', 0):.2f} near you.",
+                "action_url": "/driver-home",
+            },
+            idempotency_key=f"newjob:{order.get('id')}",
+        )
+    except Exception as e:
+        logger.warning(f"New-job push failed (non-blocking): {e}")
+
+
+async def push_status_to_shipper(order: dict, event: str) -> None:
+    """Background push to the shipper on a lifecycle transition."""
+    EVENT_COPY = {
+        "accepted": ("Driver assigned", "A driver is on the way to your pickup."),
+        "arrived_pickup": ("Driver at pickup", "Your driver has arrived at the pickup location."),
+        "arrived_dropoff": ("Arrived at drop-off", "Your driver has arrived at the drop-off location."),
+        "delivered": ("Delivered", "Your shipment has been delivered successfully."),
+    }
+    copy = EVENT_COPY.get(event)
+    shipper_id = order.get("shipper_id")
+    if not copy or not shipper_id:
+        return
+    try:
+        title, message = copy
+        await send_push(
+            recipients=[shipper_id],
+            data={"title": title, "message": message, "action_url": f"/shipper-tracking?id={order.get('id')}"},
+            idempotency_key=f"{event}:{order.get('id')}",
+        )
+    except Exception as e:
+        logger.warning(f"Status push failed (non-blocking): {e}")
 
 
 async def notify_drivers_of_new_order(order: dict):
@@ -2668,6 +2779,8 @@ async def create_shipment(
         pickup_address=request.pickup_address,
         earnings=driver_earnings,
     ))
+    # Background (Emergent relay) push to online drivers about the new job.
+    asyncio.create_task(push_new_job_to_online_drivers(new_order.model_dump()))
     
     response = {
         "order_id": order_id,
