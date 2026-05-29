@@ -107,7 +107,7 @@ export default function ShipperSettingsScreen() {
     }
 
     try {
-      const res = await fetch(`${BASE}/shipper/me`, {
+      const res = await fetch(`${BASE}/api/shipper/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -141,7 +141,7 @@ export default function ShipperSettingsScreen() {
 
     setSaving(true);
     try {
-      const res = await fetch(`${BASE}/shipper/me`, {
+      const res = await fetch(`${BASE}/api/shipper/me`, {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${token}`,

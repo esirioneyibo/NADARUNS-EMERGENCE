@@ -108,7 +108,7 @@ export default function ShipperCreateScreen() {
     setQuoteLoading(true);
     try {
       const token = getAuthToken();
-      const res = await fetch(`${BASE}/shipper/quote`, {
+      const res = await fetch(`${BASE}/api/shipper/quote`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -176,7 +176,7 @@ export default function ShipperCreateScreen() {
       const finalPickupCoords = pickupCoords || defaultCoords;
       const finalDropoffCoords = dropoffCoords || defaultCoords;
       
-      const res = await fetch(`${BASE}/shipper/shipments`, {
+      const res = await fetch(`${BASE}/api/shipper/shipments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

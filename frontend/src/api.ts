@@ -7,8 +7,7 @@ const BASE = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
 
 // API prefix - set to empty string if your backend URL already includes /api
 // or if your Nginx rewrites add the /api prefix automatically
-// For api.nadaruns.com subdomain setup, Nginx adds /api, so we use empty prefix
-const API_PREFIX = "";
+const API_PREFIX = "/api";
 
 // Token storage for authenticated requests
 let authToken: string | null = null;

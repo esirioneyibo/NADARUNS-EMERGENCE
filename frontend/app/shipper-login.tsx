@@ -51,7 +51,7 @@ export default function ShipperLoginScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     
     try {
-      const res = await fetch(`${BASE}/auth/shipper-login`, {
+      const res = await fetch(`${BASE}/api/auth/shipper-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
@@ -96,7 +96,7 @@ export default function ShipperLoginScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     
     try {
-      const res = await fetch(`${BASE}/shipper/register`, {
+      const res = await fetch(`${BASE}/api/shipper/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
