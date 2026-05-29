@@ -120,6 +120,26 @@ async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(sec
     return user
 
 
+async def get_current_driver_id(request: Request) -> str:
+    """Extract the authenticated driver's ID from the request's Authorization header."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(401, "Authentication required")
+    
+    token = auth_header.replace("Bearer ", "")
+    payload = decode_token(token)
+    driver_id = payload.get("sub")
+    user_type = payload.get("type")
+    
+    if user_type != "driver":
+        raise HTTPException(403, "Driver access required")
+    
+    if not driver_id:
+        raise HTTPException(401, "Invalid token: no driver ID")
+    
+    return driver_id
+
+
 # ===================== Models =====================
 
 OrderStatus = Literal[
@@ -946,6 +966,15 @@ async def ensure_seed():
         {"delivery_photo": {"$exists": False}},
         {"$set": {"delivery_photo": None}},
     )
+    
+    # Add password_hash to legacy Eero Virtanen driver if exists without password
+    legacy_driver = await db.drivers.find_one({"email": "eero.virtanen@driver.app"})
+    if legacy_driver and not legacy_driver.get("password_hash"):
+        await db.drivers.update_one(
+            {"email": "eero.virtanen@driver.app"},
+            {"$set": {"password_hash": hash_password("driver123")}}
+        )
+        logger.info("Added password to legacy driver Eero Virtanen")
 
 
 # ===================== Routes =====================
@@ -1296,8 +1325,16 @@ async def get_active():
 
 
 @api_router.get("/orders/history", response_model=List[Order])
-async def get_history():
-    cursor = db.orders.find({"status": "delivered"}, {"_id": 0}).sort("completed_at", -1).limit(50)
+async def get_history(request: Request):
+    """Get delivery history for the authenticated driver."""
+    # Get the authenticated driver
+    driver_id = await get_current_driver_id(request)
+    
+    # Return only orders that were delivered by this driver
+    cursor = db.orders.find(
+        {"status": "delivered", "driver_id": driver_id}, 
+        {"_id": 0}
+    ).sort("completed_at", -1).limit(50)
     items = await cursor.to_list(50)
     return [Order(**o) for o in items]
 
@@ -1802,13 +1839,33 @@ async def add_pending_order():
 # ===================== Driver Update =====================
 
 @api_router.patch("/driver/me", response_model=Driver)
-async def update_driver(update: DriverUpdate):
+async def update_driver(update: DriverUpdate, request: Request):
+    """Update the authenticated driver's profile."""
+    # Get the authenticated driver ID
+    driver_id = await get_current_driver_id(request)
+    
     payload = {k: v for k, v in update.model_dump(exclude_unset=True).items() if v is not None}
     if payload.get("notifications") is not None:
         payload["notifications"] = update.notifications.model_dump()
+    
+    # Update vehicle string if vehicle_type or plate is updated
+    if "vehicle_type" in payload or "plate" in payload:
+        # Get current driver data
+        current_driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+        if current_driver:
+            vehicle_type = payload.get("vehicle_type", current_driver.get("vehicle_type", "cargo_van"))
+            plate = payload.get("plate", current_driver.get("plate", ""))
+            vehicle_info = VEHICLE_TYPES.get(vehicle_type, VEHICLE_TYPES.get("cargo_van"))
+            vehicle_label = vehicle_info["name"] if vehicle_info else "Cargo Van"
+            payload["vehicle"] = f"{vehicle_label} • {plate}" if plate else vehicle_label
+    
     if payload:
-        await db.drivers.update_one({"id": DRIVER_ID}, {"$set": payload})
-    driver = await db.drivers.find_one({"id": DRIVER_ID}, {"_id": 0})
+        result = await db.drivers.update_one({"id": driver_id}, {"$set": payload})
+        logger.info(f"Driver profile updated: {driver_id}, fields: {list(payload.keys())}, matched: {result.matched_count}, modified: {result.modified_count}")
+    
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(404, "Driver not found")
     return Driver(**driver)
 
 
