@@ -10,7 +10,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,6 +21,7 @@ import * as Location from "expo-location";
 import { getAuthToken } from "../src/api";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
+import MapLocationPicker from "../src/components/MapLocationPicker";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 // API prefix for direct fetch calls (Nginx rewrites add /api automatically for api.nadaruns.com)
@@ -413,7 +413,7 @@ export default function ShipperCreateScreen() {
   const renderStep3 = () => (
     <Animated.View entering={FadeInUp.duration(300)}>
       <Text style={styles.stepTitle}>Package Details</Text>
-      <Text style={styles.stepDescription}>Tell us about what you're shipping</Text>
+      <Text style={styles.stepDescription}>Tell us about what you are shipping</Text>
       
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Required Vehicle Type *</Text>
@@ -660,8 +660,8 @@ export default function ShipperCreateScreen() {
         )}
       </View>
       
-      {/* Location Picker Modals - Web-compatible using expo-location */}
-      <LocationPickerModal
+      {/* Map-based Location Picker Modals */}
+      <MapLocationPicker
         visible={showPickupPicker}
         onClose={() => setShowPickupPicker(false)}
         onSelectLocation={(address, coords) => {
@@ -669,11 +669,12 @@ export default function ShipperCreateScreen() {
           setPickupCoords(coords);
         }}
         title="Select Pickup Location"
-        initialAddress={pickupAddress}
+        initialCoords={pickupCoords}
         theme={theme}
+        markerColor="#FF6B35"
       />
       
-      <LocationPickerModal
+      <MapLocationPicker
         visible={showDropoffPicker}
         onClose={() => setShowDropoffPicker(false)}
         onSelectLocation={(address, coords) => {
@@ -681,423 +682,13 @@ export default function ShipperCreateScreen() {
           setDropoffCoords(coords);
         }}
         title="Select Dropoff Location"
-        initialAddress={dropoffAddress}
+        initialCoords={dropoffCoords}
         theme={theme}
+        markerColor="#10B981"
       />
     </KeyboardAvoidingView>
   );
 }
-
-// Inline LocationPicker Modal - Web compatible using expo-location
-interface LocationPickerModalProps {
-  visible: boolean;
-  onClose: () => void;
-  onSelectLocation: (address: string, coords: { latitude: number; longitude: number }) => void;
-  title: string;
-  initialAddress: string;
-  theme: any;
-}
-
-function LocationPickerModal({
-  visible,
-  onClose,
-  onSelectLocation,
-  title,
-  initialAddress,
-  theme,
-}: LocationPickerModalProps) {
-  const [address, setAddress] = useState(initialAddress);
-  const [isLoading, setIsLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-
-  useEffect(() => {
-    if (visible) {
-      setAddress(initialAddress);
-      setCoords(null);
-    }
-  }, [visible, initialAddress]);
-
-  const searchAddress = async (query: string) => {
-    setAddress(query);
-    if (query.length < 3) {
-      setSuggestions([]);
-      return;
-    }
-    
-    try {
-      const results = await Location.geocodeAsync(query);
-      if (results.length > 0) {
-        // Generate suggestions based on geocode results
-        const suggestionList = results.slice(0, 3).map((r, i) => 
-          `${query} (Location ${i + 1})`
-        );
-        setSuggestions(suggestionList);
-        
-        // Auto-set first result coords
-        setCoords({
-          latitude: results[0].latitude,
-          longitude: results[0].longitude,
-        });
-      }
-    } catch (e) {
-      console.warn("Geocode error:", e);
-    }
-  };
-
-  const useCurrentLocation = async () => {
-    setIsLoading(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Required", "Location permission is needed to use current location");
-        return;
-      }
-      
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      
-      const results = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-      
-      if (results.length > 0) {
-        const loc = results[0];
-        const formattedAddress = [
-          loc.streetNumber,
-          loc.street,
-          loc.city,
-          loc.postalCode,
-        ].filter(Boolean).join(", ");
-        
-        setAddress(formattedAddress);
-        setCoords({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      }
-    } catch (e) {
-      console.warn("Location error:", e);
-      Alert.alert("Error", "Could not get current location");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleConfirm = () => {
-    if (!address.trim()) return;
-    
-    // If we don't have coords yet, geocode the address
-    if (!coords) {
-      setIsLoading(true);
-      Location.geocodeAsync(address)
-        .then((results) => {
-          if (results.length > 0) {
-            onSelectLocation(address, {
-              latitude: results[0].latitude,
-              longitude: results[0].longitude,
-            });
-          } else {
-            // Fallback to Helsinki center if geocoding fails
-            onSelectLocation(address, { latitude: 60.1699, longitude: 24.9384 });
-          }
-          onClose();
-        })
-        .catch(() => {
-          onSelectLocation(address, { latitude: 60.1699, longitude: 24.9384 });
-          onClose();
-        })
-        .finally(() => setIsLoading(false));
-    } else {
-      onSelectLocation(address, coords);
-      onClose();
-    }
-  };
-
-  const modalStyles = createModalStyles(theme);
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
-      <View style={modalStyles.overlay}>
-        <Animated.View entering={SlideInDown.duration(300)} style={modalStyles.container}>
-          <View style={modalStyles.header}>
-            <TouchableOpacity onPress={onClose} style={modalStyles.closeButton}>
-              <Ionicons name="close" size={24} color={theme.text} />
-            </TouchableOpacity>
-            <Text style={modalStyles.headerTitle}>{title}</Text>
-            <View style={{ width: 44 }} />
-          </View>
-
-          <ScrollView style={modalStyles.content} keyboardShouldPersistTaps="handled">
-            {/* Current Location Button */}
-            <TouchableOpacity style={modalStyles.currentLocationBtn} onPress={useCurrentLocation} disabled={isLoading}>
-              {isLoading ? (
-                <ActivityIndicator size="small" color={theme.primary} />
-              ) : (
-                <>
-                  <View style={modalStyles.currentLocationIcon}>
-                    <Ionicons name="locate" size={20} color="#fff" />
-                  </View>
-                  <Text style={modalStyles.currentLocationText}>Use my current location</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            {/* Address Input */}
-            <View style={modalStyles.inputGroup}>
-              <Text style={modalStyles.inputLabel}>Enter Address</Text>
-              <View style={modalStyles.inputContainer}>
-                <Ionicons name="search" size={20} color={theme.textSecondary} />
-                <TextInput
-                  style={modalStyles.input}
-                  placeholder="Search for an address..."
-                  placeholderTextColor={theme.textSecondary}
-                  value={address}
-                  onChangeText={searchAddress}
-                  multiline
-                />
-                {address.length > 0 && (
-                  <TouchableOpacity onPress={() => { setAddress(""); setSuggestions([]); setCoords(null); }}>
-                    <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            {/* Suggestions */}
-            {suggestions.length > 0 && (
-              <View style={modalStyles.suggestions}>
-                {suggestions.map((suggestion, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={[modalStyles.suggestionItem, i < suggestions.length - 1 && modalStyles.suggestionBorder]}
-                    onPress={() => {
-                      setAddress(suggestion.replace(/ \(Location \d+\)$/, ""));
-                      setSuggestions([]);
-                    }}
-                  >
-                    <Ionicons name="location" size={18} color={theme.primary} />
-                    <Text style={modalStyles.suggestionText}>{suggestion}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            {/* Coordinates Display */}
-            {coords && (
-              <View style={modalStyles.coordsBox}>
-                <Ionicons name="pin" size={18} color={theme.primary} />
-                <Text style={modalStyles.coordsText}>
-                  📍 {coords.latitude.toFixed(5)}, {coords.longitude.toFixed(5)}
-                </Text>
-              </View>
-            )}
-
-            <Text style={modalStyles.tipText}>
-              💡 Enter a full address including street number and city for best accuracy
-            </Text>
-          </ScrollView>
-
-          {/* Footer */}
-          <View style={modalStyles.footer}>
-            <TouchableOpacity style={modalStyles.cancelButton} onPress={onClose}>
-              <Text style={modalStyles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[modalStyles.confirmButton, !address.trim() && modalStyles.confirmButtonDisabled]}
-              onPress={handleConfirm}
-              disabled={!address.trim() || isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Text style={modalStyles.confirmButtonText}>Confirm</Text>
-                  <Ionicons name="checkmark" size={20} color="#fff" />
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}
-
-const createModalStyles = (theme: any) => StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  container: {
-    backgroundColor: theme.card || theme.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "85%",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  closeButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: theme.text || theme.textPrimary,
-  },
-  content: {
-    padding: spacing.lg,
-    maxHeight: 400,
-  },
-  currentLocationBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.primaryLight || "#E0F2FE",
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    marginBottom: spacing.lg,
-    gap: spacing.md,
-  },
-  currentLocationIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  currentLocationText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: theme.primary,
-  },
-  inputGroup: {
-    marginBottom: spacing.md,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: theme.text || theme.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.surface || "#F9FAFB",
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: theme.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: theme.text || theme.textPrimary,
-    minHeight: 44,
-  },
-  suggestions: {
-    backgroundColor: theme.surface || "#F9FAFB",
-    borderRadius: radius.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  suggestionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  suggestionBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  suggestionText: {
-    fontSize: 14,
-    color: theme.text || theme.textPrimary,
-  },
-  coordsBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.sm,
-    backgroundColor: "#D1FAE5",
-    borderRadius: radius.md,
-    marginBottom: spacing.md,
-  },
-  coordsText: {
-    fontSize: 13,
-    color: "#065F46",
-    fontWeight: "500",
-  },
-  tipText: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    fontStyle: "italic",
-    marginTop: spacing.sm,
-  },
-  footer: {
-    flexDirection: "row",
-    gap: spacing.md,
-    padding: spacing.lg,
-    paddingBottom: Platform.OS === "ios" ? 34 : spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: theme.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: theme.textSecondary,
-  },
-  confirmButton: {
-    flex: 1,
-    flexDirection: "row",
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: theme.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-  },
-  confirmButtonDisabled: {
-    opacity: 0.5,
-  },
-  confirmButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-  },
-});
 
 const createStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },

@@ -180,6 +180,19 @@ backend:
           agent: "testing"
           comment: "Completed comprehensive MongoDB migration testing. All 9 test cases passed: (1) POST /api/seed-demo successfully creates demo driver (demo.driver@nadaruns.com), demo shipper (demo.shipper@nadaruns.com), and 10 logistics orders with 8 history records, (2) POST /api/auth/login returns valid JWT token for driver authentication, (3) GET /api/driver/me returns complete driver profile from MongoDB with vehicle_type, email, name, and vehicle_capacity_kg, (4) POST /api/driver/toggle-online successfully toggles driver online/offline status, (5) GET /api/driver/wallet returns available_balance, pending_balance, and transactions list (8 transactions with €377.71 pending), (6) GET /api/notifications returns notifications list and unread_count (0 notifications as expected), (7) GET /api/orders/available returns 10 pending logistics orders with proper structure including cargo_weight_kg, vehicle_type, cargo_type, and special_requirements fields, (8) POST /api/auth/shipper-login successfully authenticates shipper and returns valid token, (9) POST /api/auth/admin-login successfully authenticates admin with is_admin: true. All data is properly stored and retrieved from MongoDB (not hardcoded). Logistics order data is correctly structured with vehicle types (cargo_van, refrigerated, flatbed_truck, hazmat, box_truck), cargo weights (500-5000 kg), and cargo types (general, perishable, oversized, hazardous, fragile). Authentication flows work correctly for all user types (driver, shipper, admin)."
 
+
+  - task: "Shipper shipment creation flow"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Tested complete shipper shipment creation flow. All 4 test cases passed: (1) POST /api/auth/shipper-login successfully authenticates shipper (demo.shipper@nadaruns.com) and returns JWT token, (2) POST /api/shipper/shipments successfully creates shipment with all required fields (order_id, order_number, status=pending, pickup_otp, dropoff_otp, price, distance_km), shipment includes proper logistics data (vehicle_type=cargo_van, cargo_weight_kg=500, cargo_type=general), (3) GET /api/shipper/shipments returns list of shipper's shipments including newly created one with complete order details and driver info (null when unassigned), (4) GET /api/orders/available returns list of available orders including newly created shipment, confirming order is visible to drivers for acceptance. All endpoints working correctly with proper authentication, data validation, and response structure."
+
 frontend:
   - task: "PhotoCapture component + dropoff integration"
     implemented: true
@@ -249,3 +262,6 @@ agent_communication:
       message: "Completed backend testing for logistics vehicle types implementation. All 6 test cases passed successfully: (1) Vehicle types endpoint returns 11 vehicle types with correct structure, (2) Driver registration with valid vehicle types (semi_truck, tanker) works correctly, (3) Invalid vehicle types (bicycle) are properly rejected with 400 error, (4) Available orders endpoint filters by vehicle type correctly, (5) Driver profile update with vehicle type and capacity works, (6) Simple driver registration with vehicle type works. All vehicle type validation, capacity setting based on vehicle type, and order filtering functionality is working as expected. No issues found."
     - agent: "testing"
       message: "Completed MongoDB migration testing for NadaRuns Logistics Platform. All 9 test cases passed successfully. Authentication works correctly for all user types (driver, shipper, admin). All data is properly stored and retrieved from MongoDB. Seed demo endpoint creates demo accounts and logistics orders correctly. Driver profile, wallet, notifications, and toggle online endpoints all working. Available orders endpoint returns logistics orders with proper structure (cargo_weight_kg, vehicle_type, cargo_type). No issues found - MongoDB integration is fully functional."
+
+    - agent: "testing"
+      message: "Completed testing of shipper shipment creation flow. All 4 test cases passed successfully: (1) Shipper login endpoint works correctly with demo credentials, (2) Shipment creation endpoint creates orders with proper structure and logistics data, (3) Shipper shipments list endpoint returns all shipments for authenticated shipper, (4) Created orders appear in available orders list for drivers. The complete flow from shipper authentication to order creation and driver visibility is working correctly. No issues found."
