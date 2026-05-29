@@ -246,13 +246,16 @@ frontend:
     implemented: true
     working: false
     file: "frontend/src/components/MapLocationPicker.tsx, frontend/app/shipper-create.tsx"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
         - working: false
           agent: "testing"
           comment: "CRITICAL: MapLocationPicker.tsx directly imports 'react-native-maps' which is a native-only library and does not work on web. When testing on web browser (even with mobile viewport), the app shows red screen error: 'Importing native-only module react-native/Libraries/Utilities/codegenNativeCommands on web from: node_modules/react-native-maps/lib/MapMarkerNativeComponent.js'. The component needs to be refactored to use platform-specific implementations similar to the existing MapView.tsx component which uses SvgMapView for web and NativeMapView for native. The shipper-create.tsx page imports MapLocationPicker which causes the entire page to crash on web. This blocks all testing of the Map Location Picker functionality on web browsers. Recommendation: Create a web-compatible version of MapLocationPicker or use a web-compatible map library like react-leaflet or Google Maps JavaScript API for web platform."
+        - working: false
+          agent: "testing"
+          comment: "CONFIRMED STILL BROKEN: Code review shows MapLocationPicker.tsx (line 13) still directly imports 'react-native-maps' which is native-only. No changes have been made since last test. The component will crash on web with red screen error. Attempted to test the shipper create shipment flow on web but could not complete due to this blocking issue. The codebase has the correct pattern in MapView.tsx which uses Platform.OS to conditionally render SvgMapView (web) and NativeMapView (native). MapLocationPicker needs the same treatment. CRITICAL BLOCKER: This prevents ALL testing of the Map Location Picker feature on web. Main agent MUST use WEBSEARCH TOOL to find solutions for cross-platform map location picker in React Native/Expo that works on both web and native platforms."
 
 metadata:
   created_by: "main_agent"
@@ -279,3 +282,5 @@ agent_communication:
       message: "Completed testing of shipper shipment creation flow. All 4 test cases passed successfully: (1) Shipper login endpoint works correctly with demo credentials, (2) Shipment creation endpoint creates orders with proper structure and logistics data, (3) Shipper shipments list endpoint returns all shipments for authenticated shipper, (4) Created orders appear in available orders list for drivers. The complete flow from shipper authentication to order creation and driver visibility is working correctly. No issues found."
     - agent: "testing"
       message: "CRITICAL BLOCKER: Map Location Picker cannot be tested on web. The MapLocationPicker.tsx component directly imports 'react-native-maps' which is a native-only library that does not work on web browsers. When attempting to test the shipper create shipment page on web (even with mobile viewport), the app crashes with red screen error: 'Importing native-only module react-native/Libraries/Utilities/codegenNativeCommands on web'. The existing codebase has a pattern for handling this - MapView.tsx uses Platform.OS to conditionally render SvgMapView for web and NativeMapView for native. MapLocationPicker needs the same treatment. RECOMMENDATION: Use WEBSEARCH TOOL to find best practices for implementing a cross-platform map location picker in React Native/Expo that works on both web and native. Consider solutions like: (1) Creating MapLocationPicker.web.tsx with react-leaflet or Google Maps JavaScript API, (2) Using expo-location with a web-compatible map library, (3) Conditionally rendering different components based on Platform.OS. This is blocking all testing of the Map Location Picker feature."
+    - agent: "testing"
+      message: "CONFIRMED CRITICAL BLOCKER PERSISTS: Attempted to test Map Location Picker on web as requested but issue remains unchanged. Code review confirms MapLocationPicker.tsx (line 13) still directly imports 'react-native-maps' which is native-only. No fixes have been applied since last test. The component will crash on web with red screen error when shipper-create page loads. Stuck count increased to 2. URGENT ACTION REQUIRED: Main agent MUST use WEBSEARCH TOOL to research cross-platform map location picker solutions for React Native/Expo. The existing MapView.tsx component demonstrates the correct pattern (Platform.OS check with SvgMapView for web, NativeMapView for native). MapLocationPicker needs similar implementation. This is a HIGH PRIORITY BLOCKER preventing all web testing of the shipper create shipment flow."

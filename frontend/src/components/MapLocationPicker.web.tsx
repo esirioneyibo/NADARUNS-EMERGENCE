@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,18 +7,15 @@ import {
   ActivityIndicator,
   Platform,
   Modal,
-  Dimensions,
   TextInput,
+  ScrollView,
 } from "react-native";
-import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { SlideInDown } from "react-native-reanimated";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-
-interface MapLocationPickerProps {
+interface MapLocationPickerWebProps {
   visible: boolean;
   onClose: () => void;
   onSelectLocation: (address: string, coords: { latitude: number; longitude: number }) => void;
@@ -29,14 +26,12 @@ interface MapLocationPickerProps {
 }
 
 // Default to Helsinki
-const DEFAULT_REGION = {
+const DEFAULT_COORDS = {
   latitude: 60.1699,
   longitude: 24.9384,
-  latitudeDelta: 0.01,
-  longitudeDelta: 0.01,
 };
 
-export default function MapLocationPicker({
+export default function MapLocationPickerWeb({
   visible,
   onClose,
   onSelectLocation,
@@ -44,21 +39,15 @@ export default function MapLocationPicker({
   initialCoords,
   theme,
   markerColor = "#FF6B35",
-}: MapLocationPickerProps) {
-  const mapRef = useRef<MapView>(null);
-  const [region, setRegion] = useState<Region>(
-    initialCoords
-      ? { ...initialCoords, latitudeDelta: 0.01, longitudeDelta: 0.01 }
-      : DEFAULT_REGION
-  );
-  const [markerCoords, setMarkerCoords] = useState<{ latitude: number; longitude: number }>(
-    initialCoords || { latitude: DEFAULT_REGION.latitude, longitude: DEFAULT_REGION.longitude }
+}: MapLocationPickerWebProps) {
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number }>(
+    initialCoords || DEFAULT_COORDS
   );
   const [address, setAddress] = useState("");
-  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [searchResults, setSearchResults] = useState<Array<{ address: string; coords: { latitude: number; longitude: number } }>>([]);
-  const [isSearching, setIsSearching] = useState(false);
 
   // Get user's current location when modal opens
   useEffect(() => {
@@ -67,12 +56,12 @@ export default function MapLocationPicker({
     }
   }, [visible]);
 
-  // Reverse geocode whenever marker moves
+  // Reverse geocode whenever coords change
   useEffect(() => {
-    if (visible && markerCoords) {
-      reverseGeocode(markerCoords);
+    if (visible && coords) {
+      reverseGeocode(coords);
     }
-  }, [markerCoords, visible]);
+  }, [coords.latitude, coords.longitude, visible]);
 
   const getCurrentLocation = async () => {
     setIsGettingLocation(true);
@@ -91,19 +80,7 @@ export default function MapLocationPicker({
         longitude: location.coords.longitude,
       };
 
-      setMarkerCoords(newCoords);
-      setRegion({
-        ...newCoords,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      });
-
-      mapRef.current?.animateToRegion({
-        ...newCoords,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }, 500);
-
+      setCoords(newCoords);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (error) {
       console.warn("Error getting location:", error);
@@ -112,9 +89,9 @@ export default function MapLocationPicker({
     }
   };
 
-  const reverseGeocode = async (coords: { latitude: number; longitude: number }) => {
+  const reverseGeocode = async (coordsToGeocode: { latitude: number; longitude: number }) => {
     try {
-      const results = await Location.reverseGeocodeAsync(coords);
+      const results = await Location.reverseGeocodeAsync(coordsToGeocode);
       if (results.length > 0) {
         const loc = results[0];
         const formattedAddress = [
@@ -124,31 +101,19 @@ export default function MapLocationPicker({
           loc.region,
           loc.postalCode,
         ].filter(Boolean).join(", ");
-        setAddress(formattedAddress || `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`);
+        setAddress(formattedAddress || `${coordsToGeocode.latitude.toFixed(5)}, ${coordsToGeocode.longitude.toFixed(5)}`);
       } else {
-        setAddress(`${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`);
+        setAddress(`${coordsToGeocode.latitude.toFixed(5)}, ${coordsToGeocode.longitude.toFixed(5)}`);
       }
     } catch (error) {
-      setAddress(`${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`);
+      setAddress(`${coordsToGeocode.latitude.toFixed(5)}, ${coordsToGeocode.longitude.toFixed(5)}`);
     }
-  };
-
-  const handleMapPress = (event: any) => {
-    const { coordinate } = event.nativeEvent;
-    setMarkerCoords(coordinate);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-  };
-
-  const handleMarkerDragEnd = (event: any) => {
-    const { coordinate } = event.nativeEvent;
-    setMarkerCoords(coordinate);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   };
 
   const handleSearch = async () => {
     if (searchQuery.length < 2) return;
     
-    setIsSearching(true);
+    setIsLoading(true);
     try {
       const results = await Location.geocodeAsync(searchQuery);
       if (results.length > 0) {
@@ -182,28 +147,21 @@ export default function MapLocationPicker({
       console.warn("Search error:", error);
       setSearchResults([]);
     } finally {
-      setIsSearching(false);
+      setIsLoading(false);
     }
   };
 
   const selectSearchResult = (result: { address: string; coords: { latitude: number; longitude: number } }) => {
-    setMarkerCoords(result.coords);
+    setCoords(result.coords);
     setAddress(result.address);
     setSearchResults([]);
     setSearchQuery("");
-    
-    mapRef.current?.animateToRegion({
-      ...result.coords,
-      latitudeDelta: 0.005,
-      longitudeDelta: 0.005,
-    }, 500);
-    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
 
   const handleConfirm = () => {
     if (!address) return;
-    onSelectLocation(address, markerCoords);
+    onSelectLocation(address, coords);
     onClose();
   };
 
@@ -228,100 +186,126 @@ export default function MapLocationPicker({
           <View style={{ width: 44 }} />
         </View>
 
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchInputWrapper}>
-            <Ionicons name="search" size={20} color={theme.textSecondary} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search address..."
-              placeholderTextColor={theme.textSecondary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearch}
-              returnKeyType="search"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => { setSearchQuery(""); setSearchResults([]); }}>
-                <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
-              </TouchableOpacity>
-            )}
-          </View>
-          <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={isSearching}>
-            {isSearching ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="search" size={20} color="#fff" />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Search Results */}
-        {searchResults.length > 0 && (
-          <View style={styles.searchResults}>
-            {searchResults.map((result, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.searchResultItem,
-                  index < searchResults.length - 1 && styles.searchResultBorder,
-                ]}
-                onPress={() => selectSearchResult(result)}
-              >
-                <Ionicons name="location" size={18} color={markerColor} />
-                <Text style={styles.searchResultText} numberOfLines={2}>
-                  {result.address}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Map */}
-        <View style={styles.mapContainer}>
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            initialRegion={region}
-            onPress={handleMapPress}
-            showsUserLocation
-            showsMyLocationButton={false}
-            mapType="standard"
-          >
-            <Marker
-              coordinate={markerCoords}
-              draggable
-              onDragEnd={handleMarkerDragEnd}
-            >
-              <View style={styles.markerContainer}>
-                <View style={[styles.marker, { backgroundColor: markerColor }]}>
-                  <Ionicons name="location" size={24} color="#fff" />
-                </View>
-                <View style={[styles.markerShadow, { backgroundColor: markerColor }]} />
-              </View>
-            </Marker>
-          </MapView>
-
-          {/* Center indicator */}
-          <View style={styles.centerIndicator} pointerEvents="none">
-            <Text style={styles.centerIndicatorText}>Drag pin or tap map</Text>
-          </View>
-
-          {/* My Location Button */}
-          <TouchableOpacity
-            style={styles.myLocationBtn}
-            onPress={getCurrentLocation}
+        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+          {/* Current Location Button */}
+          <TouchableOpacity 
+            style={styles.currentLocationBtn} 
+            onPress={getCurrentLocation} 
             disabled={isGettingLocation}
           >
             {isGettingLocation ? (
               <ActivityIndicator size="small" color={theme.primary} />
             ) : (
-              <Ionicons name="locate" size={24} color={theme.primary} />
+              <>
+                <View style={[styles.iconCircle, { backgroundColor: markerColor }]}>
+                  <Ionicons name="locate" size={20} color="#fff" />
+                </View>
+                <Text style={styles.currentLocationText}>Use my current location</Text>
+              </>
             )}
           </TouchableOpacity>
-        </View>
 
-        {/* Address Preview & Confirm */}
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputWrapper}>
+              <Ionicons name="search" size={20} color={theme.textSecondary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search for an address..."
+                placeholderTextColor={theme.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={handleSearch}
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => { setSearchQuery(""); setSearchResults([]); }}>
+                  <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={isLoading}>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.searchBtnText}>Search</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Results */}
+          {searchResults.length > 0 && (
+            <View style={styles.searchResults}>
+              {searchResults.map((result, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.searchResultItem,
+                    index < searchResults.length - 1 && styles.searchResultBorder,
+                  ]}
+                  onPress={() => selectSearchResult(result)}
+                >
+                  <Ionicons name="location" size={18} color={markerColor} />
+                  <Text style={styles.searchResultText} numberOfLines={2}>
+                    {result.address}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* Map Preview (Static) */}
+          <View style={styles.mapPreview}>
+            <View style={styles.mapPlaceholder}>
+              <View style={[styles.mapMarker, { backgroundColor: markerColor }]}>
+                <Ionicons name="location" size={32} color="#fff" />
+              </View>
+              <Text style={styles.mapNote}>
+                📍 Map preview available on mobile app
+              </Text>
+              <Text style={styles.coordsDisplay}>
+                Lat: {coords.latitude.toFixed(5)}, Lng: {coords.longitude.toFixed(5)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Manual Coordinate Entry */}
+          <View style={styles.manualEntry}>
+            <Text style={styles.sectionLabel}>Or enter coordinates manually:</Text>
+            <View style={styles.coordInputRow}>
+              <View style={styles.coordInputWrapper}>
+                <Text style={styles.coordLabel}>Latitude</Text>
+                <TextInput
+                  style={styles.coordInput}
+                  value={coords.latitude.toString()}
+                  onChangeText={(val) => {
+                    const num = parseFloat(val);
+                    if (!isNaN(num)) setCoords(prev => ({ ...prev, latitude: num }));
+                  }}
+                  keyboardType="numeric"
+                  placeholder="60.1699"
+                  placeholderTextColor={theme.textSecondary}
+                />
+              </View>
+              <View style={styles.coordInputWrapper}>
+                <Text style={styles.coordLabel}>Longitude</Text>
+                <TextInput
+                  style={styles.coordInput}
+                  value={coords.longitude.toString()}
+                  onChangeText={(val) => {
+                    const num = parseFloat(val);
+                    if (!isNaN(num)) setCoords(prev => ({ ...prev, longitude: num }));
+                  }}
+                  keyboardType="numeric"
+                  placeholder="24.9384"
+                  placeholderTextColor={theme.textSecondary}
+                />
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Bottom Sheet with Address Preview */}
         <Animated.View entering={SlideInDown.duration(300)} style={styles.bottomSheet}>
           <View style={styles.addressPreview}>
             <View style={[styles.addressIcon, { backgroundColor: markerColor }]}>
@@ -330,10 +314,7 @@ export default function MapLocationPicker({
             <View style={styles.addressTextContainer}>
               <Text style={styles.addressLabel}>Selected Location</Text>
               <Text style={styles.addressText} numberOfLines={2}>
-                {address || "Tap on map to select location"}
-              </Text>
-              <Text style={styles.coordsText}>
-                📍 {markerCoords.latitude.toFixed(5)}, {markerCoords.longitude.toFixed(5)}
+                {address || "Search or use current location"}
               </Text>
             </View>
           </View>
@@ -382,50 +363,74 @@ const createStyles = (theme: any, markerColor: string) =>
       fontWeight: "700",
       color: theme.textPrimary,
     },
+    content: {
+      flex: 1,
+      padding: 16,
+    },
+    currentLocationBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.card,
+      padding: 16,
+      borderRadius: 12,
+      marginBottom: 16,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    iconCircle: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    currentLocationText: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: theme.textPrimary,
+    },
     searchContainer: {
       flexDirection: "row",
-      paddingHorizontal: 16,
-      paddingVertical: 12,
       gap: 8,
-      backgroundColor: theme.card,
+      marginBottom: 16,
     },
     searchInputWrapper: {
       flex: 1,
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: theme.backgroundSecondary,
+      backgroundColor: theme.card,
       borderRadius: 12,
       paddingHorizontal: 12,
       gap: 8,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     searchInput: {
       flex: 1,
       fontSize: 16,
       color: theme.textPrimary,
-      paddingVertical: 12,
+      paddingVertical: 14,
     },
     searchBtn: {
-      width: 48,
-      height: 48,
+      paddingHorizontal: 20,
+      paddingVertical: 14,
       borderRadius: 12,
       backgroundColor: theme.primary,
       alignItems: "center",
       justifyContent: "center",
     },
+    searchBtnText: {
+      color: "#fff",
+      fontWeight: "600",
+      fontSize: 15,
+    },
     searchResults: {
-      position: "absolute",
-      top: Platform.OS === "ios" ? 160 : 120,
-      left: 16,
-      right: 16,
       backgroundColor: theme.card,
       borderRadius: 12,
-      zIndex: 100,
-      elevation: 5,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 12,
-      maxHeight: 250,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     searchResultItem: {
       flexDirection: "row",
@@ -442,64 +447,66 @@ const createStyles = (theme: any, markerColor: string) =>
       fontSize: 14,
       color: theme.textPrimary,
     },
-    mapContainer: {
-      flex: 1,
-      position: "relative",
+    mapPreview: {
+      marginBottom: 16,
     },
-    map: {
-      ...StyleSheet.absoluteFillObject,
-    },
-    centerIndicator: {
-      position: "absolute",
-      top: 16,
-      alignSelf: "center",
-      backgroundColor: "rgba(0,0,0,0.6)",
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 20,
-    },
-    centerIndicatorText: {
-      color: "#fff",
-      fontSize: 13,
-      fontWeight: "500",
-    },
-    myLocationBtn: {
-      position: "absolute",
-      bottom: 200,
-      right: 16,
-      width: 50,
-      height: 50,
-      borderRadius: 25,
+    mapPlaceholder: {
+      height: 200,
       backgroundColor: theme.card,
+      borderRadius: 16,
       alignItems: "center",
       justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-      elevation: 4,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderStyle: "dashed",
     },
-    markerContainer: {
-      alignItems: "center",
-    },
-    marker: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+    mapMarker: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
       alignItems: "center",
       justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 4,
+      marginBottom: 12,
     },
-    markerShadow: {
-      width: 20,
-      height: 8,
+    mapNote: {
+      fontSize: 14,
+      color: theme.textSecondary,
+      marginBottom: 8,
+    },
+    coordsDisplay: {
+      fontSize: 12,
+      color: theme.textSecondary,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    },
+    manualEntry: {
+      marginBottom: 20,
+    },
+    sectionLabel: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.textSecondary,
+      marginBottom: 12,
+    },
+    coordInputRow: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    coordInputWrapper: {
+      flex: 1,
+    },
+    coordLabel: {
+      fontSize: 12,
+      color: theme.textSecondary,
+      marginBottom: 6,
+    },
+    coordInput: {
+      backgroundColor: theme.card,
       borderRadius: 10,
-      opacity: 0.3,
-      marginTop: -4,
+      padding: 14,
+      fontSize: 15,
+      color: theme.textPrimary,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     bottomSheet: {
       backgroundColor: theme.card,
@@ -508,11 +515,8 @@ const createStyles = (theme: any, markerColor: string) =>
       paddingHorizontal: 20,
       paddingTop: 20,
       paddingBottom: Platform.OS === "ios" ? 40 : 24,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12,
-      elevation: 10,
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
     },
     addressPreview: {
       flexDirection: "row",
@@ -542,11 +546,6 @@ const createStyles = (theme: any, markerColor: string) =>
       fontWeight: "600",
       color: theme.textPrimary,
       lineHeight: 22,
-    },
-    coordsText: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      marginTop: 4,
     },
     confirmBtn: {
       flexDirection: "row",
