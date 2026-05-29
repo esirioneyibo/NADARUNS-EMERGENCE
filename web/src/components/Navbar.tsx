@@ -34,29 +34,25 @@ export default function Navbar() {
           <Link href="/about" className="nav-link">About</Link>
           <Link href="/drivers" className="nav-link">For Drivers</Link>
           <Link href="/business" className="nav-link">For Business</Link>
+          <Link href="/download" className="nav-link">Download</Link>
           <Link href="/contact" className="nav-link">Contact</Link>
         </div>
 
         {/* CTA Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="nav-cta" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <Link href="/drivers" className="btn-outline" style={{ padding: '10px 20px', fontSize: '14px' }}>
             Drive with us
           </Link>
-          <Link href="/business" className="btn-secondary" style={{ padding: '10px 20px', fontSize: '14px' }}>
-            Ship Now
+          <Link href="/download" className="btn-primary" style={{ padding: '10px 20px', fontSize: '14px' }}>
+            Get the app
           </Link>
         </div>
 
         {/* Mobile Menu Button */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          style={{
-            display: 'none',
-            background: 'none',
-            border: 'none',
-            fontSize: '24px',
-            cursor: 'pointer'
-          }}
+          className="nav-mobile-btn"
+          aria-label="Toggle menu"
         >
           {isOpen ? '✕' : '☰'}
         </button>
@@ -74,14 +70,15 @@ export default function Navbar() {
           borderTop: '1px solid #E5E7EB',
           boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
         }}>
-          <Link href="/" className="nav-link" style={{ display: 'block', padding: '12px 0' }}>Home</Link>
-          <Link href="/about" className="nav-link" style={{ display: 'block', padding: '12px 0' }}>About</Link>
-          <Link href="/drivers" className="nav-link" style={{ display: 'block', padding: '12px 0' }}>For Drivers</Link>
-          <Link href="/business" className="nav-link" style={{ display: 'block', padding: '12px 0' }}>For Business</Link>
-          <Link href="/contact" className="nav-link" style={{ display: 'block', padding: '12px 0' }}>Contact</Link>
+          <Link href="/" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>Home</Link>
+          <Link href="/about" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>About</Link>
+          <Link href="/drivers" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>For Drivers</Link>
+          <Link href="/business" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>For Business</Link>
+          <Link href="/download" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>Download</Link>
+          <Link href="/contact" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>Contact</Link>
           <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <Link href="/drivers" className="btn-primary" style={{ justifyContent: 'center' }}>Drive with us</Link>
-            <Link href="/business" className="btn-secondary" style={{ justifyContent: 'center' }}>Ship Now</Link>
+            <Link href="/drivers" className="btn-outline" style={{ justifyContent: 'center' }} onClick={() => setIsOpen(false)}>Drive with us</Link>
+            <Link href="/download" className="btn-primary" style={{ justifyContent: 'center' }} onClick={() => setIsOpen(false)}>Get the app</Link>
           </div>
         </div>
       )}

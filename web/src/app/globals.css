@@ -381,16 +381,57 @@ body {
 }
 
 /* Mobile menu */
-@media (max-width: 768px) {
-  .nav-links {
+.nav-mobile-btn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 26px;
+  cursor: pointer;
+  color: #111827;
+  line-height: 1;
+}
+
+@media (max-width: 900px) {
+  .nav-links,
+  .nav-cta {
     display: none;
   }
-  
+  .nav-mobile-btn {
+    display: block;
+  }
+
   .section-title {
     font-size: 32px;
   }
-  
+
   .section {
     padding: 60px 0;
+  }
+
+  /* Responsive grids for inline-styled sections */
+  .hero-grid,
+  .app-band-grid,
+  .dl-hero-grid {
+    grid-template-columns: 1fr !important;
+    gap: 40px !important;
+  }
+  .dl-feature-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .features-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .howitworks-grid,
+  .testimonials-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .hero-visual {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .features-grid {
+    grid-template-columns: 1fr !important;
   }
 }

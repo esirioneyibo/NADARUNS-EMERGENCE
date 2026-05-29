@@ -22,7 +22,7 @@ export default function DriversPage() {
                 Be your own boss and deliver when you want.
               </p>
               <Link
-                href="#"
+                href="/download"
                 className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 transition-all btn-hover"
               >
                 <Smartphone className="w-5 h-5" />
@@ -207,7 +207,7 @@ export default function DriversPage() {
             Join our community of drivers today. Sign up takes just 5 minutes.
           </p>
           <Link
-            href="#"
+            href="/download"
             className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-emerald-600 font-semibold rounded-xl hover:bg-gray-100 transition-all btn-hover"
           >
             <Smartphone className="w-5 h-5" />

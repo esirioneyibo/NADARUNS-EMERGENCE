@@ -1,6 +1,13 @@
 import Link from "next/link";
+import { site } from "@/lib/site";
 
 export default function Footer() {
+  const socials: { label: string; href: string }[] = [
+    { label: "f", href: site.social.facebook },
+    { label: "X", href: site.social.twitter },
+    { label: "in", href: site.social.linkedin },
+    { label: "ig", href: site.social.instagram },
+  ];
   return (
     <footer className="footer">
       <div className="container">
@@ -27,8 +34,8 @@ export default function Footer() {
               Fast & reliable delivery connecting drivers with businesses across Finland.
             </p>
             <div style={{ display: 'flex', gap: '12px' }}>
-              {['f', 'X', 'in', 'ig'].map((icon, i) => (
-                <a key={i} href="#" style={{
+              {socials.map((s, i) => (
+                <a key={i} href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.label} style={{
                   width: '40px',
                   height: '40px',
                   background: '#374151',
@@ -42,7 +49,7 @@ export default function Footer() {
                   fontWeight: '600',
                   transition: 'all 0.2s'
                 }}>
-                  {icon}
+                  {s.label}
                 </a>
               ))}
             </div>
@@ -62,27 +69,27 @@ export default function Footer() {
             <h3 className="footer-title">Products</h3>
             <Link href="/drivers" className="footer-link">Drive with NadaRuns</Link>
             <Link href="/business" className="footer-link">NadaRuns for Business</Link>
-            <Link href="#" className="footer-link">API Access</Link>
-            <Link href="#" className="footer-link">Enterprise</Link>
+            <Link href="/download" className="footer-link">Download the App</Link>
+            <Link href="/contact" className="footer-link">Enterprise</Link>
           </div>
 
           {/* Legal */}
           <div>
             <h3 className="footer-title">Legal</h3>
-            <Link href="#" className="footer-link">Terms of Service</Link>
-            <Link href="#" className="footer-link">Privacy Policy</Link>
-            <Link href="#" className="footer-link">Cookie Policy</Link>
-            <Link href="#" className="footer-link">GDPR</Link>
+            <Link href="/contact" className="footer-link">Terms of Service</Link>
+            <Link href="/contact" className="footer-link">Privacy Policy</Link>
+            <Link href="/contact" className="footer-link">Cookie Policy</Link>
+            <Link href="/contact" className="footer-link">GDPR</Link>
           </div>
 
           {/* Contact */}
           <div>
             <h3 className="footer-title">Contact</h3>
             <p style={{ color: '#9CA3AF', marginBottom: '12px' }}>
-              📍 Helsinki, Finland
+              📍 {site.contact.address.line1}, {site.contact.address.line2}
             </p>
-            <a href="mailto:hello@nadaruns.com" className="footer-link">✉️ hello@nadaruns.com</a>
-            <a href="tel:+358401234567" className="footer-link">📞 +358 40 123 4567</a>
+            <a href={`mailto:${site.contact.email}`} className="footer-link">✉️ {site.contact.email}</a>
+            <a href={site.contact.phoneHref} className="footer-link">📞 {site.contact.phone}</a>
           </div>
         </div>
 

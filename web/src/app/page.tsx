@@ -1,11 +1,9 @@
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import AppDownloadSection from "@/components/AppDownloadSection";
 
 export default function Home() {
   return (
     <>
-      <Navbar />
       <div style={{ paddingTop: '72px' }}>
       {/* Hero Section */}
       <section className="hero-gradient" style={{ padding: '80px 0 100px', position: 'relative', overflow: 'hidden' }}>
@@ -14,7 +12,7 @@ export default function Home() {
         <div style={{ position: 'absolute', bottom: '-100px', left: '-100px', width: '400px', height: '400px', background: 'radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%)', borderRadius: '50%' }} />
         
         <div className="container">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }} className="hero-grid">
             <div>
               <div className="badge badge-green" style={{ marginBottom: '24px' }}>
                 ⚡ #1 Delivery Platform in Finland
@@ -54,7 +52,7 @@ export default function Home() {
             </div>
             
             {/* Hero Visual */}
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative' }} className="hero-visual">
               <div className="float-animation" style={{
                 background: 'linear-gradient(135deg, #10B981 0%, #6366F1 100%)',
                 borderRadius: '32px',
@@ -118,7 +116,7 @@ export default function Home() {
             </p>
           </div>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px' }} className="features-grid">
             {[
               { icon: '⚡', title: 'Fast Delivery', desc: 'Average delivery time under 30 minutes', color: 'green' },
               { icon: '🛡️', title: 'Secure & Insured', desc: 'All deliveries are tracked and insured', color: 'purple' },
@@ -147,7 +145,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }} className="howitworks-grid">
             {/* For Drivers */}
             <div className="card" style={{ background: 'linear-gradient(135deg, #F0FDF4 0%, white 100%)' }}>
               <div className="badge badge-green" style={{ marginBottom: '24px' }}>
@@ -217,7 +215,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }} className="testimonials-grid">
             {[
               { name: 'Mikko L.', role: 'Driver', text: 'Best platform for flexible work. I earn well and manage my own schedule. The app is super easy to use!' },
               { name: 'Sanna R.', role: 'Business Owner', text: 'NadaRuns has transformed our delivery operations. Fast, reliable, and their support team is amazing.' },
@@ -244,6 +242,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* App Download Band */}
+      <AppDownloadSection />
 
       {/* CTA Section */}
       <section style={{ padding: '100px 0', background: 'linear-gradient(135deg, #10B981 0%, #6366F1 100%)', position: 'relative', overflow: 'hidden' }}>
@@ -294,7 +295,6 @@ export default function Home() {
         </div>
       </section>
     </div>
-    <Footer />
     </>
   );
 }

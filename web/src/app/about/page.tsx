@@ -82,24 +82,27 @@ export default function AboutPage() {
                 icon: Target,
                 title: "Reliability",
                 desc: "Every delivery matters. We ensure your packages arrive on time, every time.",
-                color: "emerald"
+                bg: "bg-emerald-100",
+                text: "text-emerald-600"
               },
               {
                 icon: Heart,
                 title: "Care",
                 desc: "We treat every package as if it were our own, with attention and respect.",
-                color: "rose"
+                bg: "bg-rose-100",
+                text: "text-rose-600"
               },
               {
                 icon: Globe,
                 title: "Sustainability",
                 desc: "We prioritize eco-friendly delivery options to reduce our carbon footprint.",
-                color: "indigo"
+                bg: "bg-indigo-100",
+                text: "text-indigo-600"
               }
             ].map((value, i) => (
               <div key={i} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                <div className={`w-14 h-14 bg-${value.color}-100 rounded-xl flex items-center justify-center mb-4`}>
-                  <value.icon className={`w-7 h-7 text-${value.color}-600`} />
+                <div className={`w-14 h-14 ${value.bg} rounded-xl flex items-center justify-center mb-4`}>
+                  <value.icon className={`w-7 h-7 ${value.text}`} />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">{value.title}</h3>
                 <p className="text-gray-600">{value.desc}</p>

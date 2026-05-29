@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Mail, Phone, MapPin, Send, CheckCircle, Clock, MessageSquare } from "lucide-react";
+import { site } from "@/lib/site";
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -81,8 +82,8 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <div className="font-semibold text-gray-900">Email</div>
-                    <a href="mailto:hello@nadaruns.com" className="text-gray-600 hover:text-emerald-600 transition-colors">
-                      hello@nadaruns.com
+                    <a href={`mailto:${site.contact.email}`} className="text-gray-600 hover:text-emerald-600 transition-colors">
+                      {site.contact.email}
                     </a>
                   </div>
                 </div>
@@ -92,8 +93,8 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <div className="font-semibold text-gray-900">Phone</div>
-                    <a href="tel:+358401234567" className="text-gray-600 hover:text-indigo-600 transition-colors">
-                      +358 40 123 4567
+                    <a href={site.contact.phoneHref} className="text-gray-600 hover:text-indigo-600 transition-colors">
+                      {site.contact.phone}
                     </a>
                   </div>
                 </div>
@@ -104,8 +105,8 @@ export default function ContactPage() {
                   <div>
                     <div className="font-semibold text-gray-900">Office</div>
                     <div className="text-gray-600">
-                      Mannerheimintie 10<br />
-                      00100 Helsinki, Finland
+                      {site.contact.address.line1}<br />
+                      {site.contact.address.line2}
                     </div>
                   </div>
                 </div>
@@ -116,8 +117,12 @@ export default function ContactPage() {
                   <div>
                     <div className="font-semibold text-gray-900">Support Hours</div>
                     <div className="text-gray-600">
-                      Mon-Fri: 9:00 - 18:00<br />
-                      Sat-Sun: 10:00 - 16:00
+                      {site.contact.hours.map((h, i) => (
+                        <span key={i}>
+                          {h.days}: {h.time}
+                          {i < site.contact.hours.length - 1 && <br />}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -240,12 +245,18 @@ export default function ContactPage() {
       {/* Map */}
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-gray-200 rounded-2xl h-[400px] flex items-center justify-center">
-            <div className="text-center">
-              <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">Interactive map would go here</p>
-              <p className="text-sm text-gray-400">Mannerheimintie 10, Helsinki</p>
-            </div>
+          <div className="rounded-2xl h-[400px] overflow-hidden shadow-sm border border-gray-100">
+            <iframe
+              title="NadaRuns office location"
+              src={`https://www.google.com/maps?q=${encodeURIComponent(
+                `${site.contact.address.line1}, ${site.contact.address.line2}`
+              )}&output=embed`}
+              width="100%"
+              height="100%"
+              style={{ border: 0 }}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
           </div>
         </div>
       </section>
