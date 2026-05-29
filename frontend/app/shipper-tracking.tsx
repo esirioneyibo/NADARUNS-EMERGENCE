@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,7 @@ import * as Haptics from "expo-haptics";
 import { getAuthToken } from "../src/api";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { useNotify } from "../src/contexts/NotificationContext";
 import MapView from "../src/components/MapView";
 import { useOrderTracking } from "../src/hooks/useWebSocket";
 
@@ -87,7 +88,9 @@ export default function ShipperTrackingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  
+  const { notify } = useNotify();
+  const prevStatusRef = useRef<string | null>(null);
+
   const [shipment, setShipment] = useState<ShipmentDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -101,6 +104,23 @@ export default function ShipperTrackingScreen() {
   } | null>(null);
 
   const styles = createStyles(theme);
+
+  // Alert the shipper on key lifecycle transitions (distinct sound + banner).
+  useEffect(() => {
+    const status = shipment?.status;
+    if (!status) return;
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (prev === null || prev === status) return; // skip first load & no-change
+    const STATUS_EVENTS = {
+      accepted: "driver_assigned",
+      arrived_pickup: "arrived_pickup",
+      arrived_dropoff: "arrived_dropoff",
+      delivered: "delivered",
+    } as const;
+    const ev = STATUS_EVENTS[status as keyof typeof STATUS_EVENTS];
+    if (ev) notify(ev);
+  }, [shipment?.status, notify]);
 
   // Real-time tracking via WebSocket
   const { isConnected: wsConnected, driverLocation: wsDriverLocation, orderStatus: wsOrderStatus } = useOrderTracking({

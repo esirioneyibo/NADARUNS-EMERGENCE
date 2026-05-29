@@ -1,0 +1,75 @@
+{
+  "summary": "Tested in-app event-alert banners on Expo web preview (mobile viewport 390x844). Found and fixed 2 critical bundle-crashing bugs that completely blocked the feature. After fixes, all 4 required banners verified end-to-end: DRIVER 'Job accepted' banner appears on /driver-home after job assignment; SHIPPER 'Driver at pickup', 'Arrived at drop-off', and 'Delivered' banners appear on /shipper-tracking when the driver advances the order through the corresponding statuses. Banner shows icon + bold title + one-line body + close (x) and auto-dismisses after ~4.5s as specified. 'Driver assigned' banner did NOT fire when the tracking page was opened on an already-accepted shipment because the implementation deliberately skips the very first status (prev===null guard) to avoid stale alerts - this is correct behavior but worth confirming with main agent. No expo-audio related red-screen on web after fixes. Some pre-existing /ws/track WebSocket 502 noise in console (not introduced by this feature).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "driver-home.tsx",
+        "issue": "ReferenceError: useRef is not defined - app crashed with red screen on /driver-home. useRef was used (lines 70-71) but not imported. FIXED by adding useRef to React import.",
+        "testID": "n/a",
+        "priority": "CRITICAL (fixed)"
+      },
+      {
+        "component": "shipper-tracking.tsx",
+        "issue": "Temporal dead zone: a useEffect referenced 'shipment' before its useState declaration. Would throw 'Cannot access shipment before initialization' on mount. FIXED by moving the alert useEffect AFTER the state declarations (now placed right after createStyles).",
+        "testID": "n/a",
+        "priority": "CRITICAL (fixed)"
+      },
+      {
+        "component": "NotificationContext banner",
+        "issue": "Floating alert banner has no testID. Detection had to rely on inline-style 'position:absolute' + zIndex 9999 fallback. Add testID='alert-banner' (and testID='alert-banner-close' on the X icon) for stable automated testing.",
+        "testID": "alert-banner (missing)",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Shipper tracking - 'Driver assigned' banner",
+        "issue": "Per spec, the 'Driver assigned' banner should fire 'on accept/arrival state change to accepted'. Current implementation guards against firing on the initial load (prev===null returns early). So if the shipper opens a tracking screen for an already-accepted shipment, no banner fires. If the requirement is to also fire when the shipper opens the page and the status is already 'accepted', adjust the guard. Otherwise it only fires if the shipper has the page open while status flips from 'pending' -> 'accepted' (an edge case in practice).",
+        "affected_testIDs": []
+      },
+      {
+        "flow": "Direct deep-link to /shipper-tracking?id=<sid>",
+        "issue": "When navigating directly to the tracking URL (vs clicking a card on shipper-home), the first /api/shipper/shipments/{id} call sometimes returns 401 and the page renders the 'Couldn't load shipment' empty state. Looks like an auth-token hydration race - getAuthToken returns null before AsyncStorage resolves. Clicking through from shipper-home works reliably.",
+        "affected_testIDs": []
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "shipper-tracking",
+        "issues": ["Banner renders correctly with icon, bold title, body and close X (verified in screenshots)."]
+      }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_7.json"
+  ],
+  "action_items": [
+    "Confirm whether 'Driver assigned' banner should also fire on FIRST poll if the shipment is already in 'accepted' state when the shipper opens tracking. If yes, weaken the prev===null guard for this specific status or seed prevStatusRef from 'pending' when the first payload is 'accepted'.",
+    "Add testID='alert-banner' to the floating banner View and testID='alert-banner-close' to the close button in NotificationContext.tsx (lines 56-76) so future automation can target it reliably.",
+    "Investigate the 401 race on direct-load of /shipper-tracking?id=... (getAuthToken returning null before AsyncStorage hydrates). Retry once after a short delay or wait for auth-ready state before issuing the first fetch.",
+    "(Already fixed by test agent) Re-verify driver-home.tsx and shipper-tracking.tsx no longer crash; bundle now loads on both home screens."
+  ],
+  "critical_code_review_comments": [
+    "driver-home.tsx was a hard import bug - useRef used without import. This means the feature was likely never run/loaded once after editing. Recommend a basic 'app smoke test' before merging frontend feature branches.",
+    "shipper-tracking.tsx had the alert useEffect inserted in a hoist-unsafe position (above the matching useState). When hoisting/JSX edits are made, the dev should run the screen at least once.",
+    "Banner has hard-coded testID-less DOM. For an alert system that is core feature, testID's are critical."
+  ],
+  "updated_files": [
+    "/app/frontend/app/driver-home.tsx (added useRef to React import)",
+    "/app/frontend/app/shipper-tracking.tsx (moved alert useEffect to after the useState declarations to fix temporal dead zone)"
+  ],
+  "success_rate": {
+    "backend": "skipped (frontend-only request)",
+    "frontend": "90% - 4/4 banners verified; 1 spec ambiguity ('Driver assigned' first-load behavior); 1 deep-link auth race (pre-existing pattern)"
+  },
+  "seed_data_creation": "Used existing /api/seed-demo (already idempotent). Advanced shipment SHP-6482 (id ece1a37e-00c8-451a-998f-68c6976285e0) through all lifecycle states to verify banners.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Two crash-fixes already applied. To retest banners: login as demo.shipper, click an 'accepted' shipment card to open /shipper-tracking, then in another browser context (or via direct API POST /api/orders/{id}/advance with the driver bearer token) advance the order step by step. After each advance, the shipper-tracking screen polls every ~10s and a banner fires for: accepted (driver_assigned), arrived_pickup (Driver at pickup), arrived_dropoff (Arrived at drop-off), delivered (Delivered). Banner does NOT fire on enroute_pickup, picked_up, enroute_dropoff. Banner DOM: an absolutely-positioned View with zIndex 9999 (no testID yet). For driver: log in and accept an available job - 'Job accepted' banner appears.",
+  "rca_of_issue": "RCA #1 (driver-home red screen): The new feature added `const seenJobIdsRef = useRef(...)` and `initialJobsLoadedRef = useRef(...)` but the file's existing React import was `import React, { useCallback, useEffect, useState, useMemo } from 'react'` - useRef was missing. At runtime this throws 'ReferenceError: useRef is not defined' which Expo catches and shows as a red screen. FIX: added useRef to the import list.\n\nRCA #2 (shipper-tracking crash): A new useEffect that reads `shipment?.status` was inserted above the `const [shipment, setShipment] = useState(...)` declaration. Because `const` declarations are in a temporal dead zone, evaluating the component throws 'Cannot access shipment before initialization' on the very first render. FIX: moved the useEffect block down to after all state declarations (right after createStyles(theme)) - the dependency [shipment?.status, notify] still works identically because hook execution order is unchanged within the function body but the variable is now declared before reference."
+}

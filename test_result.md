@@ -344,6 +344,19 @@ frontend:
           agent: "main"
           comment: "Root cause: index (role-selection) was the navigator's initial route, so any router.back() landed there. FIX: (1) index.tsx now has an auth-redirect guard - logged-in users are <Redirect>'d to their home (driver-home/shipper-home/admin) and a loader shows while auth is resolving, so the selection screen is unreachable once authenticated. (2) _layout TabsNavigator is now role-aware via useAuth(): drivers get Home/History/Wallet/Profile tabs; shippers get Home/New/Profile tabs (shipper-create as 'New' with the tab bar hidden while the wizard is open so it doesn't collide with the wizard's bottom action bar); shipper-settings is the shipper Profile tab. VERIFIED ON WEB for BOTH roles: after login, navigating to '/' shows SHOWS_SELECTION_SCREEN=False and lands on the role home; shipper tab bar = [Home, New, Profile]; driver tab bar = [Home, History, Wallet, Profile]."
 
+  - task: "In-app event alerts: distinct sound + haptic + banner (driver & shipper)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/services/alerts.ts, frontend/src/contexts/NotificationContext.tsx, frontend/app/_layout.tsx, frontend/app/driver-home.tsx, frontend/app/shipper-tracking.tsx, frontend/assets/sounds/*"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Built a global NotificationProvider (mounted in _layout) that plays a DISTINCT bundled sound + haptic + shows a floating in-app banner per event. Six tones generated (new_job, job_accepted, driver_assigned, arrived_pickup, arrived_dropoff, delivered) via expo-audio. Wiring: DRIVER (driver-home) fires 'job_accepted' on accept and 'new_job' when a new available job appears while online; SHIPPER (shipper-tracking) fires 'driver_assigned' (status->accepted), 'arrived_pickup', 'arrived_dropoff', and 'delivered' on status transitions. TEST (frontend, drive a full flow): login shipper (demo.shipper@nadaruns.com/demo1234), create a shipment, open its tracking; login driver (demo.driver@nadaruns.com/demo1234) in another session, accept that shipment and advance it through arrived_pickup -> picked_up -> arrived_dropoff -> delivered. On the SHIPPER tracking screen a banner should appear at the top for each transition: 'Driver assigned', 'Driver at pickup', 'Arrived at drop-off', 'Delivered'. On the DRIVER home, accepting shows a 'Job accepted' banner; a newly created nearby job (while online, no active order) shows a 'New job available' banner. Sounds can't be verified headless - verify the BANNERS appear with correct titles. App must not crash from expo-audio on web."
+
+
 
 
 

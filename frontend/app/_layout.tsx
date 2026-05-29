@@ -8,6 +8,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { View, Platform, StyleSheet, Text, ActivityIndicator } from "react-native";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
+import { NotificationProvider } from "../src/contexts/NotificationContext";
 
 // Prevent splash screen from auto-hiding until app is ready
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -147,7 +148,9 @@ function AppContent() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
       <SafeAreaProvider>
-        <TabsNavigator />
+        <NotificationProvider>
+          <TabsNavigator />
+        </NotificationProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

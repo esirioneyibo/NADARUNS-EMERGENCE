@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,7 @@ import { api } from "../src/api";
 import { Driver, Order } from "../src/types";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { useNotify } from "../src/contexts/NotificationContext";
 import { useAuth } from "../src/contexts/AuthContext";
 import MapView from "../src/components/MapView";
 import SlideToGoOnline from "../src/components/SlideToGoOnline";
@@ -65,6 +66,9 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { notify } = useNotify();
+  const seenJobIdsRef = useRef<Set<string>>(new Set());
+  const initialJobsLoadedRef = useRef(false);
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const [driver, setDriver] = useState<Driver | null>(null);
   const [pending, setPending] = useState<Order | null>(null);
@@ -325,6 +329,7 @@ export default function HomeScreen() {
   const handleAcceptJob = useCallback(async (orderId: string) => {
     try {
       await api.accept(orderId);
+      notify("job_accepted");
       setShowJobSheet(false);
       setSelectedOrders([]);
       // Remove from available orders
@@ -336,7 +341,30 @@ export default function HomeScreen() {
       const available = await api.getAvailableOrders();
       setAvailableOrders(available || []);
     }
-  }, [router]);
+  }, [router, notify]);
+
+  // Alert the driver when a NEW job appears nearby (online, no active order).
+  useEffect(() => {
+    if (!driver?.is_online) {
+      seenJobIdsRef.current = new Set(availableOrders.map((o) => o.id));
+      return;
+    }
+    const current = new Set(availableOrders.map((o) => o.id));
+    if (!initialJobsLoadedRef.current) {
+      initialJobsLoadedRef.current = true;
+      seenJobIdsRef.current = current;
+      return;
+    }
+    let hasNew = false;
+    for (const jid of current) {
+      if (!seenJobIdsRef.current.has(jid)) {
+        hasNew = true;
+        break;
+      }
+    }
+    seenJobIdsRef.current = current;
+    if (hasNew && !active) notify("new_job");
+  }, [availableOrders, driver?.is_online, active, notify]);
 
   // Handle job sheet close
   const handleCloseJobSheet = useCallback(() => {
