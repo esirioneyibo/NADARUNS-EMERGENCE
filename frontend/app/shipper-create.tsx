@@ -23,7 +23,9 @@ import { getAuthToken } from "../src/api";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+// API prefix for direct fetch calls (Nginx rewrites add /api automatically for api.nadaruns.com)
+const API_PREFIX = "";
 
 // Logistics Vehicle Types for Shippers
 const VEHICLE_CATEGORIES = [
@@ -106,7 +108,7 @@ export default function ShipperCreateScreen() {
     setQuoteLoading(true);
     try {
       const token = getAuthToken();
-      const res = await fetch(`${BASE}/api/shipper/quote`, {
+      const res = await fetch(`${BASE}/shipper/quote`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -174,7 +176,7 @@ export default function ShipperCreateScreen() {
       const finalPickupCoords = pickupCoords || defaultCoords;
       const finalDropoffCoords = dropoffCoords || defaultCoords;
       
-      const res = await fetch(`${BASE}/api/shipper/shipments`, {
+      const res = await fetch(`${BASE}/shipper/shipments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

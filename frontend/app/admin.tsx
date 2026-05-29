@@ -81,7 +81,7 @@ export default function AdminScreen() {
       };
 
       // Fetch dashboard stats
-      const statsRes = await fetch(`${BASE}/api/admin/stats`, { headers });
+      const statsRes = await fetch(`${BASE}/admin/stats`, { headers });
       if (statsRes.ok) {
         setStats(await statsRes.json());
       } else {
@@ -99,19 +99,19 @@ export default function AdminScreen() {
       }
 
       // Fetch KYC applications
-      const kycRes = await fetch(`${BASE}/api/admin/kyc-applications`, { headers });
+      const kycRes = await fetch(`${BASE}/admin/kyc-applications`, { headers });
       if (kycRes.ok) {
         setKycApplications(await kycRes.json());
       }
 
       // Fetch drivers
-      const driversRes = await fetch(`${BASE}/api/admin/drivers`, { headers });
+      const driversRes = await fetch(`${BASE}/admin/drivers`, { headers });
       if (driversRes.ok) {
         setDrivers(await driversRes.json());
       }
 
       // Fetch shippers
-      const shippersRes = await fetch(`${BASE}/api/admin/shippers`, { headers });
+      const shippersRes = await fetch(`${BASE}/admin/shippers`, { headers });
       if (shippersRes.ok) {
         setShippers(await shippersRes.json());
       }
@@ -139,7 +139,7 @@ export default function AdminScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     
     try {
-      const res = await fetch(`${BASE}/api/admin/kyc/${driverId}/${action}`, {
+      const res = await fetch(`${BASE}/admin/kyc/${driverId}/${action}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

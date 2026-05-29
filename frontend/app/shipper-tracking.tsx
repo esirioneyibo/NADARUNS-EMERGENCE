@@ -116,7 +116,7 @@ export default function ShipperTrackingScreen() {
   const loadShipment = useCallback(async () => {
     try {
       const token = getAuthToken();
-      const res = await fetch(`${BASE}/api/shipper/shipments/${id}`, {
+      const res = await fetch(`${BASE}/shipper/shipments/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
@@ -159,7 +159,7 @@ export default function ShipperTrackingScreen() {
             
             try {
               const token = getAuthToken();
-              const res = await fetch(`${BASE}/api/shipper/shipments/${id}/cancel`, {
+              const res = await fetch(`${BASE}/shipper/shipments/${id}/cancel`, {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}` },
               });

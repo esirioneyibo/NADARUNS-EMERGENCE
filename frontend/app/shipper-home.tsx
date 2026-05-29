@@ -114,10 +114,10 @@ export default function ShipperHomeScreen() {
 
     try {
       const [profileRes, shipmentsRes] = await Promise.all([
-        fetch(`${BASE}/api/shipper/me`, {
+        fetch(`${BASE}/shipper/me`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${BASE}/api/shipper/shipments`, {
+        fetch(`${BASE}/shipper/shipments`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
