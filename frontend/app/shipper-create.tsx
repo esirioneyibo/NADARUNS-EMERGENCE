@@ -168,6 +168,12 @@ export default function ShipperCreateScreen() {
     
     try {
       const token = getAuthToken();
+      
+      // Use Helsinki center as fallback coordinates
+      const defaultCoords = { latitude: 60.1699, longitude: 24.9384 };
+      const finalPickupCoords = pickupCoords || defaultCoords;
+      const finalDropoffCoords = dropoffCoords || defaultCoords;
+      
       const res = await fetch(`${BASE}/api/shipper/shipments`, {
         method: "POST",
         headers: {
@@ -176,19 +182,21 @@ export default function ShipperCreateScreen() {
         },
         body: JSON.stringify({
           pickup_address: pickupAddress,
+          pickup_lat: finalPickupCoords.latitude,
+          pickup_lng: finalPickupCoords.longitude,
           pickup_contact_name: pickupName,
-          pickup_contact_phone: pickupPhone,
-          pickup_notes: pickupNotes,
-          pickup_coords: pickupCoords,
+          pickup_contact_phone: pickupPhone || "",
+          pickup_notes: pickupNotes || null,
           dropoff_address: dropoffAddress,
+          dropoff_lat: finalDropoffCoords.latitude,
+          dropoff_lng: finalDropoffCoords.longitude,
           dropoff_contact_name: dropoffName,
-          dropoff_contact_phone: dropoffPhone,
-          dropoff_notes: dropoffNotes,
-          dropoff_coords: dropoffCoords,
+          dropoff_contact_phone: dropoffPhone || "",
+          dropoff_notes: dropoffNotes || null,
           vehicle_type: vehicleType,
-          cargo_weight_kg: parseFloat(cargoWeight) || 0,
-          cargo_description: cargoDescription,
-          price: useCustomPrice && customPrice ? parseFloat(customPrice) : priceQuote,
+          cargo_weight_kg: parseFloat(cargoWeight) || 100,
+          cargo_description: cargoDescription || "General cargo",
+          cargo_type: "general",
         }),
       });
       

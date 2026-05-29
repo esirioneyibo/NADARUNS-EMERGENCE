@@ -1,6 +1,13 @@
 import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet } from "./types";
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
+// Get BASE URL from environment, with fallback and cleanup
+const rawBase = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+// Remove trailing slash if present
+const BASE = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
+
+// API prefix - set to empty string if your backend URL already includes /api
+// or if your backend routes don't use /api prefix
+const API_PREFIX = "/api";
 
 // Token storage for authenticated requests
 let authToken: string | null = null;
@@ -23,24 +30,35 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers["Authorization"] = `Bearer ${authToken}`;
   }
   
-  const res = await fetch(`${BASE}/api${path}`, {
-    headers,
-    ...init,
-  });
+  const url = `${BASE}${API_PREFIX}${path}`;
   
-  if (!res.ok) {
-    const txt = await res.text();
-    // Parse error message from JSON if possible
-    try {
-      const err = JSON.parse(txt);
-      throw new Error(err.detail || err.message || `API ${path} failed (${res.status})`);
-    } catch {
-      throw new Error(`API ${path} failed (${res.status}): ${txt}`);
+  try {
+    const res = await fetch(url, {
+      headers,
+      ...init,
+    });
+    
+    if (!res.ok) {
+      const txt = await res.text();
+      // Parse error message from JSON if possible
+      try {
+        const err = JSON.parse(txt);
+        throw new Error(err.detail || err.message || `API ${path} failed (${res.status})`);
+      } catch {
+        throw new Error(`API ${path} failed (${res.status}): ${txt}`);
+      }
     }
+    
+    const text = await res.text();
+    return (text ? JSON.parse(text) : null) as T;
+  } catch (error: any) {
+    // Better error handling for network issues
+    if (error.message === "Network request failed" || error.name === "TypeError") {
+      console.error(`Network error calling ${url}:`, error);
+      throw new Error(`Network request failed. Please check your internet connection and try again. (URL: ${url})`);
+    }
+    throw error;
   }
-  
-  const text = await res.text();
-  return (text ? JSON.parse(text) : null) as T;
 }
 
 // Auth types
