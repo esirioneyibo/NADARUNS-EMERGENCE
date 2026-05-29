@@ -254,6 +254,17 @@ backend:
           comment: "POST /api/shipper/shipments accepts an optional Idempotency-Key header. Repeating a request with the same key replays the stored response (no duplicate job). Without the header, behavior is unchanged. Keys auto-expire after 24h via TTL index. NEEDS TESTING: two POST /shipper/shipments with identical Idempotency-Key create exactly ONE order and return the same order_id; without the header two calls create two orders (backward compatible)."
 
 frontend:
+  - task: "Shipper 6-step Order-Creation Wizard (rebuild)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/shipper-create.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Rebuilt shipper-create.tsx from a 3-step form into a 6-step wizard: Pickup, Dropoff, Package, Price, When, Review. Pricing is now IMMUTABLE (removed the 'Set Custom' toggle); Price step fetches POST /api/shipper/quote with coords and shows a read-only breakdown. Package step adds over-capacity validation, cargo-type chips, priority toggle, dimensions + special-handling expander. Scheduling step (ASAP vs presets). Review step has per-section Edit buttons + risk warnings. Draft auto-save (AsyncStorage), saved addresses, and Idempotency-Key on submit. Verify full happy path creates a shipment."
   - task: "PhotoCapture component + dropoff integration"
     implemented: true
     working: true

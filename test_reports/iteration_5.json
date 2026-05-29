@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 5 (FRONTEND ONLY) - Shipper 6-step Create-Shipment Wizard fully validated on public Expo web preview (mobile viewport 390x844). All flows pass: login -> shipper-home -> Create New Shipment -> 6-step wizard with header counter '1/6'..'6/6' and progress labels Pickup/Dropoff/Package/Price/When/Review. Step 1 (Pickup) and Step 2 (Dropoff): empty Continue is blocked (step counter stays put). Step 3 (Package): Cargo Van over-capacity (5000 kg vs 1500 kg max) shows the red 'Exceeds Cargo Van capacity' error and blocks Continue; reducing to 200 kg advances. 'Add dimensions & handling needs' expander reveals L/W/H inputs and special-handling chips (Tail lift visible); Priority delivery toggle flips. Step 4 (Price - IMMUTABLE) auto-loads quote, shows 'Estimated total', the 'Pricing is set by NadaRuns ... can't be changed' lock note, ZERO 'Set Custom' occurrences and ZERO editable price inputs. Step 5 (When) defaults to ASAP and 'Tomorrow morning' card is selectable. Step 6 (Review) shows summary cards for Pickup/Dropoff/Package/Schedule/Total price with 4 Edit buttons (Total price intentionally non-editable per immutability rule). Confirm & Create successfully creates the shipment - regression confirmed: new SHP-3460 with the entered pickup 'Mannerheimintie 10, Helsinki' and dropoff 'Esplanadi 5, Helsinki', 200 kg, EUR 15.00 appeared on shipper-home; counters moved from 28 -> 29 total / 14 -> 15 active. DRAFT auto-save verified end-to-end: filled steps 1+2 (DRAFTRUN_X markers), navigated to shipper-home, reopened wizard, and BOTH step 1 (pickup addr + contact name) and step 2 (dropoff addr + recipient name) were perfectly restored. One minor UX-on-web observation: Alert.alert validation/success popups don't render as visible dialogs in the web preview (React Native Web limitation) - the underlying validation/state logic still blocks advancement and the create still succeeds, but web users get no explicit 'Almost there' / 'Shipment created' feedback. On native iOS/Android Alert.alert renders natively, so this is web-preview-only.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "shipper-create.tsx - Alert.alert on web",
+        "issue": "Alert.alert('Almost there', ...) for required-field validation and the success Alert.alert after Confirm & Create do NOT produce a visible dialog on Expo web preview (React Native Web does not polyfill Alert.alert by default). The validation logic still blocks step advancement and shipment creation still succeeds, but users on web get no explicit confirmation/error feedback. On native builds this works correctly.",
+        "testID": "(none - the screen lacks testIDs on step-action elements)",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "shipper-create.tsx",
+        "issues": [
+          "Interactive elements lack testID attributes (Continue button, step inputs, vehicle cards, time-slot cards, Confirm & Create, Edit buttons, expander). Tests had to rely on placeholder/text selectors which is brittle. Recommend adding testIDs like wizard-continue-btn, wizard-confirm-btn, wizard-pickup-addr-input, wizard-recipient-name-input, vehicle-card-cargo-van, timeslot-tomorrow-morning, review-edit-pickup, etc."
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {
+        "component": "Deprecated style props (global)",
+        "issue": "Console warns: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' and 'props.pointerEvents is deprecated. Use style.pointerEvents'. Not blocking but should be migrated. Reference: appears across multiple screens including shipper-create.tsx (shadow* in StyleSheet.create blocks)."
+      },
+      {
+        "component": "Expo Router layout",
+        "issue": "Console warns: '[Layout children]: Too many screens defined. Route \"+html\" is extraneous.' Reference: frontend/app/_layout.tsx (or +html.tsx). Should be cleaned up so the +html route is not registered as a Stack.Screen."
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Add testID attributes to all interactive elements in /app/frontend/app/shipper-create.tsx (continue/back/confirm buttons, every TextInput, vehicle cards, cargo-type chips, time-slot cards, dimensions inputs, special-handling chips, priority toggle, every Edit button on the review step) to make the screen testable and accessibility-friendly.",
+    "Replace Alert.alert(...) calls in shipper-create.tsx with a cross-platform feedback mechanism (e.g. an inline banner/toast component or a Platform.OS === 'web' fallback using window.alert / a custom modal) so that validation messages ('Almost there') and the success confirmation ('Shipment created - Order SHP-XXXX') are actually visible to users on the Expo web preview.",
+    "Migrate deprecated shadow* style props to the unified boxShadow prop and migrate props.pointerEvents to style.pointerEvents across the codebase to silence RNW deprecation warnings.",
+    "Clean up the extraneous '+html' route in the Expo Router layout to silence the 'Too many screens defined' warning."
+  ],
+  "critical_code_review_comments": [
+    "Immutability rule fully respected in shipper-create.tsx: step 4 renders the quote via a read-only ReviewRow/total layout, contains the 'Pricing is set by NadaRuns' lock note, and there is no TextInput, Picker or 'Set Custom' toggle on the price step. Total price on the Review step has no Edit button, which is the correct behaviour given the immutability rule.",
+    "Over-capacity validation is implemented client-side against the selected vehicle's max kg (Cargo Van = 1500 kg) and BOTH (a) renders an inline red error AND (b) gates the Continue handler. Verified: 5000 kg on Cargo Van blocks advancement, 200 kg advances.",
+    "Draft auto-save persists step 1 and step 2 data across full navigation out of the wizard (verified via UI). Restore correctly populates pickup_addr, contact_name, dropoff_addr and recipient_name on re-entry.",
+    "POST /api/shipper/quote is fired automatically when entering step 4 and the response (base + weight surcharge + total + distance + ETA) is rendered as a read-only breakdown. Default Helsinki coords are used when the map isn't tapped, as documented in the agent context.",
+    "Shipment creation works end-to-end: POST /api/shipper/shipments with Idempotency-Key returns an order, the wizard navigates back, and the new SHP- record appears on shipper-home with the correct addresses and price - regression confirmed."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not tested (frontend-only review requested)",
+    "frontend": "100% on functional acceptance criteria (9/9 wizard requirements verified, draft restore verified, regression verified). 1 medium UX-on-web issue noted (Alert.alert invisible)."
+  },
+  "seed_data_creation": "Used existing demo.shipper. Created 2 real shipments during testing via the wizard: SHP-3460 (Mannerheimintie 10 -> Esplanadi 5, 200 kg, EUR 15) and a second DRAFTRUN_X shipment. Counters on shipper-home moved 28->29 total / 14->15 active.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All wizard acceptance criteria from this iteration pass on the public preview URL. The only meaningful issue is that Alert.alert is silent on Expo web - validation/success logic still works but is invisible to web users; main agent should swap to an inline/toast/banner pattern or a Platform.OS === 'web' fallback. testID coverage on shipper-create.tsx is essentially zero - adding testIDs will make future regression runs vastly more robust. Demo shipper credentials demo.shipper@nadaruns.com / demo1234 work via /api/seed-demo + /api/auth/shipper-login.",
+  "rca_of_issue": "N/A - the wizard works as specified. The 'no visible Alert' observation has RCA: React Native's Alert module is not implemented for the web platform; on Expo Router web builds Alert.alert is effectively a no-op visually unless a polyfill or custom modal is used."
+}
