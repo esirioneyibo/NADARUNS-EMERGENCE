@@ -110,7 +110,6 @@ function TabsNavigator() {
         <Tabs.Screen name="shipper-tracking" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="shipper-settings" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="admin" options={{ href: null, tabBarStyle: { display: "none" } }} />
-        <Tabs.Screen name="+html" options={{ href: null }} />
       </Tabs>
     </>
   );
