@@ -22,6 +22,7 @@ from datetime import datetime, timezone, timedelta
 from services import order_state_machine as sm
 from services import audit
 from services import idempotency
+from services import pricing
 
 
 ROOT_DIR = Path(__file__).parent
@@ -406,6 +407,9 @@ class ShipmentCreateRequest(BaseModel):
     special_requirements: Optional[List[str]] = None
     # Scheduling
     scheduled_pickup: Optional[str] = None  # ISO datetime, null for ASAP
+    # Pricing
+    urgency: str = "standard"  # standard | express | priority | emergency
+    shipper_offer: Optional[float] = 0.0  # optional bonus on top of base price
 
 
 class PriceQuoteRequest(BaseModel):
@@ -415,6 +419,8 @@ class PriceQuoteRequest(BaseModel):
     dropoff_lng: float
     vehicle_type: str
     cargo_weight_kg: float
+    urgency: str = "standard"  # standard | express | priority | emergency
+    special_handling: bool = False
 
 
 class PriceQuoteResponse(BaseModel):
@@ -425,6 +431,16 @@ class PriceQuoteResponse(BaseModel):
     total_price: float
     vehicle_type: str
     currency: str = "EUR"
+    # Detailed breakdown (NadaRuns pricing engine)
+    base_fee: float = 0.0
+    distance_fee: float = 0.0
+    weight_fee: float = 0.0
+    fuel_surcharge: float = 0.0
+    urgency: str = "standard"
+    urgency_multiplier: float = 1.0
+    special_multiplier: float = 1.0
+    estimate_low: float = 0.0
+    estimate_high: float = 0.0
 
 
 class OtpRequest(BaseModel):
@@ -1249,14 +1265,19 @@ async def get_pending():
 async def get_available_orders(
     vehicle_type: Optional[str] = None,
     min_capacity_kg: Optional[int] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    radius_km: float = 50.0,
 ):
     """
     Get all available (pending) orders for map-based job discovery.
     Returns orders with their pickup locations for displaying on driver's map.
-    
+
     Optional filters:
     - vehicle_type: Filter orders requiring a specific vehicle type
     - min_capacity_kg: Filter orders where cargo weight is within this capacity
+    - lat/lng + radius_km: only return jobs whose pickup is within radius_km of
+      the driver, sorted nearest-first (so the "jobs nearby" count is accurate)
     """
     query = {"status": "pending"}
     
@@ -1280,8 +1301,26 @@ async def get_available_orders(
             {"cargo_weight_kg": {"$exists": False}},
         ]
     
-    cursor = db.orders.find(query, {"_id": 0}).limit(50)
-    items = await cursor.to_list(50)
+    cursor = db.orders.find(query, {"_id": 0}).limit(200)
+    items = await cursor.to_list(200)
+
+    # Proximity filter: only keep jobs whose pickup is within radius of driver,
+    # sorted nearest-first. This makes the "X jobs nearby" count meaningful.
+    if lat is not None and lng is not None:
+        nearby = []
+        for o in items:
+            pickup = o.get("pickup") or {}
+            plat, plng = pickup.get("lat"), pickup.get("lng")
+            if plat is None or plng is None:
+                continue
+            dist = _haversine_km(lat, lng, plat, plng)
+            if dist <= radius_km:
+                nearby.append((dist, o))
+        nearby.sort(key=lambda x: x[0])
+        items = [o for _, o in nearby][:50]
+    else:
+        items = items[:50]
+
     return [Order(**o) for o in items]
 
 
@@ -1490,8 +1529,10 @@ async def advance_order(order_id: str, body: AdvanceRequest, request: Request):
             {"id": credit_driver_id},
             {"$inc": {"earnings_today": order["earnings"] + order.get("tip", 0), "deliveries_today": 1}},
         )
-        # seed a fresh pending request to keep the demo flowing
-        await db.orders.insert_one(build_order("pending"))
+        # Note: we intentionally do NOT auto-seed a replacement pending order
+        # here. The available-jobs pool should shrink as jobs are completed so
+        # the "jobs nearby" counter reflects reality. Use POST
+        # /api/orders/seed-new-pending to top up demo data when needed.
 
     await db.orders.update_one({"id": order_id}, {"$set": update})
     order.update(update)
@@ -2627,27 +2668,35 @@ async def get_price_quote(request: PriceQuoteRequest):
     vehicle = VEHICLE_TYPES.get(request.vehicle_type)
     if not vehicle:
         raise HTTPException(400, f"Invalid vehicle type: {request.vehicle_type}")
-    
-    # Calculate price
-    base_rate = vehicle["base_rate_per_km"]
-    base_price = distance_km * base_rate
-    
-    # Weight surcharge (€0.01 per kg over 500kg)
-    weight_surcharge = max(0, (request.cargo_weight_kg - 500) * 0.01)
-    
-    # Minimum price
-    total_price = max(15.0, base_price + weight_surcharge)
-    
+
+    # NadaRuns pricing engine
+    breakdown = pricing.calculate_price(
+        vehicle_type=request.vehicle_type,
+        distance_km=distance_km,
+        weight_kg=request.cargo_weight_kg,
+        urgency=request.urgency,
+        special_handling=request.special_handling,
+    )
+
     # Estimate duration (average 60 km/h for trucks)
     estimated_duration = int(distance_km / 60 * 60)  # minutes
-    
+
     return PriceQuoteResponse(
         distance_km=round(distance_km, 2),
         estimated_duration_minutes=max(30, estimated_duration),
-        base_price=round(base_price, 2),
-        weight_surcharge=round(weight_surcharge, 2),
-        total_price=round(total_price, 2),
+        base_price=round(breakdown["base_fee"] + breakdown["distance_fee"], 2),
+        weight_surcharge=breakdown["weight_fee"],
+        total_price=breakdown["total_price"],
         vehicle_type=request.vehicle_type,
+        base_fee=breakdown["base_fee"],
+        distance_fee=breakdown["distance_fee"],
+        weight_fee=breakdown["weight_fee"],
+        fuel_surcharge=breakdown["fuel_surcharge"],
+        urgency=breakdown["urgency"],
+        urgency_multiplier=breakdown["urgency_multiplier"],
+        special_multiplier=breakdown["special_multiplier"],
+        estimate_low=breakdown["estimate_low"],
+        estimate_high=breakdown["estimate_high"],
     )
 
 
@@ -2698,10 +2747,24 @@ async def create_shipment(
         request.dropoff_lat, request.dropoff_lng
     )
     
-    base_price = distance_km * vehicle["base_rate_per_km"]
-    weight_surcharge = max(0, (request.cargo_weight_kg - 500) * 0.01)
-    total_price = max(15.0, base_price + weight_surcharge)
-    
+    # NadaRuns pricing engine (immutable base price)
+    special_handling = bool(
+        (request.special_requirements and len(request.special_requirements) > 0)
+        or request.cargo_type == "oversized"
+    )
+    breakdown = pricing.calculate_price(
+        vehicle_type=request.vehicle_type,
+        distance_km=distance_km,
+        weight_kg=request.cargo_weight_kg,
+        urgency=request.urgency,
+        special_handling=special_handling,
+    )
+    base_total = breakdown["total_price"]
+
+    # Optional shipper bonus on top of the base (paid fully to the driver).
+    offer = max(0.0, float(request.shipper_offer or 0.0))
+    total_price = round(base_total + offer, 2)
+
     # Generate order
     order_id = str(uuid.uuid4())
     order_number = f"SHP-{random.randint(1000, 9999)}"
@@ -2710,8 +2773,8 @@ async def create_shipment(
     pickup_otp = str(random.randint(1000, 9999))
     dropoff_otp = str(random.randint(1000, 9999))
     
-    # Driver earnings (80% of price)
-    driver_earnings = total_price * 0.80
+    # Driver keeps 80% of base + 100% of the shipper's bonus.
+    driver_earnings = pricing.driver_earnings(base_total, offer)
     
     new_order = Order(
         id=order_id,
@@ -2739,7 +2802,7 @@ async def create_shipment(
         distance_km=round(distance_km, 2),
         eta_minutes=max(30, int(distance_km / 60 * 60)),
         earnings=round(driver_earnings, 2),
-        tip=0.0,
+        tip=round(offer, 2),
         pickup_otp=pickup_otp,
         dropoff_otp=dropoff_otp,
         shipper_id=shipper_id,
@@ -2789,6 +2852,9 @@ async def create_shipment(
         "pickup_otp": pickup_otp,
         "dropoff_otp": dropoff_otp,
         "price": total_price,
+        "base_price": base_total,
+        "offer": round(offer, 2),
+        "breakdown": breakdown,
         "distance_km": round(distance_km, 2),
         "estimated_duration_minutes": new_order.eta_minutes,
         "message": "Shipment created successfully! Waiting for driver assignment."

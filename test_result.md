@@ -446,8 +446,11 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Background push (Emergent relay): /api/register-push + lifecycle send_push triggers"
-    - "In-app event alerts: distinct sound + haptic + banner (driver & shipper)"
+    - "NadaRuns pricing engine: /api/shipper/quote + create with base+distance+weight+urgency+special+fuel, manual offer (tip)"
+    - "Available orders: no reseed on delivery (count shrinks) + proximity (lat/lng/radius_km) filtering"
+    - "Driver performance/earnings endpoint populated"
+    - "Shipper wizard: keyboard-aware layout, auto-advance focus, reset after submit, urgency + bonus UI"
+    - "Driver: new green clock map marker, jobs-nearby counter accuracy"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"

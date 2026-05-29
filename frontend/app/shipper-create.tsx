@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboard-controller";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -139,6 +139,12 @@ interface Quote {
   base_price: number;
   weight_surcharge: number;
   total_price: number;
+  base_fee?: number;
+  distance_fee?: number;
+  weight_fee?: number;
+  fuel_surcharge?: number;
+  estimate_low?: number;
+  estimate_high?: number;
 }
 
 export default function ShipperCreateScreen() {
@@ -152,6 +158,10 @@ export default function ShipperCreateScreen() {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const idempotencyKey = useRef<string>(genId());
+  // Refs for auto-advancing focus to the next field within a step.
+  const pickupPhoneRef = useRef<TextInput>(null);
+  const dropoffPhoneRef = useRef<TextInput>(null);
+  const cargoDescRef = useRef<TextInput>(null);
 
   // Pickup
   const [pickupAddress, setPickupAddress] = useState("");
@@ -178,6 +188,9 @@ export default function ShipperCreateScreen() {
   const [priority, setPriority] = useState(false);
   const [specialReqs, setSpecialReqs] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // Pricing: urgency tier + optional bonus the shipper adds on top of the base.
+  const [urgency, setUrgency] = useState("standard");
+  const [shipperOffer, setShipperOffer] = useState("");
 
   // Scheduling
   const scheduleSlots = useRef(buildScheduleSlots()).current;
@@ -302,6 +315,8 @@ export default function ShipperCreateScreen() {
           dropoff_lng: d.longitude,
           vehicle_type: vehicleType,
           cargo_weight_kg: weight,
+          urgency,
+          special_handling: specialReqs.length > 0 || cargoType === "oversized",
         }),
       });
       if (res.ok) {
@@ -312,6 +327,12 @@ export default function ShipperCreateScreen() {
           base_price: data.base_price,
           weight_surcharge: data.weight_surcharge,
           total_price: data.total_price,
+          base_fee: data.base_fee,
+          distance_fee: data.distance_fee,
+          weight_fee: data.weight_fee,
+          fuel_surcharge: data.fuel_surcharge,
+          estimate_low: data.estimate_low,
+          estimate_high: data.estimate_high,
         });
       } else {
         setQuote(null);
@@ -322,7 +343,7 @@ export default function ShipperCreateScreen() {
     } finally {
       setQuoteLoading(false);
     }
-  }, [BASE, pickupCoords, dropoffCoords, vehicleType, cargoWeight]);
+  }, [BASE, pickupCoords, dropoffCoords, vehicleType, cargoWeight, urgency, specialReqs, cargoType]);
 
   useEffect(() => {
     if (step === 4) fetchQuote();
@@ -375,6 +396,35 @@ export default function ShipperCreateScreen() {
     Haptics.selectionAsync().catch(() => {});
     setSpecialReqs((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
+
+  // Reset the whole wizard so a brand-new shipment starts blank.
+  const resetForm = useCallback(() => {
+    setPickupAddress("");
+    setPickupCoords(null);
+    setPickupName("");
+    setPickupPhone("");
+    setPickupNotes("");
+    setDropoffAddress("");
+    setDropoffCoords(null);
+    setDropoffName("");
+    setDropoffPhone("");
+    setDropoffNotes("");
+    setVehicleType("cargo_van");
+    setCargoWeight("");
+    setCargoType("general");
+    setCargoDescription("");
+    setDimL("");
+    setDimW("");
+    setDimH("");
+    setPriority(false);
+    setSpecialReqs([]);
+    setShowAdvanced(false);
+    setScheduleSlotId("asap");
+    setUrgency("standard");
+    setShipperOffer("");
+    setQuote(null);
+    setStep(1);
+  }, []);
 
   // ---------- Submit ----------
   const handleSubmit = async () => {
@@ -433,6 +483,8 @@ export default function ShipperCreateScreen() {
           cargo_description: cargoDescription || "General cargo",
           special_requirements: reqs.length ? reqs : null,
           scheduled_pickup: slot?.iso || null,
+          urgency,
+          shipper_offer: parseFloat(shipperOffer) || 0,
         }),
       });
 
@@ -442,7 +494,10 @@ export default function ShipperCreateScreen() {
         await clearDraft();
         idempotencyKey.current = genId(); // fresh key for next shipment
         showBanner(`Shipment ${data.order_number} created! Finding a driver for you…`, "success", false);
-        setTimeout(() => router.back(), 1400);
+        setTimeout(() => {
+          resetForm(); // clear the wizard so a new shipment starts blank
+          router.back();
+        }, 1400);
       } else {
         const err = await res.json().catch(() => ({}));
         showBanner(err.detail || "Failed to create shipment", "error");
@@ -556,6 +611,9 @@ export default function ShipperCreateScreen() {
             placeholderTextColor={theme.textSecondary}
             value={pickupName}
             onChangeText={setPickupName}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => pickupPhoneRef.current?.focus()}
           />
         </View>
       </View>
@@ -571,6 +629,8 @@ export default function ShipperCreateScreen() {
             value={pickupPhone}
             onChangeText={setPickupPhone}
             keyboardType="phone-pad"
+            ref={pickupPhoneRef}
+            returnKeyType="done"
           />
         </View>
       </View>
@@ -681,6 +741,8 @@ export default function ShipperCreateScreen() {
             value={dropoffPhone}
             onChangeText={setDropoffPhone}
             keyboardType="phone-pad"
+            ref={dropoffPhoneRef}
+            returnKeyType="done"
           />
         </View>
       </View>
@@ -756,6 +818,9 @@ export default function ShipperCreateScreen() {
             value={cargoWeight}
             onChangeText={setCargoWeight}
             keyboardType="numeric"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => cargoDescRef.current?.focus()}
           />
         </View>
         {overCapacity && (
@@ -794,6 +859,7 @@ export default function ShipperCreateScreen() {
             placeholderTextColor={theme.textSecondary}
             value={cargoDescription}
             onChangeText={setCargoDescription}
+            ref={cargoDescRef}
             multiline
           />
         </View>
@@ -879,10 +945,43 @@ export default function ShipperCreateScreen() {
     </Animated.View>
   );
 
-  const renderStep4 = () => (
+  const renderStep4 = () => {
+    const offerNum = parseFloat(shipperOffer) || 0;
+    const finalTotal = quote ? quote.total_price + Math.max(0, offerNum) : 0;
+    const URGENCIES: { id: string; label: string; sub?: string }[] = [
+      { id: "standard", label: "Standard" },
+      { id: "express", label: "Express", sub: "+30%" },
+      { id: "priority", label: "Priority", sub: "+50%" },
+      { id: "emergency", label: "Emergency", sub: "×2" },
+    ];
+    return (
     <Animated.View entering={FadeInUp.duration(280)}>
       <Text style={styles.stepTitle}>Price estimate</Text>
-      <Text style={styles.stepDescription}>Set by NadaRuns — fair, transparent, fixed</Text>
+      <Text style={styles.stepDescription}>Fair, transparent pricing — add a bonus to go faster</Text>
+
+      {/* Urgency selector */}
+      <Text style={styles.fieldLabel}>Delivery speed</Text>
+      <View style={styles.urgencyRow}>
+        {URGENCIES.map((u) => (
+          <TouchableOpacity
+            key={u.id}
+            style={[styles.urgencyChip, urgency === u.id && styles.urgencyChipActive]}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setUrgency(u.id);
+            }}
+          >
+            <Text style={[styles.urgencyChipText, urgency === u.id && styles.urgencyChipTextActive]}>
+              {u.label}
+            </Text>
+            {u.sub ? (
+              <Text style={[styles.urgencyChipSub, urgency === u.id && styles.urgencyChipTextActive]}>
+                {u.sub}
+              </Text>
+            ) : null}
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <View style={[styles.priceCard, shadows.md]}>
         {quoteLoading ? (
@@ -893,7 +992,12 @@ export default function ShipperCreateScreen() {
         ) : quote ? (
           <>
             <Text style={styles.priceLabel}>Estimated total</Text>
-            <Text style={styles.priceBig}>€{quote.total_price.toFixed(2)}</Text>
+            <Text style={styles.priceBig}>€{finalTotal.toFixed(2)}</Text>
+            {quote.estimate_low ? (
+              <Text style={styles.priceRange}>
+                Typically €{quote.estimate_low?.toFixed(0)}–€{quote.estimate_high?.toFixed(0)}
+              </Text>
+            ) : null}
 
             <View style={styles.priceMetaRow}>
               <View style={styles.priceMeta}>
@@ -912,25 +1016,56 @@ export default function ShipperCreateScreen() {
 
             <View style={styles.breakdown}>
               <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Base ({quote.distance_km.toFixed(1)} km × rate)</Text>
-                <Text style={styles.breakdownValue}>€{quote.base_price.toFixed(2)}</Text>
+                <Text style={styles.breakdownLabel}>Base fee</Text>
+                <Text style={styles.breakdownValue}>€{(quote.base_fee ?? 0).toFixed(2)}</Text>
               </View>
               <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Weight surcharge</Text>
-                <Text style={styles.breakdownValue}>€{quote.weight_surcharge.toFixed(2)}</Text>
+                <Text style={styles.breakdownLabel}>Distance ({quote.distance_km.toFixed(1)} km)</Text>
+                <Text style={styles.breakdownValue}>€{(quote.distance_fee ?? 0).toFixed(2)}</Text>
               </View>
+              {(quote.weight_fee ?? 0) > 0 && (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Weight surcharge</Text>
+                  <Text style={styles.breakdownValue}>€{(quote.weight_fee ?? 0).toFixed(2)}</Text>
+                </View>
+              )}
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Fuel surcharge (8%)</Text>
+                <Text style={styles.breakdownValue}>€{(quote.fuel_surcharge ?? 0).toFixed(2)}</Text>
+              </View>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>NadaRuns base price</Text>
+                <Text style={styles.breakdownValue}>€{quote.total_price.toFixed(2)}</Text>
+              </View>
+              {offerNum > 0 && (
+                <View style={styles.breakdownRow}>
+                  <Text style={[styles.breakdownLabel, { color: ACCENT }]}>Your bonus</Text>
+                  <Text style={[styles.breakdownValue, { color: ACCENT }]}>+€{offerNum.toFixed(2)}</Text>
+                </View>
+              )}
               <View style={[styles.breakdownRow, styles.breakdownTotalRow]}>
                 <Text style={styles.breakdownTotalLabel}>Total</Text>
-                <Text style={styles.breakdownTotalValue}>€{quote.total_price.toFixed(2)}</Text>
+                <Text style={styles.breakdownTotalValue}>€{finalTotal.toFixed(2)}</Text>
               </View>
             </View>
 
-            <View style={styles.lockNote}>
-              <Ionicons name="lock-closed" size={13} color={theme.textSecondary} />
-              <Text style={styles.lockNoteText}>
-                Pricing is set by NadaRuns based on distance, vehicle &amp; weight — it can't be changed.
-              </Text>
+            {/* Optional shipper bonus */}
+            <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Add a bonus (optional)</Text>
+            <View style={styles.offerRow}>
+              <Text style={styles.offerCurrency}>€</Text>
+              <TextInput
+                style={styles.offerInput}
+                value={shipperOffer}
+                onChangeText={(t) => setShipperOffer(t.replace(/[^0-9.]/g, ""))}
+                placeholder="0"
+                placeholderTextColor={theme.textSecondary}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+              />
             </View>
+            <Text style={styles.offerHint}>
+              A bonus goes 100% to the driver and helps your job get accepted faster.
+            </Text>
           </>
         ) : (
           <View style={{ paddingVertical: 24, alignItems: "center" }}>
@@ -944,7 +1079,8 @@ export default function ShipperCreateScreen() {
         )}
       </View>
     </Animated.View>
-  );
+    );
+  };
 
   const renderStep5 = () => (
     <Animated.View entering={FadeInUp.duration(280)}>
@@ -1100,10 +1236,7 @@ export default function ShipperCreateScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <Animated.View entering={FadeInDown.duration(260)} style={styles.header}>
         <TouchableOpacity style={[styles.iconBtn, shadows.sm]} onPress={goBack}>
@@ -1158,10 +1291,12 @@ export default function ShipperCreateScreen() {
         </Animated.View>
       )}
 
-      <ScrollView
-        contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + 130 }}
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xl }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        bottomOffset={90}
       >
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
@@ -1169,9 +1304,10 @@ export default function ShipperCreateScreen() {
         {step === 4 && renderStep4()}
         {step === 5 && renderStep5()}
         {step === 6 && renderStep6()}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
-      {/* Bottom Action */}
+      {/* Bottom Action (sticks above keyboard) */}
+      <KeyboardStickyView>
       <View style={[styles.bottomAction, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.bottomRow}>
           {step > 1 && (
@@ -1202,6 +1338,7 @@ export default function ShipperCreateScreen() {
           )}
         </View>
       </View>
+      </KeyboardStickyView>
 
       {/* Map pickers */}
       <MapLocationPicker
@@ -1229,7 +1366,7 @@ export default function ShipperCreateScreen() {
         theme={theme}
         markerColor={DROPOFF_COLOR}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -1417,6 +1554,34 @@ const createStyles = (theme: any) =>
     },
     priceLabel: { fontSize: 13, fontWeight: "700", color: theme.textSecondary, textAlign: "center" },
     priceBig: { fontSize: 44, fontWeight: "800", color: ACCENT, textAlign: "center", marginVertical: 4 },
+    priceRange: { fontSize: 12.5, color: theme.textSecondary, textAlign: "center", marginBottom: 4, fontWeight: "600" },
+    fieldLabel: { fontSize: 13, fontWeight: "700", color: theme.textPrimary, marginBottom: 8 },
+    urgencyRow: { flexDirection: "row", gap: 8, marginBottom: spacing.lg },
+    urgencyChip: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+      alignItems: "center",
+    },
+    urgencyChipActive: { borderColor: ACCENT, backgroundColor: theme.primaryLight || "rgba(16,185,129,0.12)" },
+    urgencyChipText: { fontSize: 12.5, fontWeight: "700", color: theme.textPrimary },
+    urgencyChipSub: { fontSize: 10.5, fontWeight: "700", color: theme.textSecondary, marginTop: 1 },
+    urgencyChipTextActive: { color: ACCENT },
+    offerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderWidth: 1.5,
+      borderColor: theme.border,
+      borderRadius: 12,
+      backgroundColor: theme.surface,
+      paddingHorizontal: 14,
+    },
+    offerCurrency: { fontSize: 18, fontWeight: "800", color: theme.textSecondary, marginRight: 6 },
+    offerInput: { flex: 1, fontSize: 17, fontWeight: "700", color: theme.textPrimary, paddingVertical: 12 },
+    offerHint: { fontSize: 12, color: theme.textSecondary, marginTop: 6, lineHeight: 16 },
     priceBigSmall: { fontSize: 30, fontWeight: "800", color: ACCENT, marginTop: 4 },
     priceMetaRow: { flexDirection: "row", justifyContent: "center", gap: 18, marginTop: 6, marginBottom: spacing.md },
     priceMeta: { flexDirection: "row", alignItems: "center", gap: 5 },
@@ -1502,10 +1667,6 @@ const createStyles = (theme: any) =>
     warnText: { fontSize: 12.5, color: "#92400E", fontWeight: "600", lineHeight: 18 },
 
     bottomAction: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
       paddingHorizontal: spacing.xl,
       paddingTop: spacing.md,
       backgroundColor: theme.background,

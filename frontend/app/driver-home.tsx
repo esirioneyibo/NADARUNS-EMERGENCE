@@ -78,6 +78,8 @@ export default function HomeScreen() {
   const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<Order[]>([]);
   const [showJobSheet, setShowJobSheet] = useState(false);
+  // Last known driver coordinates, used to show only *nearby* available jobs.
+  const driverCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const styles = createStyles(theme);
 
@@ -133,6 +135,7 @@ export default function HomeScreen() {
               return;
             }
             lastSent = { lat, lng, t: now };
+            driverCoordsRef.current = { lat, lng };
 
             // Prefer WebSocket; fall back to HTTP only when WS is down.
             if (wsConnected) {
@@ -181,7 +184,7 @@ export default function HomeScreen() {
         api.getDriver(), 
         api.getPending(), 
         api.getActive(),
-        api.getAvailableOrders(),
+        api.getAvailableOrders(driverCoordsRef.current ?? undefined),
       ]);
       setDriver(d);
       setPending(p);
@@ -201,6 +204,33 @@ export default function HomeScreen() {
     }
   }, [authLoading, isAuthenticated, user?.type]);
 
+  // When the driver goes online (and isn't already tracking an active order),
+  // grab an approximate location once so "jobs nearby" is filtered to the area.
+  useEffect(() => {
+    if (!driver?.is_online) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const current = await Location.getForegroundPermissionsAsync();
+        let granted = current.status === "granted";
+        if (!granted && current.canAskAgain) {
+          const req = await Location.requestForegroundPermissionsAsync();
+          granted = req.status === "granted";
+        }
+        if (!granted) return;
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (cancelled) return;
+        driverCoordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        load(); // refresh available jobs with proximity applied
+      } catch (e) {
+        console.warn("[Location] one-time fetch failed:", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [driver?.is_online, load]);
+
   useFocusEffect(
     useCallback(() => {
       if (!authLoading) {
@@ -217,7 +247,7 @@ export default function HomeScreen() {
         const [p, a, available] = await Promise.all([
           api.getPending(), 
           api.getActive(),
-          api.getAvailableOrders(),
+          api.getAvailableOrders(driverCoordsRef.current ?? undefined),
         ]);
         setPending(p);
         setActive(a);
@@ -296,7 +326,7 @@ export default function HomeScreen() {
     } catch (error: any) {
       Alert.alert("Job Taken", "This job was already accepted by another driver.");
       // Refresh available orders
-      const available = await api.getAvailableOrders();
+      const available = await api.getAvailableOrders(driverCoordsRef.current ?? undefined);
       setAvailableOrders(available || []);
     }
   }, [router, notify]);

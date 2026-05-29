@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 9 backend + shipper-wizard regression PASSED end-to-end. All 16 pytest cases (pricing quote formula + urgency/special/special-handling multipliers, create-shipment with offer, available-orders no-reseed cycle, driver performance, push-validation, full order lifecycle) are green. Frontend shipper wizard step-4 renders urgency chips (Standard/Express +30%/Priority +50%/Emergency x2), the new breakdown (Base fee €12 / Distance / Weight surcharge / Fuel surcharge / NadaRuns base price), and the optional € bonus input. Tier toggles scaled the total exactly 1.3x/1.5x/2.0x and adding a €15 bonus added +€15 on top. Reset-after-submit works: after Confirm & Create (SHP-8541, €38.76 = €23.76+€15) the wizard reopens at step 1 with an empty pickup-address textarea. Driver Wallet tab is populated (pending €528.63, recent deliveries+tips). One UI bug found: the Review (step 6) TOTAL PRICE does not include the shipper bonus — it shows the base only (€23.76) although the persisted order is correctly priced at €38.76.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "shipper-create.tsx Review (step 6) total card",
+        "issue": "TOTAL PRICE on the Review screen excludes the shipper bonus. With base €23.76 + bonus €15 the order is correctly created at €38.76 (verified in active-shipments list and backend response), but the Review screen displays €23.76. Display only — server-side data is correct. Likely the review summary reads only the base/breakdown total and not base+offer.",
+        "testID": "(no testID present)",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "shipper-create.tsx + earnings.tsx + driver-home.tsx",
+        "issues": [
+          "No testID attributes on any interactive elements (form inputs, urgency chips, bonus input, Continue/Confirm & Create buttons, bottom-tab items). Testing relies on placeholder/text matching, which is fragile."
+        ]
+      }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pricing_and_iter9.py",
+    "/app/test_reports/pytest/iter9_results.xml"
+  ],
+  "action_items": [
+    "Fix Review (step 6) total display in /app/frontend/app/shipper-create.tsx so the displayed TOTAL PRICE = base_total + shipper_offer (current behavior shows base only). The created order itself is correct; only the on-screen number is wrong.",
+    "Add testID props to wizard primitives (urgency chips, bonus input, Continue/Confirm & Create) and to earnings.tsx/driver-home.tsx headline metrics — this would make regression testing much more reliable.",
+    "Could not visually verify the new green-teardrop JobMarker because the demo driver currently has an active job, so the idle map state isn't reachable from the Wallet/Profile state. Optional: surface the 'View performance & earnings' link from Profile/Wallet too, not only from the idle driver-home, so it's reachable when a job is active."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is ~4.3k lines — splitting into routers (auth, shipper, driver, orders, pricing, push) would help maintainability.",
+    "GET /api/orders/available caps the underlying find() at 200 before haversine filtering and the python-side cap at 50. With >200 pending orders that pre-cap can mask far locations; consider a 2dsphere index for true geospatial filtering."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pricing_and_iter9.py (NEW)",
+    "/app/test_reports/pytest/iter9_results.xml (NEW)"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "~90% — wizard flow + reset + driver wallet OK; one display bug on Review total"},
+  "seed_data_creation": "Used POST /api/seed-demo + created throwaway TEST_ shipments (Helsinki/Espoo and one remote 85N for the no-reseed cycle) via demo shipper.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Pricing engine, no-reseed, driver performance and wizard reset are validated and stable. Re-test should focus on: (1) Review (step 6) total displaying base+offer once fixed; (2) green-teardrop JobMarker on a clean driver state (deliver/cancel all active jobs for demo.driver before login); (3) navigating to earnings.tsx (the dedicated Performance & Earnings screen — not the Wallet tab) once it's reachable.",
+  "rca_of_issue": "Review step total bug: the Review summary likely renders pricing.total_price (the base/breakdown total) without adding state.shipper_offer. The breakdown row 'Your bonus +€15.00' is visible on step 4 and the persisted order/total are correct (€38.76 in active-shipments list and in the create_shipment response), so the bug is isolated to the on-screen total computation in renderStep6 / review summary of /app/frontend/app/shipper-create.tsx."
+}

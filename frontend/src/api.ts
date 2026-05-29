@@ -216,8 +216,17 @@ export const api = {
       body: JSON.stringify({ photo }),
     }),
   
-  // Available orders for map-based discovery
-  getAvailableOrders: () => request<Order[]>("/orders/available"),
+  // Available orders for map-based discovery (optionally proximity-filtered)
+  getAvailableOrders: (coords?: { lat: number; lng: number }, radiusKm?: number) => {
+    const params = new URLSearchParams();
+    if (coords) {
+      params.append("lat", String(coords.lat));
+      params.append("lng", String(coords.lng));
+      if (radiusKm) params.append("radius_km", String(radiusKm));
+    }
+    const qs = params.toString();
+    return request<Order[]>(`/orders/available${qs ? `?${qs}` : ""}`);
+  },
   
   // Available orders filtered by vehicle type
   getAvailableOrdersFiltered: (vehicleType?: string, minCapacityKg?: number) => {

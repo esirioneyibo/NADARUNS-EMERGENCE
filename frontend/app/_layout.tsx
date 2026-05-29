@@ -3,6 +3,7 @@ import { Tabs, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
@@ -197,11 +198,13 @@ function AppContent() {
   
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
-      <SafeAreaProvider>
-        <NotificationProvider>
-          <TabsNavigator />
-        </NotificationProvider>
-      </SafeAreaProvider>
+      <KeyboardProvider>
+        <SafeAreaProvider>
+          <NotificationProvider>
+            <TabsNavigator />
+          </NotificationProvider>
+        </SafeAreaProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }
