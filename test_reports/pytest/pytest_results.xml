@@ -1,1 +1,143 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="24" time="5.990" timestamp="2026-05-19T22:24:00.389589+00:00" hostname="agent-env-da0bdf31-c3a6-4c51-8d62-98307823844f"><testcase classname="backend.tests.test_driver_api.TestDriver" name="test_get_driver" time="0.303" /><testcase classname="backend.tests.test_driver_api.TestDriver" name="test_toggle_online_flips" time="0.204" /><testcase classname="backend.tests.test_driver_api.TestPending" name="test_pending_order_full_shape" time="0.178" /><testcase classname="backend.tests.test_driver_api.TestHistory" name="test_history_min_8" time="0.077" /><testcase classname="backend.tests.test_driver_api.TestLifecycle" name="test_accept_advance_complete" time="0.975" /><testcase classname="backend.tests.test_driver_api.TestLifecycle" name="test_reject_creates_new_pending" time="0.256" /><testcase classname="backend.tests.test_driver_api.TestLifecycle" name="test_rate_after_delivery" time="0.815" /><testcase classname="backend.tests.test_driver_api.TestErrors" name="test_accept_nonexistent" time="0.097" /><testcase classname="backend.tests.test_driver_api.TestErrors" name="test_advance_nonexistent" time="0.103" /><testcase classname="backend.tests.test_otp_and_wallet.TestPendingOrderOtpFields" name="test_pending_has_4digit_otps_unverified" time="0.151" /><testcase classname="backend.tests.test_otp_and_wallet.TestVerifyOtp" name="test_invalid_otp_returns_400" time="0.319" /><testcase classname="backend.tests.test_otp_and_wallet.TestVerifyOtp" name="test_nonexistent_order_returns_404" time="0.120" /><testcase classname="backend.tests.test_otp_and_wallet.TestVerifyOtp" name="test_correct_pickup_otp_marks_pickup_verified" time="0.169" /><testcase classname="backend.tests.test_otp_and_wallet.TestVerifyOtp" name="test_correct_dropoff_otp_marks_dropoff_verified" time="0.090" /><testcase classname="backend.tests.test_otp_and_wallet.TestWallet" name="test_wallet_structure_and_balances" time="0.108" /><testcase classname="backend.tests.test_otp_and_wallet.TestWallet" name="test_wallet_has_mixed_txn_types_and_sorted_desc" time="0.104" /><testcase classname="backend.tests.test_otp_and_wallet.TestWallet" name="test_wallet_includes_tip_rows_when_present" time="0.097" /><testcase classname="backend.tests.test_settings_and_route.TestDriverNewFields" name="test_driver_has_new_fields" time="0.096" /><testcase classname="backend.tests.test_settings_and_route.TestDriverPatch" name="test_patch_name_only" time="0.206" /><testcase classname="backend.tests.test_settings_and_route.TestDriverPatch" name="test_patch_vehicle_combo" time="0.217" /><testcase classname="backend.tests.test_settings_and_route.TestDriverPatch" name="test_patch_notifications" time="0.236" /><testcase classname="backend.tests.test_settings_and_route.TestRoute" name="test_route_fallback_shape" time="0.278" /><testcase classname="backend.tests.test_settings_and_route.TestRoute" name="test_route_idempotent_cache" time="0.507" /><testcase classname="backend.tests.test_settings_and_route.TestRoute" name="test_route_404_for_unknown_order" time="0.067" /></testsuite></testsuites>
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="4" failures="14" skipped="0" tests="43" time="16.393" timestamp="2026-05-29T11:38:08.430964+00:00" hostname="agent-env-c13770aa-1a0b-4cda-b566-e1936f307470"><testcase classname="backend.tests.test_driver_api.TestDriver" name="test_get_driver" time="1.390"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_driver_api.py:21: in test_get_driver
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_driver_api.TestDriver" name="test_toggle_online_flips" time="0.458"><failure message="requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)">/root/.venv/lib/python3.11/site-packages/requests/models.py:1116: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:340: in decode
+    raise JSONDecodeError("Extra data", s, end)
+E   json.decoder.JSONDecodeError: Extra data: line 1 column 5 (char 4)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_driver_api.py:29: in test_toggle_online_flips
+    d1 = s.get(f"{API}/driver/me").json()
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:1120: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)</failure></testcase><testcase classname="backend.tests.test_driver_api.TestPending" name="test_pending_order_full_shape" time="1.531"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_driver_api.py:44: in test_pending_order_full_shape
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_driver_api.TestHistory" name="test_history_min_8" time="0.461"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_driver_api.py:62: in test_history_min_8
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_driver_api.TestLifecycle" name="test_accept_advance_complete" time="0.917"><failure message="requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)">/root/.venv/lib/python3.11/site-packages/requests/models.py:1116: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:340: in decode
+    raise JSONDecodeError("Extra data", s, end)
+E   json.decoder.JSONDecodeError: Extra data: line 1 column 5 (char 4)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_driver_api.py:77: in test_accept_advance_complete
+    pending = s.get(f"{API}/orders/pending").json()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:1120: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)</failure></testcase><testcase classname="backend.tests.test_driver_api.TestLifecycle" name="test_reject_creates_new_pending" time="0.911"><failure message="requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)">/root/.venv/lib/python3.11/site-packages/requests/models.py:1116: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:340: in decode
+    raise JSONDecodeError("Extra data", s, end)
+E   json.decoder.JSONDecodeError: Extra data: line 1 column 5 (char 4)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_driver_api.py:112: in test_reject_creates_new_pending
+    old = s.get(f"{API}/orders/pending").json()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:1120: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)</failure></testcase><testcase classname="backend.tests.test_driver_api.TestLifecycle" name="test_rate_after_delivery" time="0.912"><failure message="requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)">/root/.venv/lib/python3.11/site-packages/requests/models.py:1116: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:340: in decode
+    raise JSONDecodeError("Extra data", s, end)
+E   json.decoder.JSONDecodeError: Extra data: line 1 column 5 (char 4)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_driver_api.py:123: in test_rate_after_delivery
+    p = s.get(f"{API}/orders/pending").json()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:1120: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)</failure></testcase><testcase classname="backend.tests.test_driver_api.TestErrors" name="test_accept_nonexistent" time="0.457" /><testcase classname="backend.tests.test_driver_api.TestErrors" name="test_advance_nonexistent" time="0.458" /><testcase classname="backend.tests.test_otp_and_wallet.TestPendingOrderOtpFields" name="test_pending_has_4digit_otps_unverified" time="1.229"><error message="failed on setup with &quot;AssertionError: 404 page not found&#10;  &#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_otp_and_wallet.py:16: in pending_order
+    assert r.status_code == 200, r.text
+E   AssertionError: 404 page not found
+E     
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_otp_and_wallet.TestVerifyOtp" name="test_invalid_otp_returns_400" time="0.000"><error message="failed on setup with &quot;AssertionError: 404 page not found&#10;  &#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_otp_and_wallet.py:16: in pending_order
+    assert r.status_code == 200, r.text
+E   AssertionError: 404 page not found
+E     
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_otp_and_wallet.TestVerifyOtp" name="test_nonexistent_order_returns_404" time="0.576" /><testcase classname="backend.tests.test_otp_and_wallet.TestVerifyOtp" name="test_correct_pickup_otp_marks_pickup_verified" time="0.000"><error message="failed on setup with &quot;AssertionError: 404 page not found&#10;  &#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_otp_and_wallet.py:16: in pending_order
+    assert r.status_code == 200, r.text
+E   AssertionError: 404 page not found
+E     
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_otp_and_wallet.TestVerifyOtp" name="test_correct_dropoff_otp_marks_dropoff_verified" time="0.000"><error message="failed on setup with &quot;AssertionError: 404 page not found&#10;  &#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_otp_and_wallet.py:16: in pending_order
+    assert r.status_code == 200, r.text
+E   AssertionError: 404 page not found
+E     
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_otp_and_wallet.TestWallet" name="test_wallet_structure_and_balances" time="0.564"><failure message="AssertionError: 404 page not found&#10;  &#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">backend/tests/test_otp_and_wallet.py:84: in test_wallet_structure_and_balances
+    assert r.status_code == 200, r.text
+E   AssertionError: 404 page not found
+E     
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_otp_and_wallet.TestWallet" name="test_wallet_has_mixed_txn_types_and_sorted_desc" time="0.564"><failure message="requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)">/root/.venv/lib/python3.11/site-packages/requests/models.py:1116: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:340: in decode
+    raise JSONDecodeError("Extra data", s, end)
+E   json.decoder.JSONDecodeError: Extra data: line 1 column 5 (char 4)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_otp_and_wallet.py:105: in test_wallet_has_mixed_txn_types_and_sorted_desc
+    w = r.json()
+        ^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:1120: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)</failure></testcase><testcase classname="backend.tests.test_otp_and_wallet.TestWallet" name="test_wallet_includes_tip_rows_when_present" time="0.563"><failure message="requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)">/root/.venv/lib/python3.11/site-packages/requests/models.py:1116: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:340: in decode
+    raise JSONDecodeError("Extra data", s, end)
+E   json.decoder.JSONDecodeError: Extra data: line 1 column 5 (char 4)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_otp_and_wallet.py:121: in test_wallet_includes_tip_rows_when_present
+    w = r.json()
+        ^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:1120: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Extra data: line 1 column 5 (char 4)</failure></testcase><testcase classname="backend.tests.test_p0_state_machine.TestRegression" name="test_health" time="0.205" /><testcase classname="backend.tests.test_p0_state_machine.TestRegression" name="test_driver_login" time="0.269" /><testcase classname="backend.tests.test_p0_state_machine.TestRegression" name="test_shipper_login" time="0.269" /><testcase classname="backend.tests.test_p0_state_machine.TestRegression" name="test_orders_available" time="0.052" /><testcase classname="backend.tests.test_p0_state_machine.TestRegression" name="test_driver_me" time="0.053" /><testcase classname="backend.tests.test_p0_state_machine.TestRegression" name="test_orders_history" time="0.050" /><testcase classname="backend.tests.test_p0_state_machine.TestStateMachine" name="test_full_happy_path" time="0.370" /><testcase classname="backend.tests.test_p0_state_machine.TestStateMachine" name="test_illegal_jump_to_delivered" time="0.141" /><testcase classname="backend.tests.test_p0_state_machine.TestStateMachine" name="test_advance_already_delivered_returns_400" time="0.470" /><testcase classname="backend.tests.test_p0_state_machine.TestStateMachine" name="test_idempotent_advance_same_status" time="0.139" /><testcase classname="backend.tests.test_p0_state_machine.TestAcceptRaceSafe" name="test_accept_binds_driver_id" time="0.138" /><testcase classname="backend.tests.test_p0_state_machine.TestAcceptRaceSafe" name="test_same_driver_reaccept_is_idempotent" time="0.144" /><testcase classname="backend.tests.test_p0_state_machine.TestAcceptRaceSafe" name="test_different_driver_gets_409" time="0.427" /><testcase classname="backend.tests.test_p0_state_machine.TestActiveScoped" name="test_active_returns_driver_order_only" time="0.199" /><testcase classname="backend.tests.test_p0_state_machine.TestEarningsCredit" name="test_delivered_credits_authenticated_driver" time="0.464" /><testcase classname="backend.tests.test_p0_state_machine.TestAudit" name="test_unknown_order_returns_404" time="0.045" /><testcase classname="backend.tests.test_p0_state_machine.TestAudit" name="test_events_chronological_with_required_fields" time="0.189" /><testcase classname="backend.tests.test_p0_state_machine.TestIdempotency" name="test_same_key_returns_same_order" time="0.104" /><testcase classname="backend.tests.test_p0_state_machine.TestIdempotency" name="test_no_key_creates_two_orders" time="0.098" /><testcase classname="backend.tests.test_settings_and_route.TestDriverNewFields" name="test_driver_has_new_fields" time="0.157"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_settings_and_route.py:21: in test_driver_has_new_fields
+    assert r.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_settings_and_route.TestDriverPatch" name="test_patch_name_only" time="0.104"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_settings_and_route.py:43: in test_patch_name_only
+    assert r.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_settings_and_route.TestDriverPatch" name="test_patch_vehicle_combo" time="0.105"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_settings_and_route.py:58: in test_patch_vehicle_combo
+    assert r.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_settings_and_route.TestDriverPatch" name="test_patch_notifications" time="0.052"><failure message="KeyError: 'notifications'">backend/tests/test_settings_and_route.py:76: in test_patch_notifications
+    flipped = {k: not v for k, v in original["notifications"].items()}
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'notifications'</failure></testcase><testcase classname="backend.tests.test_settings_and_route.TestRoute" name="test_route_fallback_shape" time="0.318" /><testcase classname="backend.tests.test_settings_and_route.TestRoute" name="test_route_idempotent_cache" time="0.370" /><testcase classname="backend.tests.test_settings_and_route.TestRoute" name="test_route_404_for_unknown_order" time="0.061" /></testsuite></testsuites>

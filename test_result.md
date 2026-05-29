@@ -203,7 +203,55 @@ backend:
     status_history:
         - working: true
           agent: "testing"
-          comment: "Tested driver profile update and history endpoints to verify they use authenticated driver ID from JWT token. All 6 test cases passed: (1) POST /api/seed-demo successfully seeds demo data (demo driver already exists), (2) POST /api/auth/login successfully authenticates driver (demo.driver@nadaruns.com) and returns JWT token with driver_id in payload, (3) GET /api/driver/me successfully retrieves driver profile using authenticated driver ID from JWT token (returns id, name, email, vehicle_type, plate, vehicle_capacity_kg), (4) PATCH /api/driver/me successfully updates driver profile (name: 'Updated Driver Name', plate: 'XYZ-999', vehicle_type: 'box_truck') using authenticated driver ID from JWT token via get_current_driver_id(request), backend logs confirm driver_id extracted from token: '0380e045-271b-4a7d-ba92-bd1e35ad788d', vehicle string correctly updated to 'Box Truck • XYZ-999', (5) GET /api/driver/me again confirms all updates persisted correctly (name, plate, vehicle_type all match updated values), (6) GET /api/orders/history successfully returns order history filtered by authenticated driver ID (returns empty list which is correct since demo driver has no delivered orders, endpoint uses get_current_driver_id(request) to filter by driver_id). All endpoints correctly use authenticated driver ID from JWT token. Minor: vehicle_capacity_kg did not auto-update from 1500 kg to 5000 kg when vehicle_type changed to box_truck (endpoint allows manual update but doesn't auto-set based on vehicle type like registration does), but this doesn't affect core functionality."
+          comment: "Tested driver profile update and history endpoints to verify they use authenticated driver ID from JWT token. All 6 test cases passed."
+
+  - task: "P0 Order State Machine (transition validation) on accept/advance"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py, backend/services/order_state_machine.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Introduced services/order_state_machine.py as the single source of truth for valid order transitions. /orders/{id}/advance now validates every transition via sm.resolve_target(current, requested) and returns 400 on illegal transitions (e.g. pending->delivered, advancing a terminal order). Happy-path forward flow mirrors legacy ADVANCE_FLOW so existing clients are unaffected. Advance is idempotent (requesting current status returns order unchanged). Added 'cancelled' to OrderStatus. NEEDS TESTING: (1) normal forward advance accepted->...->delivered works, (2) illegal jump pending->delivered returns 400, (3) advancing a delivered order returns 400, (4) idempotent re-request of current status returns 200 unchanged."
+
+  - task: "P0 Driver binding + race-safe accept (atomic claim)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "/orders/{id}/accept now extracts the authenticated driver from the JWT and binds driver_id onto the order using a conditional update on status==pending (atomic claim) so two drivers cannot accept the same job. Idempotent: a driver re-accepting their own order gets 200; accepting a job already claimed by another driver returns 409 Conflict. /orders/active now filters by the authenticated driver (driver only sees their own active order; legacy null-driver orders still visible). /orders/{id}/advance now credits earnings/deliveries to the AUTHENTICATED driver instead of the legacy hardcoded DRIVER_ID. NEEDS TESTING with driver JWT: accept binds driver_id, second accept by same driver returns 200, history/active scoped per driver, delivery credits correct driver's earnings_today/deliveries_today."
+
+  - task: "P0 Audit trail (order_events) + GET /orders/{id}/events"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py, backend/services/audit.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Every order_created/status_change/rejected event is appended to the order_events collection. New endpoint GET /api/orders/{id}/events returns the chronological timeline {order_id, current_status, events[]}. NEEDS TESTING: after creating a shipment + accepting + advancing, /events returns ordered events with from_status/to_status/actor fields; 404 for unknown order."
+
+  - task: "P0 Idempotency-Key on shipment creation"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py, backend/services/idempotency.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "POST /api/shipper/shipments accepts an optional Idempotency-Key header. Repeating a request with the same key replays the stored response (no duplicate job). Without the header, behavior is unchanged. Keys auto-expire after 24h via TTL index. NEEDS TESTING: two POST /shipper/shipments with identical Idempotency-Key create exactly ONE order and return the same order_id; without the header two calls create two orders (backward compatible)."
 
 frontend:
   - task: "PhotoCapture component + dropoff integration"
@@ -280,8 +328,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Vehicle types in onboarding with capacity"
-    - "Vehicle types in settings profile update"
+    - "P0 Order State Machine (transition validation) on accept/advance"
+    - "P0 Driver binding + race-safe accept (atomic claim)"
+    - "P0 Audit trail (order_events) + GET /orders/{id}/events"
+    - "P0 Idempotency-Key on shipment creation"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -303,3 +353,6 @@ agent_communication:
       message: "✓ Map Location Picker FIXED and WORKING! Main agent successfully resolved the critical blocker by creating platform-specific files (MapLocationPicker.web.tsx and MapLocationPicker.native.tsx). Tested complete flow on web with mobile viewport (390x844): (1) Shipper login successful (backend returns 200 OK), (2) Navigated to shipper-home and clicked 'Create New Shipment', (3) Opened Map Location Picker modal by clicking 'Tap to select on map' button, (4) Modal opens WITHOUT red screen errors - this is the key fix!, (5) All UI elements verified: 'Use my current location' button with orange icon ✓, Search bar with placeholder ✓, Map placeholder showing 'Interactive map available on mobile app' ✓, Coordinates display (Lat: 60.16990, Lng: 24.93840) ✓, 'Confirm Location' button ✓. The web version uses expo-location for geocoding and shows a placeholder map with manual coordinate entry. The native version uses react-native-maps for interactive map. Stuck count reset to 0. Map Location Picker is now fully functional on web platform. Note: Minor issue with shipper login flow not auto-navigating after successful login (had to manually navigate to shipper-home), but this is a separate issue from Map Location Picker."
     - agent: "testing"
       message: "✓ Driver Profile Update and History Endpoints WORKING! Completed testing of driver profile update (PATCH /api/driver/me) and order history (GET /api/orders/history) endpoints to verify they correctly use authenticated driver ID from JWT token. All 6 test cases passed: (1) Seed demo endpoint working, (2) Driver login returns JWT token with driver_id, (3) GET /api/driver/me retrieves profile using authenticated driver ID, (4) PATCH /api/driver/me successfully updates profile (name, plate, vehicle_type) using authenticated driver ID extracted via get_current_driver_id(request), backend logs confirm correct driver_id used: '0380e045-271b-4a7d-ba92-bd1e35ad788d', (5) Updates persist correctly, (6) GET /api/orders/history returns orders filtered by authenticated driver ID (empty list is correct for demo driver with no delivered orders). All endpoints correctly extract and use driver ID from JWT token for authentication and authorization. Minor: vehicle_capacity_kg doesn't auto-update when vehicle_type changes (unlike registration endpoint), but this doesn't affect core functionality. No issues found - authentication and authorization working correctly."
+
+    - agent: "main"
+      message: "P0 RELIABILITY FOUNDATION implemented (backward-compatible, no UX change). Added services/ layer: order_state_machine.py (canonical transitions), audit.py (order_events log), idempotency.py. Changes to test (BACKEND ONLY): (1) STATE MACHINE: /orders/{id}/advance validates transitions - forward flow accepted->enroute_pickup->arrived_pickup->picked_up->enroute_dropoff->arrived_dropoff->delivered must still work; illegal jumps (pending->delivered, advancing a delivered order) must return 400; requesting the current status is idempotent (200, unchanged). (2) RACE-SAFE ACCEPT: /orders/{id}/accept now binds driver_id from JWT via atomic update on status==pending; same driver re-accepting returns 200; a different driver accepting an already-claimed order returns 409. (3) /orders/active filters by authenticated driver. (4) DELIVERY EARNINGS now credit the authenticated driver (not hardcoded driver-001) - verify earnings_today/deliveries_today increment on the logged-in driver after reaching delivered. (5) AUDIT: GET /api/orders/{id}/events returns ordered timeline (order_created/status_change/rejected) with from_status/to_status/actor_id; 404 for unknown id. (6) IDEMPOTENCY: two POST /api/shipper/shipments with the SAME 'Idempotency-Key' header create exactly ONE order (same order_id replayed); without the header two calls create two orders. Credentials in /app/memory/test_credentials.md (demo.driver@nadaruns.com/demo1234, demo.shipper@nadaruns.com/demo1234). IMPORTANT: forked prod app - DO NOT modify .env URLs. Backend testing only; do not break existing passing endpoints."

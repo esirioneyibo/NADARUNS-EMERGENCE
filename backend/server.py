@@ -18,6 +18,11 @@ from typing import List, Optional, Literal, Tuple, Dict, Set
 import uuid
 from datetime import datetime, timezone, timedelta
 
+# Service layer (production-grade business logic extracted from this monolith)
+from services import order_state_machine as sm
+from services import audit
+from services import idempotency
+
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -140,12 +145,31 @@ async def get_current_driver_id(request: Request) -> str:
     return driver_id
 
 
+async def get_optional_driver_id(request: Request) -> Optional[str]:
+    """Best-effort driver ID extraction from the JWT.
+
+    Returns the authenticated driver's ID when a valid driver token is
+    present, otherwise None. Used by lifecycle endpoints so they can bind
+    actions to the real driver without hard-failing legacy/demo callers.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    try:
+        payload = decode_token(auth_header.replace("Bearer ", ""))
+    except HTTPException:
+        return None
+    if payload.get("type") != "driver":
+        return None
+    return payload.get("sub")
+
+
 # ===================== Models =====================
 
 OrderStatus = Literal[
     "pending", "accepted", "enroute_pickup", "arrived_pickup",
     "picked_up", "enroute_dropoff", "arrived_dropoff",
-    "delivered", "rejected"
+    "delivered", "rejected", "cancelled"
 ]
 
 ADVANCE_FLOW = {
@@ -937,7 +961,15 @@ async def create_database_indexes():
         await db.notifications.create_index("recipient_id")
         await db.notifications.create_index([("recipient_id", 1), ("read", 1)])
         await db.notifications.create_index([("recipient_id", 1), ("created_at", -1)])
-        
+
+        # Order audit trail (immutable event log)
+        await db.order_events.create_index("order_id")
+        await db.order_events.create_index([("order_id", 1), ("created_at", 1)])
+
+        # Idempotency keys: unique per (key, scope) + 24h TTL auto-cleanup
+        await db.idempotency_keys.create_index([("key", 1), ("scope", 1)], unique=True)
+        await db.idempotency_keys.create_index("created_at", expireAfterSeconds=86400)
+
         logger.info("Database indexes created successfully")
     except Exception as e:
         logger.warning(f"Error creating indexes (may already exist): {e}")
@@ -1316,9 +1348,18 @@ async def get_matched_orders(credentials: HTTPAuthorizationCredentials = Depends
 
 
 @api_router.get("/orders/active", response_model=Optional[Order])
-async def get_active():
-    active_statuses = ["accepted", "enroute_pickup", "arrived_pickup", "picked_up", "enroute_dropoff", "arrived_dropoff"]
-    order = await db.orders.find_one({"status": {"$in": active_statuses}}, {"_id": 0})
+async def get_active(request: Request):
+    """Return the authenticated driver's current active order.
+
+    Filters by the driver bound to the order so a driver only ever sees
+    their own in-progress job. Legacy orders with no driver_id remain
+    visible for backward compatibility.
+    """
+    driver_id = await get_optional_driver_id(request)
+    query: dict = {"status": {"$in": list(sm.ACTIVE_STATES)}}
+    if driver_id:
+        query["driver_id"] = {"$in": [driver_id, None]}
+    order = await db.orders.find_one(query, {"_id": 0})
     if not order:
         return None
     return Order(**order)
@@ -1340,23 +1381,71 @@ async def get_history(request: Request):
 
 
 @api_router.post("/orders/{order_id}/accept", response_model=Order)
-async def accept_order(order_id: str):
+async def accept_order(order_id: str, request: Request):
+    """Atomically claim a pending order for the authenticated driver.
+
+    Uses a conditional update on `status == pending` so two drivers can never
+    accept the same job (race-safe). Idempotent: a driver re-accepting their
+    own order gets a 200; a driver accepting a job already claimed by someone
+    else gets a 409 Conflict.
+    """
+    driver_id = await get_optional_driver_id(request)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
-    if order["status"] != "pending":
-        raise HTTPException(400, "Order not in pending state")
-    await db.orders.update_one({"id": order_id}, {"$set": {"status": "accepted"}})
-    order["status"] = "accepted"
+
+    current = order["status"]
+
+    # Idempotent replay / conflict detection for already-claimed orders.
+    if current in sm.ACTIVE_STATES:
+        existing_driver = order.get("driver_id")
+        if driver_id and existing_driver and existing_driver == driver_id:
+            return Order(**order)  # this driver already owns it
+        if existing_driver and driver_id and existing_driver != driver_id:
+            raise HTTPException(409, "Order already accepted by another driver")
+        # legacy active order with no bound driver -> allow claim below isn't
+        # possible (status no longer pending); just return as-is to be safe.
+        return Order(**order)
+
+    if not sm.can_transition(current, sm.ACCEPTED):
+        raise HTTPException(400, f"Order not in pending state (current: {current})")
+
+    set_fields: dict = {"status": sm.ACCEPTED}
+    if driver_id:
+        set_fields["driver_id"] = driver_id
+
+    # Atomic claim: only succeeds if the order is still pending.
+    result = await db.orders.update_one(
+        {"id": order_id, "status": "pending"}, {"$set": set_fields}
+    )
+    if result.modified_count == 0:
+        fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
+        if fresh and fresh.get("driver_id") == driver_id:
+            return Order(**fresh)
+        raise HTTPException(409, "Order already accepted by another driver")
+
+    order.update(set_fields)
+    await audit.record_event(
+        db, order_id, "status_change",
+        from_status=current, to_status=sm.ACCEPTED,
+        actor_id=driver_id, actor_type="driver",
+    )
     return Order(**order)
 
 
 @api_router.post("/orders/{order_id}/reject", response_model=Order)
-async def reject_order(order_id: str):
+async def reject_order(order_id: str, request: Request):
+    driver_id = await get_optional_driver_id(request)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
+    current = order["status"]
     await db.orders.update_one({"id": order_id}, {"$set": {"status": "rejected"}})
+    await audit.record_event(
+        db, order_id, "rejected",
+        from_status=current, to_status="rejected",
+        actor_id=driver_id, actor_type="driver",
+    )
     # generate a fresh pending order so the demo continues
     await db.orders.insert_one(build_order("pending"))
     order["status"] = "rejected"
@@ -1364,27 +1453,61 @@ async def reject_order(order_id: str):
 
 
 @api_router.post("/orders/{order_id}/advance", response_model=Order)
-async def advance_order(order_id: str, body: AdvanceRequest):
+async def advance_order(order_id: str, body: AdvanceRequest, request: Request):
+    """Advance an order through its lifecycle, validated by the state machine.
+
+    - Rejects illegal transitions (e.g. pending -> delivered) with 400.
+    - Idempotent: requesting the current status returns the order unchanged.
+    - Credits the AUTHENTICATED driver on delivery (fixes the legacy bug that
+      always credited a hardcoded driver id).
+    """
+    driver_id = await get_optional_driver_id(request)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
+
     current = order["status"]
-    next_status = body.next_status or ADVANCE_FLOW.get(current)
-    if not next_status:
-        raise HTTPException(400, f"Cannot advance from {current}")
+
+    # Idempotent: already at requested state -> no-op.
+    if body.next_status and body.next_status == current:
+        return Order(**order)
+
+    try:
+        next_status = sm.resolve_target(current, body.next_status)
+    except sm.InvalidTransition as exc:
+        raise HTTPException(400, str(exc))
+
     update: dict = {"status": next_status}
-    if next_status == "delivered":
+    if next_status == sm.DELIVERED:
         update["completed_at"] = datetime.now(timezone.utc).isoformat()
-        # increment driver earnings & deliveries
+        # Credit the authenticated driver, falling back to the order's bound
+        # driver, then the legacy demo driver as a last resort.
+        credit_driver_id = driver_id or order.get("driver_id") or DRIVER_ID
         await db.drivers.update_one(
-            {"id": DRIVER_ID},
+            {"id": credit_driver_id},
             {"$inc": {"earnings_today": order["earnings"] + order.get("tip", 0), "deliveries_today": 1}},
         )
         # seed a fresh pending request to keep the demo flowing
         await db.orders.insert_one(build_order("pending"))
+
     await db.orders.update_one({"id": order_id}, {"$set": update})
     order.update(update)
+    await audit.record_event(
+        db, order_id, "status_change",
+        from_status=current, to_status=next_status,
+        actor_id=driver_id, actor_type="driver",
+    )
     return Order(**order)
+
+
+@api_router.get("/orders/{order_id}/events")
+async def get_order_events(order_id: str):
+    """Return the immutable audit timeline for an order (status changes etc.)."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "order_number": 1, "status": 1})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    events = await audit.get_events(db, order_id)
+    return {"order_id": order_id, "current_status": order.get("status"), "events": events}
 
 
 @api_router.post("/orders/{order_id}/rate", response_model=Order)
@@ -2301,9 +2424,15 @@ async def get_price_quote(request: PriceQuoteRequest):
 @api_router.post("/shipper/shipments")
 async def create_shipment(
     request: ShipmentCreateRequest,
+    http_request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Create a new shipment order."""
+    """Create a new shipment order.
+
+    Supports an optional `Idempotency-Key` header so a retried request (e.g.
+    after a flaky mobile network) replays the original result instead of
+    creating a duplicate job.
+    """
     if not credentials:
         raise HTTPException(401, "Authentication required")
     
@@ -2312,6 +2441,14 @@ async def create_shipment(
         raise HTTPException(403, "Shipper access required")
     
     shipper_id = payload["sub"]
+
+    # Idempotency: replay the stored response if this key was already used.
+    idem_key = idempotency.extract_key(http_request)
+    if idem_key:
+        existing = await idempotency.get_existing(db, idem_key, scope=f"shipment:{shipper_id}")
+        if existing and existing.get("response"):
+            return existing["response"]
+
     shipper = await db.shippers.find_one({"id": shipper_id}, {"_id": 0})
     if not shipper:
         raise HTTPException(404, "Shipper not found")
@@ -2395,7 +2532,15 @@ async def create_shipment(
     )
     
     logger.info(f"Shipper {shipper_id} created shipment {order_id}")
-    
+
+    # Audit trail: record order creation.
+    await audit.record_event(
+        db, order_id, "order_created",
+        from_status=None, to_status="pending",
+        actor_id=shipper_id, actor_type="shipper",
+        metadata={"vehicle_type": request.vehicle_type, "price": round(total_price, 2)},
+    )
+
     # Send push notification to online drivers with matching vehicle type
     asyncio.create_task(notify_available_drivers(
         order_id=order_id,
@@ -2405,7 +2550,7 @@ async def create_shipment(
         earnings=driver_earnings,
     ))
     
-    return {
+    response = {
         "order_id": order_id,
         "order_number": order_number,
         "status": "pending",
@@ -2416,6 +2561,11 @@ async def create_shipment(
         "estimated_duration_minutes": new_order.eta_minutes,
         "message": "Shipment created successfully! Waiting for driver assignment."
     }
+
+    # Persist idempotent response for safe client retries.
+    await idempotency.store(db, idem_key, scope=f"shipment:{shipper_id}", response=response)
+
+    return response
 
 
 @api_router.get("/shipper/shipments")
