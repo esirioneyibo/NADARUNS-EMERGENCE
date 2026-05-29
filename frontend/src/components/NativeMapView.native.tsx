@@ -78,11 +78,22 @@ export default function NativeMapView({
         });
 
         if (isMounted) {
-          setUserLocation({
+          const newLocation = {
             lat: currentLocation.coords.latitude,
             lng: currentLocation.coords.longitude,
-          });
+          };
+          setUserLocation(newLocation);
           setIsLoading(false);
+          
+          // Animate map to user's location with 50km radius view
+          setTimeout(() => {
+            mapRef.current?.animateToRegion({
+              latitude: newLocation.lat,
+              longitude: newLocation.lng,
+              latitudeDelta: 0.45,
+              longitudeDelta: 0.45,
+            }, 1000);
+          }, 500);
         }
 
         // Subscribe to location updates
@@ -163,11 +174,12 @@ export default function NativeMapView({
   }, [pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng, routePoints?.length, userLocation?.lat]);
 
   // Initial region - prefer user location, then pickup, then Helsinki center
+  // latitudeDelta of 0.45 gives approximately 50km view radius
   const initialRegion = userLocation
-    ? { latitude: userLocation.lat, longitude: userLocation.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 }
+    ? { latitude: userLocation.lat, longitude: userLocation.lng, latitudeDelta: 0.45, longitudeDelta: 0.45 }
     : pickupLL
-      ? { latitude: pickupLL.latitude, longitude: pickupLL.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }
-      : { latitude: 60.1699, longitude: 24.9384, latitudeDelta: 0.1, longitudeDelta: 0.1 }; // Helsinki center
+      ? { latitude: pickupLL.latitude, longitude: pickupLL.longitude, latitudeDelta: 0.45, longitudeDelta: 0.45 }
+      : { latitude: 60.1699, longitude: 24.9384, latitudeDelta: 0.45, longitudeDelta: 0.45 }; // Helsinki center
 
   return (
     <View style={styles.container} testID="map-view">

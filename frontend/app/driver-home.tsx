@@ -215,14 +215,19 @@ export default function HomeScreen() {
     };
   }, [driver?.id, router, load]);
 
-  // Auto-poll for pending order AND active order while online
+  // Auto-poll for pending order AND active order AND available orders while online
   useEffect(() => {
     if (!driver?.is_online) return;
     const id = setInterval(async () => {
       try {
-        const [p, a] = await Promise.all([api.getPending(), api.getActive()]);
+        const [p, a, available] = await Promise.all([
+          api.getPending(), 
+          api.getActive(),
+          api.getAvailableOrders(),
+        ]);
         setPending(p);
         setActive(a);
+        setAvailableOrders(available || []);
       } catch {}
     }, 4000);
     return () => clearInterval(id);
