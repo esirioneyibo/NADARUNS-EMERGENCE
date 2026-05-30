@@ -188,6 +188,9 @@ function TabsNavigator() {
         <Tabs.Screen name="shipper-login" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="shipper-tracking" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="admin" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="driver-edit" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="driver-vehicles" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="shipper-edit" options={{ href: null, tabBarStyle: { display: "none" } }} />
       </Tabs>
     </>
   );

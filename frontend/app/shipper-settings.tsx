@@ -275,82 +275,38 @@ export default function ShipperSettingsScreen() {
           </View>
         </Animated.View>
 
-        {/* Company Info Section */}
-        <Animated.View entering={FadeInUp.delay(100)}>
-          <Text style={styles.sectionTitle}>Company Information</Text>
+        {/* Account */}
+        <Animated.View entering={FadeInUp.delay(90)}>
+          <Text style={styles.sectionTitle}>Account</Text>
           <View style={[styles.card, shadows.sm]}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Company Name</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="business-outline" size={18} color={theme.textSecondary} />
-                <TextInput
-                  style={styles.input}
-                  value={companyName}
-                  onChangeText={setCompanyName}
-                  placeholder="Your company name"
-                  placeholderTextColor={theme.textSecondary}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Contact Name</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="person-outline" size={18} color={theme.textSecondary} />
-                <TextInput
-                  style={styles.input}
-                  value={contactName}
-                  onChangeText={setContactName}
-                  placeholder="Your name"
-                  placeholderTextColor={theme.textSecondary}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Phone</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="call-outline" size={18} color={theme.textSecondary} />
-                <TextInput
-                  style={styles.input}
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder="+358..."
-                  placeholderTextColor={theme.textSecondary}
-                  keyboardType="phone-pad"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Business Address</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="location-outline" size={18} color={theme.textSecondary} />
-                <TextInput
-                  style={styles.input}
-                  value={address}
-                  onChangeText={setAddress}
-                  placeholder="Your business address"
-                  placeholderTextColor={theme.textSecondary}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Tax ID / VAT Number</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="document-text-outline" size={18} color={theme.textSecondary} />
-                <TextInput
-                  style={styles.input}
-                  value={taxId}
-                  onChangeText={setTaxId}
-                  placeholder="FI12345678"
-                  placeholderTextColor={theme.textSecondary}
-                  autoCapitalize="characters"
-                />
-              </View>
-            </View>
+            <TouchableOpacity style={styles.accountRow} onPress={() => router.push("/shipper-edit")}>
+              <Ionicons name="create-outline" size={20} color={theme.textSecondary} />
+              <Text style={styles.accountRowLabel}>Edit profile</Text>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.accountRow} onPress={() => router.push("/shipper-edit")}>
+              <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} />
+              <Text style={styles.accountRowLabel}>Change password</Text>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
           </View>
+        </Animated.View>
+
+        {/* Company Info (read-only summary) */}
+        <Animated.View entering={FadeInUp.delay(110)}>
+          <Text style={styles.sectionTitle}>Company Information</Text>
+          <TouchableOpacity activeOpacity={0.8} style={[styles.card, shadows.sm]} onPress={() => router.push("/shipper-edit")}>
+            <SummaryRow icon="business-outline" label="Company" value={companyName || "—"} theme={theme} />
+            <View style={styles.divider} />
+            <SummaryRow icon="person-outline" label="Contact" value={contactName || "—"} theme={theme} />
+            <View style={styles.divider} />
+            <SummaryRow icon="call-outline" label="Phone" value={phone || "—"} theme={theme} />
+            <View style={styles.divider} />
+            <SummaryRow icon="location-outline" label="Address" value={address || "—"} theme={theme} />
+            <View style={styles.divider} />
+            <SummaryRow icon="document-text-outline" label="Tax ID / VAT" value={taxId || "—"} theme={theme} />
+          </TouchableOpacity>
         </Animated.View>
 
         {/* Preferred Vehicle Section */}
@@ -455,6 +411,16 @@ export default function ShipperSettingsScreen() {
   );
 }
 
+function SummaryRow({ icon, label, value, theme }: any) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.md, gap: 12 }}>
+      <Ionicons name={icon} size={20} color={theme.textSecondary} />
+      <Text style={{ fontSize: 13, color: theme.textSecondary, fontWeight: "600", width: 92 }}>{label}</Text>
+      <Text style={{ flex: 1, fontSize: 15, color: theme.textPrimary, fontWeight: "600", textAlign: "right" }} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
 const createStyles = (theme: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
@@ -479,6 +445,13 @@ const createStyles = (theme: any) =>
       fontWeight: "700",
       color: theme.textPrimary,
     },
+    accountRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingVertical: spacing.md,
+    },
+    accountRowLabel: { flex: 1, fontSize: 15, fontWeight: "600", color: theme.textPrimary },
     profileCard: {
       backgroundColor: "#6366F1",
       borderRadius: radius.xxl,

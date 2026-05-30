@@ -446,11 +446,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "NadaRuns pricing engine: /api/shipper/quote + create with base+distance+weight+urgency+special+fuel, manual offer (tip)"
-    - "Available orders: no reseed on delivery (count shrinks) + proximity (lat/lng/radius_km) filtering"
-    - "Driver performance/earnings endpoint populated"
-    - "Shipper wizard: keyboard-aware layout, auto-advance focus, reset after submit, urgency + bonus UI"
-    - "Driver: new green clock map marker, jobs-nearby counter accuracy"
+    - "Multi-vehicle: POST/PATCH/DELETE /api/driver/vehicles, POST /vehicles/{id}/primary (primary mirrors top-level vehicle_type)"
+    - "Auth: POST /api/auth/change-password (driver & shipper, current-pw verify)"
+    - "Profile edit: PATCH /driver/me & /shipper/me incl. avatar"
+    - "Redesigned profile screens + new edit screens (driver-edit, shipper-edit) + driver-vehicles UI"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"

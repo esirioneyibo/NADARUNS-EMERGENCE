@@ -79,6 +79,15 @@ export interface NotificationPrefs {
   earnings_summary: boolean;
 }
 
+export interface Vehicle {
+  id: string;
+  vehicle_type: string;
+  label: string;
+  plate: string;
+  capacity_kg: number;
+  is_primary: boolean;
+}
+
 export interface Driver {
   id: string;
   name: string;
@@ -88,6 +97,7 @@ export interface Driver {
   vehicle_type: string;
   vehicle_capacity_kg: number;
   plate: string;
+  vehicles: Vehicle[];
   email: string;
   phone: string;
   is_online: boolean;
@@ -124,6 +134,7 @@ export interface DriverUpdate {
   plate?: string;
   email?: string;
   phone?: string;
+  avatar?: string;
   notifications?: NotificationPrefs;
 }
 

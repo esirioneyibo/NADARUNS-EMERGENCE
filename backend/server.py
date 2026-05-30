@@ -475,15 +475,25 @@ class NotificationPrefs(BaseModel):
     earnings_summary: bool = True
 
 
+class Vehicle(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    vehicle_type: str = "cargo_van"  # logistics vehicle type id
+    label: str = ""                   # display name e.g. "Cargo Van"
+    plate: str = ""
+    capacity_kg: int = 1500
+    is_primary: bool = False
+
+
 class Driver(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     rating: float
     avatar: str
     vehicle: str
-    vehicle_type: str = "cargo_van"  # Logistics vehicle type ID
-    vehicle_capacity_kg: int = 1500  # Vehicle capacity in kg
+    vehicle_type: str = "cargo_van"  # Logistics vehicle type ID (mirrors primary vehicle)
+    vehicle_capacity_kg: int = 1500  # Vehicle capacity in kg (mirrors primary vehicle)
     plate: str = ""
+    vehicles: List[Vehicle] = Field(default_factory=list)  # all vehicles owned by the driver
     email: str = ""
     phone: str = ""
     password_hash: Optional[str] = None  # hashed password
@@ -503,7 +513,15 @@ class DriverUpdate(BaseModel):
     plate: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    avatar: Optional[str] = None
     notifications: Optional[NotificationPrefs] = None
+
+
+class VehicleInput(BaseModel):
+    vehicle_type: str
+    plate: str = ""
+    capacity_kg: Optional[int] = None
+    make_primary: bool = False
 
 
 class RoutePoint(BaseModel):
@@ -1206,7 +1224,7 @@ async def get_driver(credentials: HTTPAuthorizationCredentials = Depends(securit
     driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
     if not driver:
         raise HTTPException(404, "Driver not found. Please register or login again.")
-    
+    driver = await _ensure_driver_vehicles(driver)  # migrate legacy single-vehicle records
     return Driver(**driver)
 
 
@@ -2263,7 +2281,184 @@ async def update_driver(update: DriverUpdate, request: Request):
     return Driver(**driver)
 
 
-# ===================== Driver Registration =====================
+# ===================== Driver Vehicles (multi-vehicle) =====================
+
+def _vehicle_label(vehicle_type: str) -> str:
+    info = VEHICLE_TYPES.get(vehicle_type)
+    return info["name"] if info else "Vehicle"
+
+
+def _default_capacity(vehicle_type: str) -> int:
+    info = VEHICLE_TYPES.get(vehicle_type)
+    return int(info.get("max_weight_kg", 1500)) if info else 1500
+
+
+async def _ensure_driver_vehicles(driver: dict) -> dict:
+    """Lazily migrate legacy single-vehicle drivers into the vehicles[] array."""
+    if driver.get("vehicles"):
+        return driver
+    vt = driver.get("vehicle_type", "cargo_van")
+    veh = {
+        "id": str(uuid.uuid4()),
+        "vehicle_type": vt,
+        "label": _vehicle_label(vt),
+        "plate": driver.get("plate", ""),
+        "capacity_kg": driver.get("vehicle_capacity_kg") or _default_capacity(vt),
+        "is_primary": True,
+    }
+    await db.drivers.update_one({"id": driver["id"]}, {"$set": {"vehicles": [veh]}})
+    driver["vehicles"] = [veh]
+    return driver
+
+
+async def _sync_primary_vehicle(driver_id: str, vehicles: list) -> dict:
+    """Persist vehicles[] and mirror the primary one into the driver's top-level
+    fields (vehicle_type/plate/capacity), which job-matching relies on."""
+    primary = next((v for v in vehicles if v.get("is_primary")), vehicles[0] if vehicles else None)
+    set_fields: dict = {"vehicles": vehicles}
+    if primary:
+        label = primary.get("label") or _vehicle_label(primary["vehicle_type"])
+        plate = primary.get("plate", "")
+        set_fields.update({
+            "vehicle_type": primary["vehicle_type"],
+            "vehicle_capacity_kg": primary.get("capacity_kg") or _default_capacity(primary["vehicle_type"]),
+            "plate": plate,
+            "vehicle": f"{label} • {plate}" if plate else label,
+        })
+    await db.drivers.update_one({"id": driver_id}, {"$set": set_fields})
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    return driver
+
+
+@api_router.post("/driver/vehicles", response_model=Driver)
+async def add_driver_vehicle(body: VehicleInput, request: Request):
+    """Add a vehicle to the authenticated driver's garage."""
+    driver_id = await get_current_driver_id(request)
+    if body.vehicle_type not in VEHICLE_TYPES:
+        raise HTTPException(400, f"Invalid vehicle type: {body.vehicle_type}")
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+    driver = await _ensure_driver_vehicles(driver)
+    vehicles = driver.get("vehicles", [])
+    new_vehicle = {
+        "id": str(uuid.uuid4()),
+        "vehicle_type": body.vehicle_type,
+        "label": _vehicle_label(body.vehicle_type),
+        "plate": body.plate or "",
+        "capacity_kg": body.capacity_kg or _default_capacity(body.vehicle_type),
+        "is_primary": body.make_primary or len(vehicles) == 0,
+    }
+    if new_vehicle["is_primary"]:
+        for v in vehicles:
+            v["is_primary"] = False
+    vehicles.append(new_vehicle)
+    driver = await _sync_primary_vehicle(driver_id, vehicles)
+    return Driver(**driver)
+
+
+@api_router.patch("/driver/vehicles/{vehicle_id}", response_model=Driver)
+async def update_driver_vehicle(vehicle_id: str, body: VehicleInput, request: Request):
+    """Update an existing vehicle (type/plate/capacity)."""
+    driver_id = await get_current_driver_id(request)
+    if body.vehicle_type not in VEHICLE_TYPES:
+        raise HTTPException(400, f"Invalid vehicle type: {body.vehicle_type}")
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+    driver = await _ensure_driver_vehicles(driver)
+    vehicles = driver.get("vehicles", [])
+    found = next((v for v in vehicles if v["id"] == vehicle_id), None)
+    if not found:
+        raise HTTPException(404, "Vehicle not found")
+    found["vehicle_type"] = body.vehicle_type
+    found["label"] = _vehicle_label(body.vehicle_type)
+    found["plate"] = body.plate or ""
+    found["capacity_kg"] = body.capacity_kg or _default_capacity(body.vehicle_type)
+    if body.make_primary:
+        for v in vehicles:
+            v["is_primary"] = v["id"] == vehicle_id
+    driver = await _sync_primary_vehicle(driver_id, vehicles)
+    return Driver(**driver)
+
+
+@api_router.post("/driver/vehicles/{vehicle_id}/primary", response_model=Driver)
+async def set_primary_vehicle(vehicle_id: str, request: Request):
+    """Mark a vehicle as the active/primary one used for job matching."""
+    driver_id = await get_current_driver_id(request)
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+    driver = await _ensure_driver_vehicles(driver)
+    vehicles = driver.get("vehicles", [])
+    if not any(v["id"] == vehicle_id for v in vehicles):
+        raise HTTPException(404, "Vehicle not found")
+    for v in vehicles:
+        v["is_primary"] = v["id"] == vehicle_id
+    driver = await _sync_primary_vehicle(driver_id, vehicles)
+    return Driver(**driver)
+
+
+@api_router.delete("/driver/vehicles/{vehicle_id}", response_model=Driver)
+async def delete_driver_vehicle(vehicle_id: str, request: Request):
+    """Remove a vehicle. The last remaining vehicle cannot be deleted."""
+    driver_id = await get_current_driver_id(request)
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+    driver = await _ensure_driver_vehicles(driver)
+    vehicles = driver.get("vehicles", [])
+    if len(vehicles) <= 1:
+        raise HTTPException(400, "You must keep at least one vehicle")
+    target = next((v for v in vehicles if v["id"] == vehicle_id), None)
+    if not target:
+        raise HTTPException(404, "Vehicle not found")
+    vehicles = [v for v in vehicles if v["id"] != vehicle_id]
+    # If we removed the primary, promote the first remaining one.
+    if target.get("is_primary") and vehicles:
+        vehicles[0]["is_primary"] = True
+    driver = await _sync_primary_vehicle(driver_id, vehicles)
+    return Driver(**driver)
+
+
+# ===================== Change Password (driver & shipper) =====================
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=1024)
+    new_password: str = Field(min_length=8, max_length=1024)
+
+
+@api_router.post("/auth/change-password", status_code=200)
+async def change_password(
+    body: ChangePasswordRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Authenticated password change for the current driver or shipper.
+
+    Verifies the current password against the stored bcrypt hash, then rehashes
+    and stores the new one. The collection is derived from the JWT role (never
+    the request body) to avoid cross-account changes.
+    """
+    user_type = user.get("type")
+    if user_type not in ("driver", "shipper"):
+        raise HTTPException(403, "Password change not supported for this account")
+
+    collection = db.drivers if user_type == "driver" else db.shippers
+    record = await collection.find_one({"id": user["id"]})
+    if not record:
+        raise HTTPException(404, "User not found")
+
+    stored = record.get("password_hash")
+    if not stored or not verify_password(body.current_password, stored):
+        raise HTTPException(400, "Current password is incorrect")
+
+    if body.new_password == body.current_password:
+        raise HTTPException(400, "New password must be different from the current one")
+
+    new_hash = hash_password(body.new_password)
+    await collection.update_one({"id": user["id"]}, {"$set": {"password_hash": new_hash}})
+    logger.info(f"Password changed for {user_type}: {user['id']}")
+    return {"status": "ok", "message": "Password updated successfully"}
 
 @api_router.post("/driver/register", response_model=RegistrationResponse)
 async def register_driver(registration: DriverRegistration):
@@ -2610,6 +2805,7 @@ class ShipperUpdate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     tax_id: Optional[str] = None
+    avatar: Optional[str] = None
     preferred_vehicle_type: Optional[str] = None
 
 

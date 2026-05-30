@@ -267,113 +267,31 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
 
-        {/* Personal info */}
-        <SectionTitle title="Personal info" theme={theme} />
+        {/* Account */}
+        <SectionTitle title="Account" theme={theme} />
         <Animated.View entering={FadeInUp.delay(140)} style={[styles.card, shadows.sm]}>
-          <InputRow
+          <LinkRow
             icon="person-outline"
-            label="Full name"
-            value={name}
-            onChangeText={setName}
-            onBlur={() => saveField({ name }, "name")}
-            saving={savingField === "name"}
-            testID="settings-name-input"
+            label="Edit profile"
+            testID="link-edit-profile"
+            onPress={() => router.push("/driver-edit")}
             theme={theme}
           />
           <Divider theme={theme} />
-          <InputRow
-            icon="mail-outline"
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            onBlur={() => saveField({ email }, "email")}
-            saving={savingField === "email"}
-            keyboardType="email-address"
-            testID="settings-email-input"
+          <LinkRow
+            icon="car-sport-outline"
+            label="My vehicles"
+            badge={`${driver.vehicles?.length || 1}`}
+            testID="link-vehicles"
+            onPress={() => router.push("/driver-vehicles")}
             theme={theme}
           />
           <Divider theme={theme} />
-          <InputRow
-            icon="call-outline"
-            label="Phone"
-            value={phone}
-            onChangeText={setPhone}
-            onBlur={() => saveField({ phone }, "phone")}
-            saving={savingField === "phone"}
-            keyboardType="phone-pad"
-            testID="settings-phone-input"
-            theme={theme}
-          />
-        </Animated.View>
-
-        {/* Vehicle */}
-        <SectionTitle title="Vehicle" theme={theme} />
-        <Animated.View entering={FadeInUp.delay(200)} style={[styles.card, shadows.sm]}>
-          {/* Current Vehicle Info */}
-          <View style={styles.currentVehicleInfo}>
-            <View style={styles.vehicleIconWrap}>
-              <Ionicons 
-                name={ALL_VEHICLES.find(v => v.id === vehicleType)?.icon || "bus-outline"} 
-                size={24} 
-                color={theme.primary} 
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.currentVehicleLabel}>
-                {ALL_VEHICLES.find(v => v.id === vehicleType)?.label || "Select Vehicle"}
-              </Text>
-              <Text style={styles.currentVehicleCapacity}>
-                Capacity: {vehicleCapacity.toLocaleString()} kg
-              </Text>
-            </View>
-            {savingField === "vehicle" && <ActivityIndicator size="small" color={theme.primary} />}
-          </View>
-          
-          <Divider theme={theme} />
-          
-          {/* Vehicle Selection by Category */}
-          <ScrollView 
-            horizontal={false} 
-            nestedScrollEnabled 
-            style={{ maxHeight: 200 }}
-            showsVerticalScrollIndicator={false}
-          >
-            {VEHICLE_CATEGORIES.map((category) => (
-              <View key={category.category} style={styles.vehicleCategory}>
-                <Text style={styles.vehicleCategoryTitle}>{category.category}</Text>
-                <View style={styles.vehicleGrid}>
-                  {category.vehicles.map((v) => {
-                    const selected = v.id === vehicleType;
-                    return (
-                      <TouchableOpacity
-                        key={v.id}
-                        style={[styles.vehicleTile, selected && { backgroundColor: theme.primary, borderColor: theme.primary }]}
-                        onPress={() => selectVehicle(v.id)}
-                        testID={`vehicle-${v.id}`}
-                      >
-                        <Ionicons name={v.icon} size={18} color={selected ? "#fff" : theme.textPrimary} />
-                        <Text style={[styles.vehicleLabel, selected && { color: "#fff" }]} numberOfLines={1}>{v.label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-          
-          <Divider theme={theme} />
-          <InputRow
-            icon="card-outline"
-            label="License plate"
-            value={plate}
-            onChangeText={setPlate}
-            onBlur={() => {
-              const label = ALL_VEHICLES.find((v) => v.id === vehicleType)?.label || "Cargo Van";
-              saveField({ plate, vehicle: `${label} • ${plate || "—"}` }, "plate");
-            }}
-            saving={savingField === "plate"}
-            autoCapitalize="characters"
-            testID="settings-plate-input"
+          <LinkRow
+            icon="lock-closed-outline"
+            label="Change password"
+            testID="link-password"
+            onPress={() => router.push("/driver-edit")}
             theme={theme}
           />
         </Animated.View>

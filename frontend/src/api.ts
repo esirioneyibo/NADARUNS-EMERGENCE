@@ -181,6 +181,30 @@ export const api = {
   updateDriver: (update: DriverUpdate) =>
     request<Driver>("/driver/me", { method: "PATCH", body: JSON.stringify(update) }),
   getDriverPerformance: () => request<DriverPerformance>("/driver/performance"),
+
+  // Driver vehicles (multi-vehicle garage)
+  addVehicle: (body: { vehicle_type: string; plate?: string; capacity_kg?: number; make_primary?: boolean }) =>
+    request<Driver>("/driver/vehicles", { method: "POST", body: JSON.stringify(body) }),
+  updateVehicle: (
+    id: string,
+    body: { vehicle_type: string; plate?: string; capacity_kg?: number; make_primary?: boolean }
+  ) => request<Driver>(`/driver/vehicles/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  setPrimaryVehicle: (id: string) =>
+    request<Driver>(`/driver/vehicles/${id}/primary`, { method: "POST" }),
+  deleteVehicle: (id: string) =>
+    request<Driver>(`/driver/vehicles/${id}`, { method: "DELETE" }),
+
+  // Shipper profile
+  getShipper: () => request<any>("/shipper/me"),
+  updateShipper: (update: Record<string, any>) =>
+    request<any>("/shipper/me", { method: "PATCH", body: JSON.stringify(update) }),
+
+  // Account: authenticated password change (driver or shipper)
+  changePassword: (current_password: string, new_password: string) =>
+    request<{ status: string; message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ current_password, new_password }),
+    }),
   
   // Orders
   getPending: () => request<Order | null>("/orders/pending"),
