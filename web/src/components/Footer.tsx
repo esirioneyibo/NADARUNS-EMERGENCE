@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { site } from "@/lib/site";
 
 export default function Footer() {
+  const pathname = usePathname();
+  if (pathname?.startsWith("/admin")) return null;
   const socials: { label: string; href: string }[] = [
     { label: "f", href: site.social.facebook },
     { label: "X", href: site.social.twitter },

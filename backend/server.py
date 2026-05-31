@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import random
+import re
 import httpx
 import jwt
 import bcrypt
@@ -371,6 +372,7 @@ class Shipper(BaseModel):
     is_verified: bool = False
     total_shipments: int = 0
     rating: float = 5.0
+    is_suspended: bool = False
 
 
 class ShipperRegistration(BaseModel):
@@ -503,6 +505,8 @@ class Driver(BaseModel):
     acceptance_rate: float = 96.0
     completion_rate: float = 98.0
     notifications: NotificationPrefs = Field(default_factory=NotificationPrefs)
+    is_suspended: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class DriverUpdate(BaseModel):
@@ -1246,6 +1250,8 @@ async def toggle_online(credentials: HTTPAuthorizationCredentials = Depends(secu
         raise HTTPException(404, "Driver not found")
     
     new_state = not driver["is_online"]
+    if new_state and driver.get("is_suspended"):
+        raise HTTPException(403, "Your account is suspended. Please contact support.")
     await db.drivers.update_one({"id": driver_id}, {"$set": {"is_online": new_state}})
     driver["is_online"] = new_state
     
@@ -2927,6 +2933,9 @@ async def create_shipment(
     shipper = await db.shippers.find_one({"id": shipper_id}, {"_id": 0})
     if not shipper:
         raise HTTPException(404, "Shipper not found")
+
+    if shipper.get("is_suspended"):
+        raise HTTPException(403, "Your account is suspended. Please contact support.")
     
     # Validate vehicle type
     vehicle = VEHICLE_TYPES.get(request.vehicle_type)
@@ -3723,6 +3732,483 @@ async def get_admin_shippers(user: dict = Depends(get_admin_user)):
             "total_orders": order_count,
         })
     return shippers
+
+
+# ===================== Admin: world-class management API =====================
+
+def _admin_driver_row(d: dict) -> dict:
+    vehicles = d.get("vehicles", []) or []
+    vcount = len(vehicles) if vehicles else (1 if d.get("vehicle_type") else 0)
+    return {
+        "id": d.get("id"),
+        "name": d.get("name", ""),
+        "email": d.get("email", ""),
+        "phone": d.get("phone", ""),
+        "avatar": d.get("avatar", ""),
+        "is_online": d.get("is_online", False),
+        "is_suspended": d.get("is_suspended", False),
+        "rating": round(float(d.get("rating", 5.0) or 0), 2),
+        "acceptance_rate": d.get("acceptance_rate", 0),
+        "completion_rate": d.get("completion_rate", 0),
+        "vehicle_type": d.get("vehicle_type", ""),
+        "vehicles_count": vcount,
+        "earnings_today": round(float(d.get("earnings_today", 0.0) or 0), 2),
+        "deliveries_today": d.get("deliveries_today", 0),
+        "created_at": d.get("created_at"),
+    }
+
+
+def _admin_shipper_row(s: dict, order_count: int) -> dict:
+    return {
+        "id": s.get("id"),
+        "company_name": s.get("company_name", ""),
+        "contact_name": s.get("contact_name", ""),
+        "email": s.get("email", ""),
+        "phone": s.get("phone", ""),
+        "avatar": s.get("avatar", ""),
+        "address": s.get("address", ""),
+        "tax_id": s.get("tax_id", ""),
+        "is_suspended": s.get("is_suspended", False),
+        "is_verified": s.get("is_verified", False),
+        "total_orders": order_count,
+        "rating": round(float(s.get("rating", 5.0) or 0), 2),
+        "created_at": s.get("created_at"),
+    }
+
+
+def _addr(point) -> str:
+    if isinstance(point, dict):
+        return point.get("address") or point.get("name") or ""
+    return ""
+
+
+def _admin_order_row(o: dict) -> dict:
+    return {
+        "id": o.get("id"),
+        "order_number": o.get("order_number", ""),
+        "status": o.get("status", ""),
+        "vehicle_type": o.get("vehicle_type", ""),
+        "cargo_weight_kg": o.get("cargo_weight_kg"),
+        "distance_km": round(float(o.get("distance_km", 0) or 0), 1),
+        "earnings": round(float(o.get("earnings", 0.0) or 0), 2),
+        "price_quote": o.get("price_quote"),
+        "tip": round(float(o.get("tip", 0.0) or 0), 2),
+        "driver_id": o.get("driver_id"),
+        "shipper_id": o.get("shipper_id"),
+        "pickup": _addr(o.get("pickup")),
+        "dropoff": _addr(o.get("dropoff")),
+        "created_at": o.get("created_at"),
+        "completed_at": o.get("completed_at"),
+    }
+
+
+@api_router.get("/admin/overview")
+async def admin_overview(user: dict = Depends(get_admin_user)):
+    """Rich analytics for the admin dashboard: KPIs, time-series & breakdowns."""
+    now = datetime.now(timezone.utc)
+    days = 14
+    since = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    since_iso = since.isoformat()
+
+    total_drivers = await db.drivers.count_documents({})
+    active_drivers = await db.drivers.count_documents({"is_online": True})
+    suspended_drivers = await db.drivers.count_documents({"is_suspended": True})
+    total_shippers = await db.shippers.count_documents({})
+    suspended_shippers = await db.shippers.count_documents({"is_suspended": True})
+    total_orders = await db.orders.count_documents({})
+    pending_orders = await db.orders.count_documents({"status": "pending"})
+    delivered_orders = await db.orders.count_documents({"status": "delivered"})
+    cancelled_orders = await db.orders.count_documents({"status": "cancelled"})
+    in_progress = await db.orders.count_documents(
+        {"status": {"$nin": ["pending", "delivered", "cancelled", "rejected"]}}
+    )
+    try:
+        pending_kyc = await db.kyc_status.count_documents({"overall_status": "pending"})
+    except Exception:
+        pending_kyc = 0
+
+    rev = await db.orders.aggregate([
+        {"$match": {"status": "delivered"}},
+        {"$group": {"_id": None, "total": {"$sum": "$earnings"}, "tips": {"$sum": "$tip"}}},
+    ]).to_list(1)
+    total_revenue = round(float(rev[0]["total"]), 2) if rev else 0.0
+    total_tips = round(float(rev[0].get("tips", 0.0) or 0), 2) if rev else 0.0
+
+    status_rows = await db.orders.aggregate([
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+    ]).to_list(50)
+    orders_by_status = {r["_id"]: r["count"] for r in status_rows if r.get("_id")}
+
+    veh_rows = await db.orders.aggregate([
+        {"$match": {"vehicle_type": {"$ne": None}}},
+        {"$group": {"_id": "$vehicle_type", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]).to_list(50)
+    orders_by_vehicle = [{"vehicle_type": r["_id"], "count": r["count"]} for r in veh_rows if r.get("_id")]
+
+    day_keys = [(since + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+    del_rows = {r["_id"]: r for r in await db.orders.aggregate([
+        {"$match": {"status": "delivered", "completed_at": {"$gte": since_iso}}},
+        {"$group": {"_id": {"$substr": ["$completed_at", 0, 10]},
+                    "deliveries": {"$sum": 1}, "revenue": {"$sum": "$earnings"}}},
+    ]).to_list(1000)}
+    new_rows = {r["_id"]: r["count"] for r in await db.orders.aggregate([
+        {"$match": {"created_at": {"$gte": since_iso}}},
+        {"$group": {"_id": {"$substr": ["$created_at", 0, 10]}, "count": {"$sum": 1}}},
+    ]).to_list(1000)}
+    series = []
+    for k in day_keys:
+        dr = del_rows.get(k, {})
+        series.append({
+            "date": k,
+            "deliveries": dr.get("deliveries", 0),
+            "revenue": round(float(dr.get("revenue", 0.0) or 0), 2),
+            "new_orders": new_rows.get(k, 0),
+        })
+
+    top_rows = await db.orders.aggregate([
+        {"$match": {"status": "delivered", "driver_id": {"$ne": None}}},
+        {"$group": {"_id": "$driver_id", "deliveries": {"$sum": 1}, "earnings": {"$sum": "$earnings"}}},
+        {"$sort": {"deliveries": -1}},
+        {"$limit": 5},
+    ]).to_list(5)
+    top_drivers = []
+    for r in top_rows:
+        d = await db.drivers.find_one({"id": r["_id"]}, {"_id": 0, "name": 1, "avatar": 1})
+        top_drivers.append({
+            "driver_id": r["_id"],
+            "name": (d or {}).get("name", "Unknown"),
+            "avatar": (d or {}).get("avatar", ""),
+            "deliveries": r["deliveries"],
+            "earnings": round(float(r["earnings"]), 2),
+        })
+
+    recent = []
+    async for o in db.orders.find({}, {"_id": 0}).sort("created_at", -1).limit(8):
+        recent.append(_admin_order_row(o))
+
+    return {
+        "kpis": {
+            "total_drivers": total_drivers,
+            "active_drivers": active_drivers,
+            "suspended_drivers": suspended_drivers,
+            "total_shippers": total_shippers,
+            "suspended_shippers": suspended_shippers,
+            "total_orders": total_orders,
+            "pending_orders": pending_orders,
+            "in_progress_orders": in_progress,
+            "delivered_orders": delivered_orders,
+            "cancelled_orders": cancelled_orders,
+            "pending_kyc": pending_kyc,
+            "total_revenue": total_revenue,
+            "total_tips": total_tips,
+        },
+        "orders_by_status": orders_by_status,
+        "orders_by_vehicle": orders_by_vehicle,
+        "series": series,
+        "top_drivers": top_drivers,
+        "recent_orders": recent,
+    }
+
+
+# ---------- Drivers management ----------
+
+@api_router.get("/admin/manage/drivers")
+async def admin_list_drivers(
+    user: dict = Depends(get_admin_user),
+    search: str = "",
+    status: str = "all",
+    page: int = 1,
+    limit: int = 20,
+):
+    query: dict = {}
+    if search:
+        rx = {"$regex": re.escape(search), "$options": "i"}
+        query["$or"] = [{"name": rx}, {"email": rx}, {"phone": rx}, {"plate": rx}]
+    if status == "online":
+        query["is_online"] = True
+    elif status == "offline":
+        query["is_online"] = False
+    elif status == "suspended":
+        query["is_suspended"] = True
+    page = max(1, page)
+    limit = max(1, min(limit, 100))
+    total = await db.drivers.count_documents(query)
+    items = []
+    cursor = db.drivers.find(query, {"_id": 0, "password_hash": 0}).sort("name", 1).skip((page - 1) * limit).limit(limit)
+    async for d in cursor:
+        items.append(_admin_driver_row(d))
+    return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+@api_router.get("/admin/manage/drivers/{driver_id}")
+async def admin_driver_detail(driver_id: str, user: dict = Depends(get_admin_user)):
+    d = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "password_hash": 0})
+    if not d:
+        raise HTTPException(404, "Driver not found")
+    orders = []
+    async for o in db.orders.find({"driver_id": driver_id}, {"_id": 0}).sort("created_at", -1).limit(20):
+        orders.append(_admin_order_row(o))
+    delivered = await db.orders.count_documents({"driver_id": driver_id, "status": "delivered"})
+    total_assigned = await db.orders.count_documents({"driver_id": driver_id})
+    er = await db.orders.aggregate([
+        {"$match": {"driver_id": driver_id, "status": "delivered"}},
+        {"$group": {"_id": None, "total": {"$sum": "$earnings"}}},
+    ]).to_list(1)
+    lifetime_earnings = round(float(er[0]["total"]), 2) if er else 0.0
+    return {
+        "driver": d,
+        "vehicles": d.get("vehicles", []),
+        "recent_orders": orders,
+        "stats": {"delivered": delivered, "total_assigned": total_assigned, "lifetime_earnings": lifetime_earnings},
+    }
+
+
+class AdminDriverUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    vehicle_type: Optional[str] = None
+    plate: Optional[str] = None
+
+
+@api_router.patch("/admin/manage/drivers/{driver_id}")
+async def admin_update_driver(driver_id: str, body: AdminDriverUpdate, user: dict = Depends(get_admin_user)):
+    patch = body.model_dump(exclude_none=True)
+    if not patch:
+        raise HTTPException(400, "No fields to update")
+    res = await db.drivers.update_one({"id": driver_id}, {"$set": patch})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Driver not found")
+    d = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "password_hash": 0})
+    return _admin_driver_row(d)
+
+
+@api_router.post("/admin/manage/drivers/{driver_id}/suspend")
+async def admin_suspend_driver(driver_id: str, user: dict = Depends(get_admin_user)):
+    res = await db.drivers.update_one({"id": driver_id}, {"$set": {"is_suspended": True, "is_online": False}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Driver not found")
+    return {"status": "suspended", "driver_id": driver_id}
+
+
+@api_router.post("/admin/manage/drivers/{driver_id}/activate")
+async def admin_activate_driver(driver_id: str, user: dict = Depends(get_admin_user)):
+    res = await db.drivers.update_one({"id": driver_id}, {"$set": {"is_suspended": False}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Driver not found")
+    return {"status": "active", "driver_id": driver_id}
+
+
+# ---------- Shippers management ----------
+
+@api_router.get("/admin/manage/shippers")
+async def admin_list_shippers(
+    user: dict = Depends(get_admin_user),
+    search: str = "",
+    status: str = "all",
+    page: int = 1,
+    limit: int = 20,
+):
+    query: dict = {}
+    if search:
+        rx = {"$regex": re.escape(search), "$options": "i"}
+        query["$or"] = [{"company_name": rx}, {"contact_name": rx}, {"email": rx}, {"phone": rx}]
+    if status == "suspended":
+        query["is_suspended"] = True
+    elif status == "verified":
+        query["is_verified"] = True
+    page = max(1, page)
+    limit = max(1, min(limit, 100))
+    total = await db.shippers.count_documents(query)
+    items = []
+    cursor = db.shippers.find(query, {"_id": 0, "password_hash": 0}).sort("company_name", 1).skip((page - 1) * limit).limit(limit)
+    async for s in cursor:
+        oc = await db.orders.count_documents({"shipper_id": s["id"]})
+        items.append(_admin_shipper_row(s, oc))
+    return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+@api_router.get("/admin/manage/shippers/{shipper_id}")
+async def admin_shipper_detail(shipper_id: str, user: dict = Depends(get_admin_user)):
+    s = await db.shippers.find_one({"id": shipper_id}, {"_id": 0, "password_hash": 0})
+    if not s:
+        raise HTTPException(404, "Shipper not found")
+    orders = []
+    async for o in db.orders.find({"shipper_id": shipper_id}, {"_id": 0}).sort("created_at", -1).limit(20):
+        orders.append(_admin_order_row(o))
+    total_orders = await db.orders.count_documents({"shipper_id": shipper_id})
+    delivered = await db.orders.count_documents({"shipper_id": shipper_id, "status": "delivered"})
+    sp = await db.orders.aggregate([
+        {"$match": {"shipper_id": shipper_id, "status": "delivered"}},
+        {"$group": {"_id": None, "total": {"$sum": "$earnings"}}},
+    ]).to_list(1)
+    total_spend = round(float(sp[0]["total"]), 2) if sp else 0.0
+    return {
+        "shipper": s,
+        "recent_orders": orders,
+        "stats": {"total_orders": total_orders, "delivered": delivered, "total_spend": total_spend},
+    }
+
+
+class AdminShipperUpdate(BaseModel):
+    company_name: Optional[str] = None
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    tax_id: Optional[str] = None
+    is_verified: Optional[bool] = None
+
+
+@api_router.patch("/admin/manage/shippers/{shipper_id}")
+async def admin_update_shipper(shipper_id: str, body: AdminShipperUpdate, user: dict = Depends(get_admin_user)):
+    patch = body.model_dump(exclude_none=True)
+    if not patch:
+        raise HTTPException(400, "No fields to update")
+    res = await db.shippers.update_one({"id": shipper_id}, {"$set": patch})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Shipper not found")
+    s = await db.shippers.find_one({"id": shipper_id}, {"_id": 0, "password_hash": 0})
+    oc = await db.orders.count_documents({"shipper_id": shipper_id})
+    return _admin_shipper_row(s, oc)
+
+
+@api_router.post("/admin/manage/shippers/{shipper_id}/suspend")
+async def admin_suspend_shipper(shipper_id: str, user: dict = Depends(get_admin_user)):
+    res = await db.shippers.update_one({"id": shipper_id}, {"$set": {"is_suspended": True}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Shipper not found")
+    return {"status": "suspended", "shipper_id": shipper_id}
+
+
+@api_router.post("/admin/manage/shippers/{shipper_id}/activate")
+async def admin_activate_shipper(shipper_id: str, user: dict = Depends(get_admin_user)):
+    res = await db.shippers.update_one({"id": shipper_id}, {"$set": {"is_suspended": False}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Shipper not found")
+    return {"status": "active", "shipper_id": shipper_id}
+
+
+# ---------- Orders management ----------
+
+@api_router.get("/admin/manage/orders")
+async def admin_list_orders(
+    user: dict = Depends(get_admin_user),
+    search: str = "",
+    status: str = "all",
+    page: int = 1,
+    limit: int = 20,
+):
+    query: dict = {}
+    if status and status != "all":
+        query["status"] = status
+    if search:
+        rx = {"$regex": re.escape(search), "$options": "i"}
+        query["$or"] = [{"order_number": rx}, {"pickup.address": rx}, {"dropoff.address": rx}]
+    page = max(1, page)
+    limit = max(1, min(limit, 100))
+    total = await db.orders.count_documents(query)
+    items = []
+    cursor = db.orders.find(query, {"_id": 0}).sort("created_at", -1).skip((page - 1) * limit).limit(limit)
+    async for o in cursor:
+        items.append(_admin_order_row(o))
+    return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+@api_router.get("/admin/manage/orders/{order_id}")
+async def admin_order_detail(order_id: str, user: dict = Depends(get_admin_user)):
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    driver = None
+    if o.get("driver_id"):
+        driver = await db.drivers.find_one(
+            {"id": o["driver_id"]}, {"_id": 0, "id": 1, "name": 1, "phone": 1, "avatar": 1}
+        )
+    shipper = None
+    if o.get("shipper_id"):
+        shipper = await db.shippers.find_one(
+            {"id": o["shipper_id"]}, {"_id": 0, "id": 1, "company_name": 1, "contact_name": 1, "phone": 1}
+        )
+    events = []
+    try:
+        async for e in db.order_events.find({"order_id": order_id}, {"_id": 0}).sort("created_at", 1):
+            events.append(e)
+    except Exception:
+        events = []
+    return {"order": o, "driver": driver, "shipper": shipper, "events": events}
+
+
+@api_router.post("/admin/manage/orders/{order_id}/cancel")
+async def admin_cancel_order(order_id: str, user: dict = Depends(get_admin_user)):
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    if o.get("status") in ("delivered", "cancelled"):
+        raise HTTPException(400, f"Cannot cancel an order that is already {o.get('status')}")
+    await db.orders.update_one({"id": order_id}, {"$set": {"status": "cancelled"}})
+    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _admin_order_row(o2)
+
+
+class AdminReassignRequest(BaseModel):
+    driver_id: str
+
+
+@api_router.post("/admin/manage/orders/{order_id}/reassign")
+async def admin_reassign_order(order_id: str, body: AdminReassignRequest, user: dict = Depends(get_admin_user)):
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    d = await db.drivers.find_one({"id": body.driver_id}, {"_id": 0})
+    if not d:
+        raise HTTPException(404, "Driver not found")
+    await db.orders.update_one({"id": order_id}, {"$set": {"driver_id": body.driver_id}})
+    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _admin_order_row(o2)
+
+
+# ---------- Vehicles overview ----------
+
+@api_router.get("/admin/manage/vehicles")
+async def admin_list_vehicles(
+    user: dict = Depends(get_admin_user), search: str = "", vehicle_type: str = "all"
+):
+    """Flatten all vehicles across drivers into one admin list."""
+    rows = []
+    async for d in db.drivers.find({}, {"_id": 0, "password_hash": 0}):
+        vehicles = d.get("vehicles", []) or []
+        if not vehicles and d.get("vehicle_type"):
+            vehicles = [{
+                "id": str(d["id"]) + "-primary",
+                "vehicle_type": d.get("vehicle_type"),
+                "label": d.get("vehicle", ""),
+                "plate": d.get("plate", ""),
+                "capacity_kg": d.get("vehicle_capacity_kg", 0),
+                "is_primary": True,
+            }]
+        for v in vehicles:
+            if vehicle_type != "all" and v.get("vehicle_type") != vehicle_type:
+                continue
+            row = {
+                "id": v.get("id"),
+                "vehicle_type": v.get("vehicle_type"),
+                "label": v.get("label", ""),
+                "plate": v.get("plate", ""),
+                "capacity_kg": v.get("capacity_kg", 0),
+                "is_primary": v.get("is_primary", False),
+                "driver_id": d["id"],
+                "driver_name": d.get("name", ""),
+                "driver_suspended": d.get("is_suspended", False),
+            }
+            if search:
+                hay = f"{row['plate']} {row['label']} {row['driver_name']} {row['vehicle_type']}".lower()
+                if search.lower() not in hay:
+                    continue
+            rows.append(row)
+    return {"items": rows, "total": len(rows)}
+
 
 
 # ===================== Admin Dashboard HTML =====================

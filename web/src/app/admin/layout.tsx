@@ -1,14 +1,11 @@
+import "./admin.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Admin Dashboard - NadaRuns",
-  description: "NadaRuns Admin Dashboard - Manage drivers, KYC applications, and monitor platform statistics.",
+  title: "NadaRuns Admin",
+  robots: { index: false, follow: false },
 };
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return children;
 }

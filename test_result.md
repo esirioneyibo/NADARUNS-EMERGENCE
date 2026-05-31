@@ -446,10 +446,13 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Multi-vehicle: POST/PATCH/DELETE /api/driver/vehicles, POST /vehicles/{id}/primary (primary mirrors top-level vehicle_type)"
-    - "Auth: POST /api/auth/change-password (driver & shipper, current-pw verify)"
-    - "Profile edit: PATCH /driver/me & /shipper/me incl. avatar"
-    - "Redesigned profile screens + new edit screens (driver-edit, shipper-edit) + driver-vehicles UI"
+    - "Admin API: GET /admin/overview (KPIs, 14-day series, status/vehicle breakdown, top drivers, recent orders)"
+    - "Admin drivers: GET /admin/manage/drivers (search/filter/paginate), GET detail, PATCH edit, suspend/activate"
+    - "Admin shippers: GET /admin/manage/shippers, detail, PATCH, suspend/activate, verify toggle"
+    - "Admin orders: GET /admin/manage/orders (filter/paginate), detail, cancel, reassign driver"
+    - "Admin vehicles: GET /admin/manage/vehicles (flattened across drivers)"
+    - "Suspension enforcement: suspended driver cannot go online; suspended shipper cannot create shipment"
+    - "Web admin dashboard (Next.js /admin): login + all sections render & mutate"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
