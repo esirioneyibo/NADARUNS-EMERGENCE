@@ -24,6 +24,7 @@ from services import order_state_machine as sm
 from services import audit
 from services import idempotency
 from services import pricing
+from services import payments
 
 
 ROOT_DIR = Path(__file__).parent
@@ -240,6 +241,15 @@ class Order(BaseModel):
     scheduled_pickup: Optional[str] = None  # ISO datetime for scheduled pickups
     price_quote: Optional[float] = None  # Quoted price for shipper
     shipper_notes: Optional[str] = None
+    # ---- Payment / Stripe (auth -> capture) ----
+    payment_status: str = "unpaid"  # unpaid|pending|authorized|captured|payment_failed|refunded|canceled
+    stripe_payment_intent_id: Optional[str] = None
+    stripe_checkout_session_id: Optional[str] = None
+    payment_amount: Optional[float] = None      # total charged to the shipper (EUR)
+    commission_amount: Optional[float] = None   # platform commission (EUR)
+    driver_payout_amount: Optional[float] = None  # driver's share (EUR)
+    authorized_at: Optional[str] = None
+    captured_at: Optional[str] = None
 
 
 # ===================== Logistics Vehicle Types =====================
@@ -616,6 +626,48 @@ class WalletAccount(BaseModel):
 class PayoutRequest(BaseModel):
     amount: float
     method: str = "bank_transfer"
+
+
+# ===================== Payment / Withdrawal Models =====================
+
+class WithdrawalRequest(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    driver_id: str
+    driver_name: Optional[str] = None
+    amount: float
+    currency: str = "EUR"
+    method: str = "bank_transfer"  # bank_transfer | paypal | other
+    account_details: Optional[str] = None  # IBAN / PayPal email / note
+    status: Literal["pending", "approved", "paid", "rejected"] = "pending"
+    reference: Optional[str] = None  # external bank/PayPal reference once paid
+    note: Optional[str] = None
+    requested_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    processed_at: Optional[str] = None
+    processed_by: Optional[str] = None
+
+
+class WithdrawalCreate(BaseModel):
+    amount: float
+    method: str = "bank_transfer"
+    account_details: Optional[str] = None
+
+
+class WithdrawalPayBody(BaseModel):
+    reference: Optional[str] = None
+    note: Optional[str] = None
+
+
+class WithdrawalRejectBody(BaseModel):
+    reason: Optional[str] = None
+
+
+class CheckoutBody(BaseModel):
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
+
+
+class CaptureBody(BaseModel):
+    amount: Optional[float] = None  # optional partial capture (EUR)
 
 
 # ===================== Notification Models =====================
