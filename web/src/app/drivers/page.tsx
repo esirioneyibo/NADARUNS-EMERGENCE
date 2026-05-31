@@ -1,87 +1,69 @@
 import Link from "next/link";
-import { Bike, Clock, Wallet, Shield, CheckCircle, Star, ArrowRight, Smartphone, Calendar, TrendingUp } from "lucide-react";
+import AppBadges from "@/components/AppBadges";
+import { Clock, Banknote, Truck, Navigation, Bell, Headphones, ArrowRight, CheckCircle } from "lucide-react";
+
+export const metadata = {
+  title: "Drive with NadaRuns — Earn on your schedule",
+  description:
+    "Become a NadaRuns driver. Flexible hours, fast weekly pay, choose your vehicle and accept jobs near you with in-app navigation.",
+};
+
+const BENEFITS = [
+  { icon: Clock, cls: "feature-icon-green", title: "Flexible hours", desc: "Go online whenever it suits you. No shifts, no minimums — you’re always in control." },
+  { icon: Banknote, cls: "feature-icon-amber", title: "Keep more of every fare", desc: "Drivers keep up to 80% of the base price plus 100% of any shipper bonus." },
+  { icon: Truck, cls: "feature-icon-purple", title: "Use any vehicle", desc: "From a cargo van to a semi-truck — register multiple vehicles and switch your active one anytime." },
+  { icon: Navigation, cls: "feature-icon-green", title: "Built-in navigation", desc: "One-tap hand-off to Google, Apple or Waze for turn-by-turn directions." },
+  { icon: Bell, cls: "feature-icon-rose", title: "Instant job alerts", desc: "Distinct sounds and push notifications the moment a matching job appears nearby." },
+  { icon: Headphones, cls: "feature-icon-purple", title: "Real support", desc: "A team that has your back, plus in-app chat with shippers on every delivery." },
+];
+
+const STEPS = [
+  { n: "1", title: "Sign up", desc: "Create your driver account and add your vehicle details in minutes." },
+  { n: "2", title: "Go online", desc: "Open the app, go online, and see paid jobs on the map near you." },
+  { n: "3", title: "Accept & deliver", desc: "Swipe to accept, navigate to pickup, and complete the drop-off with OTP." },
+  { n: "4", title: "Get paid", desc: "Earnings land in your wallet — track today, this week and all-time." },
+];
+
+const REQUIREMENTS = [
+  "Valid driver’s licence for your vehicle class",
+  "Vehicle registration & insurance",
+  "Smartphone (iOS or Android)",
+  "Right to work in Finland",
+];
 
 export default function DriversPage() {
   return (
-    <div className="pt-16">
+    <div style={{ paddingTop: 72 }}>
       {/* Hero */}
-      <section className="py-20 bg-gradient-to-br from-emerald-50 to-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+      <section className="hero-gradient" style={{ padding: "90px 0" }}>
+        <div className="container">
+          <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
             <div>
-              <div className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
-                <Bike className="w-4 h-4" />
-                Now Hiring Drivers
-              </div>
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-                Earn Money on
-                <span className="text-emerald-600"> Your Schedule</span>
+              <div className="badge badge-green" style={{ marginBottom: 24 }}>🚚 For drivers</div>
+              <h1 style={{ fontSize: 50, fontWeight: 800, lineHeight: 1.1, color: "#111827", marginBottom: 18 }}>
+                Your vehicle.<br /><span className="gradient-text">Your schedule.</span><br />Your earnings.
               </h1>
-              <p className="text-xl text-gray-600 mb-8">
-                Join thousands of drivers earning great income with flexible hours.
-                Be your own boss and deliver when you want.
+              <p style={{ fontSize: 18, color: "#6B7280", lineHeight: 1.7, marginBottom: 32, maxWidth: 480 }}>
+                Turn your van or truck into income. Accept delivery jobs near you, navigate in one tap,
+                and keep the majority of every fare — with fast, transparent pay.
               </p>
-              <Link
-                href="/download"
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 transition-all btn-hover"
-              >
-                <Smartphone className="w-5 h-5" />
-                Download the App
-              </Link>
-              
-              {/* Earnings highlight */}
-              <div className="mt-12 p-6 bg-white rounded-2xl shadow-lg border border-gray-100">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center">
-                    <Wallet className="w-7 h-7 text-emerald-600" />
-                  </div>
-                  <div>
-                    <div className="text-3xl font-bold text-gray-900">€18-25/hr</div>
-                    <div className="text-gray-600">Average driver earnings</div>
-                  </div>
-                </div>
-              </div>
+              <AppBadges />
             </div>
-            
-            <div className="relative">
-              <div className="absolute -top-10 -right-10 w-64 h-64 bg-emerald-200 rounded-full blur-3xl opacity-30"></div>
-              <div className="relative bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-3xl p-8 text-white shadow-2xl">
-                <h3 className="text-xl font-bold mb-6">Your Week at a Glance</h3>
-                <div className="space-y-4">
-                  <div className="bg-white/10 backdrop-blur rounded-xl p-4">
-                    <div className="flex justify-between items-center">
-                      <span>Monday</span>
-                      <span className="font-semibold">€87.50</span>
-                    </div>
-                    <div className="w-full bg-white/20 rounded-full h-2 mt-2">
-                      <div className="bg-white rounded-full h-2 w-3/4"></div>
-                    </div>
+            <div className="hero-visual" style={{ display: "flex", justifyContent: "center" }}>
+              <div style={{ background: "#fff", borderRadius: 24, padding: 28, width: 320, boxShadow: "0 30px 60px -20px rgba(0,0,0,0.18)" }}>
+                <div style={{ fontSize: 13, color: "#10B981", fontWeight: 700, marginBottom: 6 }}>● Online · earning</div>
+                <div style={{ fontSize: 14, color: "#6B7280" }}>Today’s earnings</div>
+                <div style={{ fontSize: 44, fontWeight: 800, color: "#111827", margin: "4px 0 18px" }}>€128.50</div>
+                {[
+                  { o: "#A249K · Cargo Van", v: "€42.00" },
+                  { o: "#B871C · Box Truck", v: "€58.50" },
+                  { o: "#C034M · Cargo Van", v: "€28.00" },
+                ].map((r, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderTop: "1px solid #F3F4F6" }}>
+                    <span style={{ color: "#374151", fontSize: 14 }}>{r.o}</span>
+                    <span style={{ color: "#10B981", fontWeight: 700, fontSize: 14 }}>{r.v}</span>
                   </div>
-                  <div className="bg-white/10 backdrop-blur rounded-xl p-4">
-                    <div className="flex justify-between items-center">
-                      <span>Tuesday</span>
-                      <span className="font-semibold">€95.00</span>
-                    </div>
-                    <div className="w-full bg-white/20 rounded-full h-2 mt-2">
-                      <div className="bg-white rounded-full h-2 w-4/5"></div>
-                    </div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur rounded-xl p-4">
-                    <div className="flex justify-between items-center">
-                      <span>Wednesday</span>
-                      <span className="font-semibold">€72.00</span>
-                    </div>
-                    <div className="w-full bg-white/20 rounded-full h-2 mt-2">
-                      <div className="bg-white rounded-full h-2 w-2/3"></div>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-6 pt-6 border-t border-white/20">
-                  <div className="flex justify-between items-center">
-                    <span>This week total</span>
-                    <span className="text-2xl font-bold">€254.50</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
@@ -89,27 +71,36 @@ export default function DriversPage() {
       </section>
 
       {/* Benefits */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Why Drive with NadaRuns?</h2>
-            <p className="text-xl text-gray-600">Benefits that make a difference</p>
+      <section className="section" style={{ background: "#fff", paddingTop: 80, paddingBottom: 80 }}>
+        <div className="container">
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <h2 className="section-title" style={{ textAlign: "center" }}>Why drive with NadaRuns</h2>
+            <p className="section-subtitle">Everything you need to earn more, with less hassle.</p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              { icon: Clock, title: "Flexible Hours", desc: "Work when you want. No minimum hours, no pressure." },
-              { icon: Wallet, title: "Weekly Payouts", desc: "Get paid every Monday directly to your bank account." },
-              { icon: Shield, title: "Insurance Coverage", desc: "You're covered while making deliveries." },
-              { icon: Smartphone, title: "Easy-to-use App", desc: "Simple navigation, real-time updates, one-tap delivery." },
-              { icon: TrendingUp, title: "Earn More with Tips", desc: "Keep 100% of your tips from happy customers." },
-              { icon: Star, title: "Rewards Program", desc: "Earn bonuses for consistent high ratings and performance." },
-            ].map((benefit, i) => (
-              <div key={i} className="p-6 rounded-2xl border border-gray-100 hover:border-emerald-200 hover:shadow-lg transition-all">
-                <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mb-4">
-                  <benefit.icon className="w-6 h-6 text-emerald-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{benefit.title}</h3>
-                <p className="text-gray-600">{benefit.desc}</p>
+          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
+            {BENEFITS.map((b, i) => (
+              <div key={i} className="feature-card">
+                <div className={`feature-icon ${b.cls}`}><b.icon size={28} /></div>
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 10 }}>{b.title}</h3>
+                <p style={{ color: "#6B7280", lineHeight: 1.7 }}>{b.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="section" style={{ background: "#F9FAFB", paddingTop: 80, paddingBottom: 80 }}>
+        <div className="container">
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <h2 className="section-title" style={{ textAlign: "center" }}>Start earning in 4 steps</h2>
+          </div>
+          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }}>
+            {STEPS.map((s, i) => (
+              <div key={i} style={{ background: "#fff", borderRadius: 20, padding: 28, border: "1px solid #F3F4F6" }}>
+                <div style={{ width: 44, height: 44, borderRadius: 22, background: "linear-gradient(135deg, #10B981 0%, #6366F1 100%)", color: "#fff", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>{s.n}</div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{s.title}</h3>
+                <p style={{ color: "#6B7280", lineHeight: 1.6, fontSize: 15 }}>{s.desc}</p>
               </div>
             ))}
           </div>
@@ -117,102 +108,26 @@ export default function DriversPage() {
       </section>
 
       {/* Requirements */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+      <section className="section" style={{ background: "#fff", paddingTop: 72, paddingBottom: 72 }}>
+        <div className="container">
+          <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 56, alignItems: "center" }}>
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-6">What You Need to Start</h2>
-              <p className="text-gray-600 mb-8">
-                Getting started is easy. Here's what you need to become a NadaRuns driver.
-              </p>
-              <div className="space-y-4">
-                {[
-                  "Be at least 18 years old",
-                  "Have a valid driver's license or ID",
-                  "Own a bicycle, scooter, motorbike, or car",
-                  "Have a smartphone (iOS or Android)",
-                  "Pass a simple background check",
-                  "Complete KYC verification"
-                ].map((req, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <CheckCircle className="w-6 h-6 text-emerald-500 shrink-0" />
-                    <span className="text-gray-700">{req}</span>
+              <h2 style={{ fontSize: 34, fontWeight: 800, color: "#111827", marginBottom: 18 }}>What you’ll need</h2>
+              <div>
+                {REQUIREMENTS.map((r, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                    <CheckCircle size={22} color="#10B981" />
+                    <span style={{ fontSize: 16, color: "#374151" }}>{r}</span>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">How to Sign Up</h3>
-              <div className="space-y-6">
-                {[
-                  { step: "1", title: "Download the App", desc: "Available on iOS and Android" },
-                  { step: "2", title: "Create Account", desc: "Enter your basic information" },
-                  { step: "3", title: "Submit Documents", desc: "Upload your ID and vehicle info" },
-                  { step: "4", title: "Get Approved", desc: "Usually within 24-48 hours" },
-                  { step: "5", title: "Start Earning", desc: "Accept your first delivery!" },
-                ].map((item, i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="w-10 h-10 bg-emerald-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">
-                      {item.step}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900">{item.title}</div>
-                      <div className="text-gray-600 text-sm">{item.desc}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div style={{ background: "#F9FAFB", borderRadius: 24, padding: 40, textAlign: "center" }}>
+              <h3 style={{ fontSize: 24, fontWeight: 800, color: "#111827", marginBottom: 12 }}>Ready to roll?</h3>
+              <p style={{ color: "#6B7280", marginBottom: 24, lineHeight: 1.6 }}>Download the app and go online today.</p>
+              <div style={{ display: "flex", justifyContent: "center" }}><AppBadges /></div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Hear from Our Drivers</h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { name: "Mikko L.", earnings: "€850/week", text: "Finally, a platform that respects my time. I set my own hours and earn well." },
-              { name: "Aino R.", earnings: "€600/week", text: "Perfect for students! I deliver between classes and make great extra money." },
-              { name: "Jussi K.", earnings: "€1,200/week", text: "Full-time driver here. The support team is amazing and payouts are always on time." },
-            ].map((testimonial, i) => (
-              <div key={i} className="bg-emerald-50 rounded-2xl p-6">
-                <div className="flex gap-1 mb-4">
-                  {[...Array(5)].map((_, j) => (
-                    <Star key={j} className="w-5 h-5 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-                <p className="text-gray-700 mb-4">"{testimonial.text}"</p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-emerald-400 rounded-full"></div>
-                    <span className="font-semibold text-gray-900">{testimonial.name}</span>
-                  </div>
-                  <div className="text-emerald-600 font-bold">{testimonial.earnings}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-20 bg-emerald-600">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold text-white mb-6">Ready to Start Earning?</h2>
-          <p className="text-xl text-white/80 mb-8">
-            Join our community of drivers today. Sign up takes just 5 minutes.
-          </p>
-          <Link
-            href="/download"
-            className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-emerald-600 font-semibold rounded-xl hover:bg-gray-100 transition-all btn-hover"
-          >
-            <Smartphone className="w-5 h-5" />
-            Download the App
-          </Link>
         </div>
       </section>
     </div>

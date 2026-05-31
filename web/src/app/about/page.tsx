@@ -1,135 +1,112 @@
-import { Target, Heart, Globe, Award, Users, Zap } from "lucide-react";
+import Link from "next/link";
+import { Target, Heart, Leaf, ShieldCheck, Zap, Globe, ArrowRight } from "lucide-react";
+import { site } from "@/lib/site";
+
+export const metadata = {
+  title: "About NadaRuns — Moving Finland forward",
+  description:
+    "NadaRuns connects trusted drivers with businesses for fast, reliable deliveries across Finland. Learn about our mission, values and story.",
+};
+
+const STATS = [
+  { number: site.stats.deliveries, label: "Deliveries completed" },
+  { number: site.stats.drivers, label: "Active drivers" },
+  { number: site.stats.cities, label: "Cities served" },
+  { number: site.stats.rating, label: "Average rating" },
+];
+
+const VALUES = [
+  { icon: Target, cls: "feature-icon-green", title: "Reliability", desc: "Every delivery matters. We obsess over on-time pickups, accurate ETAs and proof at every step." },
+  { icon: Heart, cls: "feature-icon-rose", title: "Care", desc: "We treat every package as if it were our own — handled with attention, tracked end to end." },
+  { icon: Leaf, cls: "feature-icon-green", title: "Sustainability", desc: "Smart routing and return-load matching cut empty kilometres and lower emissions." },
+  { icon: ShieldCheck, cls: "feature-icon-purple", title: "Trust & safety", desc: "Verified drivers, OTP hand-offs and insured shipments give everyone peace of mind." },
+  { icon: Zap, cls: "feature-icon-amber", title: "Speed", desc: "Book in under a minute and get matched with a nearby driver in real time." },
+  { icon: Globe, cls: "feature-icon-purple", title: "Built for the Nordics", desc: "Pricing, vehicles and coverage tuned for Finland — and ready to scale across the region." },
+];
 
 export default function AboutPage() {
   return (
-    <div className="pt-16">
+    <div style={{ paddingTop: 72 }}>
       {/* Hero */}
-      <section className="py-20 bg-gradient-to-br from-gray-50 to-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              About <span className="gradient-text">NadaRuns</span>
-            </h1>
-            <p className="text-xl text-gray-600">
-              We're on a mission to revolutionize delivery in Finland by connecting
-              businesses with reliable drivers, creating opportunities for everyone.
-            </p>
-          </div>
+      <section className="hero-gradient" style={{ padding: "96px 0" }}>
+        <div className="container" style={{ textAlign: "center", maxWidth: 840 }}>
+          <div className="badge badge-green" style={{ marginBottom: 24 }}>✨ Our story</div>
+          <h1 style={{ fontSize: 52, fontWeight: 800, lineHeight: 1.1, color: "#111827", marginBottom: 20 }}>
+            Moving Finland forward,<br />
+            <span className="gradient-text">one delivery at a time</span>
+          </h1>
+          <p style={{ fontSize: 19, color: "#6B7280", lineHeight: 1.7, maxWidth: 680, margin: "0 auto" }}>
+            NadaRuns is the modern logistics platform connecting trusted drivers with businesses
+            that need to move things — from a single parcel to a full truckload — quickly, fairly and reliably.
+          </p>
         </div>
       </section>
 
-      {/* Our Story */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-6">Our Story</h2>
-              <div className="space-y-4 text-gray-600">
-                <p>
-                  NadaRuns was born in Helsinki in 2024 with a simple idea: make delivery
-                  faster, more reliable, and more accessible for everyone.
-                </p>
-                <p>
-                  We noticed that businesses struggled to find reliable delivery partners,
-                  while many people wanted flexible work opportunities. NadaRuns bridges
-                  this gap with technology that connects the right driver with the right
-                  delivery, every time.
-                </p>
-                <p>
-                  Today, we're proud to serve thousands of businesses and drivers across
-                  Finland, delivering everything from restaurant orders to business packages.
-                </p>
-              </div>
-            </div>
-            <div className="relative">
-              <div className="absolute -top-10 -right-10 w-64 h-64 bg-emerald-100 rounded-full blur-3xl opacity-50"></div>
-              <div className="relative bg-gradient-to-br from-emerald-500 to-indigo-600 rounded-3xl p-8 text-white">
-                <h3 className="text-2xl font-bold mb-6">Our Impact</h3>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <div className="text-4xl font-bold">500K+</div>
-                    <div className="text-white/70">Deliveries completed</div>
-                  </div>
-                  <div>
-                    <div className="text-4xl font-bold">10K+</div>
-                    <div className="text-white/70">Active drivers</div>
-                  </div>
-                  <div>
-                    <div className="text-4xl font-bold">5K+</div>
-                    <div className="text-white/70">Business partners</div>
-                  </div>
-                  <div>
-                    <div className="text-4xl font-bold">5</div>
-                    <div className="text-white/70">Cities served</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Values */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Our Values</h2>
-            <p className="text-xl text-gray-600">What drives us every day</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                icon: Target,
-                title: "Reliability",
-                desc: "Every delivery matters. We ensure your packages arrive on time, every time.",
-                bg: "bg-emerald-100",
-                text: "text-emerald-600"
-              },
-              {
-                icon: Heart,
-                title: "Care",
-                desc: "We treat every package as if it were our own, with attention and respect.",
-                bg: "bg-rose-100",
-                text: "text-rose-600"
-              },
-              {
-                icon: Globe,
-                title: "Sustainability",
-                desc: "We prioritize eco-friendly delivery options to reduce our carbon footprint.",
-                bg: "bg-indigo-100",
-                text: "text-indigo-600"
-              }
-            ].map((value, i) => (
-              <div key={i} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                <div className={`w-14 h-14 ${value.bg} rounded-xl flex items-center justify-center mb-4`}>
-                  <value.icon className={`w-7 h-7 ${value.text}`} />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">{value.title}</h3>
-                <p className="text-gray-600">{value.desc}</p>
+      {/* Stats */}
+      <section style={{ padding: "64px 0", background: "#fff" }}>
+        <div className="container">
+          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }}>
+            {STATS.map((s, i) => (
+              <div key={i} className="stat-card">
+                <div className="stat-number">{s.number}</div>
+                <div className="stat-label">{s.label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Team */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Leadership Team</h2>
-            <p className="text-xl text-gray-600">Meet the people behind NadaRuns</p>
+      {/* Mission */}
+      <section className="section" style={{ background: "#F9FAFB", paddingTop: 80, paddingBottom: 80 }}>
+        <div className="container">
+          <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
+            <div>
+              <div className="badge badge-purple" style={{ marginBottom: 20 }}>Our mission</div>
+              <h2 style={{ fontSize: 38, fontWeight: 800, color: "#111827", lineHeight: 1.2, marginBottom: 18 }}>
+                Logistics that’s fair for drivers and effortless for businesses
+              </h2>
+              <p style={{ fontSize: 17, color: "#6B7280", lineHeight: 1.8, marginBottom: 16 }}>
+                Traditional freight is slow, opaque and stacked with middlemen. We built NadaRuns to fix that —
+                transparent pricing set up front, drivers who keep the majority of every fare, and real-time
+                tracking from pickup to drop-off.
+              </p>
+              <p style={{ fontSize: 17, color: "#6B7280", lineHeight: 1.8 }}>
+                Whether you’re a small shop sending parcels or an enterprise moving pallets, NadaRuns gives you
+                the right vehicle, a fair price and a driver you can trust — in minutes.
+              </p>
+            </div>
+            <div style={{ background: "linear-gradient(135deg, #10B981 0%, #6366F1 100%)", borderRadius: 24, padding: 40, color: "#fff", boxShadow: "0 30px 60px -20px rgba(99,102,241,0.4)" }}>
+              <h3 style={{ fontSize: 24, fontWeight: 800, marginBottom: 18 }}>Why we’re different</h3>
+              {[
+                "Up-front, transparent pricing — no surprises",
+                "Drivers keep up to 80% + 100% of any bonus",
+                "Live tracking and ETA on every shipment",
+                "11 vehicle types, from cargo van to crane truck",
+                "Built for Finland, ready for the Nordics",
+              ].map((t, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 13, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✓</div>
+                  <span style={{ fontSize: 15.5, lineHeight: 1.5 }}>{t}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { name: "Mikko Virtanen", role: "CEO & Founder", bio: "Former logistics executive with 15 years of experience" },
-              { name: "Sanna Korhonen", role: "CTO", bio: "Tech leader who built platforms serving millions" },
-              { name: "Antti Mäkinen", role: "COO", bio: "Operations expert from global delivery companies" }
-            ].map((member, i) => (
-              <div key={i} className="text-center">
-                <div className="w-32 h-32 bg-gradient-to-br from-emerald-400 to-indigo-400 rounded-full mx-auto mb-4"></div>
-                <h3 className="text-xl font-semibold text-gray-900">{member.name}</h3>
-                <div className="text-emerald-600 font-medium mb-2">{member.role}</div>
-                <p className="text-gray-600 text-sm">{member.bio}</p>
+        </div>
+      </section>
+
+      {/* Values */}
+      <section className="section" style={{ background: "#fff", paddingTop: 80, paddingBottom: 80 }}>
+        <div className="container">
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <h2 className="section-title" style={{ textAlign: "center" }}>What we stand for</h2>
+            <p className="section-subtitle">The principles behind every delivery we power.</p>
+          </div>
+          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
+            {VALUES.map((v, i) => (
+              <div key={i} className="feature-card">
+                <div className={`feature-icon ${v.cls}`}><v.icon size={28} /></div>
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 10 }}>{v.title}</h3>
+                <p style={{ color: "#6B7280", lineHeight: 1.7 }}>{v.desc}</p>
               </div>
             ))}
           </div>
@@ -137,18 +114,20 @@ export default function AboutPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-20 bg-gradient-to-br from-emerald-600 to-indigo-700">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold text-white mb-6">Join Our Journey</h2>
-          <p className="text-xl text-white/80 mb-8">
-            Be part of the delivery revolution in Finland.
+      <section style={{ padding: "90px 0", background: "linear-gradient(135deg, #10B981 0%, #6366F1 100%)" }}>
+        <div className="container" style={{ textAlign: "center" }}>
+          <h2 style={{ fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 16 }}>Join the movement</h2>
+          <p style={{ fontSize: 19, color: "rgba(255,255,255,0.85)", marginBottom: 36, maxWidth: 560, margin: "0 auto 36px" }}>
+            Whether you drive or you ship, NadaRuns was built for you.
           </p>
-          <a
-            href="/contact"
-            className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-emerald-600 font-semibold rounded-xl hover:bg-gray-100 transition-all btn-hover"
-          >
-            Get in Touch
-          </a>
+          <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
+            <Link href="/drivers" style={{ background: "#fff", color: "#111827", padding: "14px 28px", borderRadius: 12, fontWeight: 700, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8 }}>
+              Drive with us <ArrowRight size={18} />
+            </Link>
+            <Link href="/business" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", padding: "14px 28px", borderRadius: 12, fontWeight: 700, textDecoration: "none", border: "1px solid rgba(255,255,255,0.3)" }}>
+              Ship with us
+            </Link>
+          </div>
         </div>
       </section>
     </div>
