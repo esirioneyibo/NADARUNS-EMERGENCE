@@ -22,8 +22,8 @@ export default function Vehicles() {
   return (
     <div>
       <div className="adm-toolbar">
-        <div className="adm-search"><Search size={16} /><input className="adm-input" placeholder="Search plate, label, driver…" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-        <select className="adm-select" value={type} onChange={(e) => setType(e.target.value)}>
+        <div className="adm-search"><Search size={16} /><input className="adm-input" data-testid="vehicles-search" placeholder="Search plate, label, driver…" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+        <select className="adm-select" data-testid="vehicles-type-filter" value={type} onChange={(e) => setType(e.target.value)}>
           {TYPES.map((t) => <option key={t} value={t}>{t === "all" ? "All types" : t.replace(/_/g, " ")}</option>)}
         </select>
         {data && <span style={{ marginLeft: "auto", color: "#64748B", fontSize: 13, fontWeight: 600 }}>{data.total} vehicles</span>}

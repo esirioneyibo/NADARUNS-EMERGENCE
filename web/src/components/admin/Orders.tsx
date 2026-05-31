@@ -25,8 +25,8 @@ export default function Orders({ notify }: { notify: Notify }) {
   return (
     <div>
       <div className="adm-toolbar">
-        <div className="adm-search"><Search size={16} /><input className="adm-input" placeholder="Search order #, address…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} /></div>
-        <select className="adm-select" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }}>
+        <div className="adm-search"><Search size={16} /><input className="adm-input" data-testid="orders-search" placeholder="Search order #, address…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} /></div>
+        <select className="adm-select" data-testid="orders-status-filter" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }}>
           {STATUSES.map((s) => <option key={s} value={s}>{s === "all" ? "All statuses" : s.replace(/_/g, " ")}</option>)}
         </select>
       </div>
@@ -37,7 +37,7 @@ export default function Orders({ notify }: { notify: Notify }) {
             {loading && <tr><td colSpan={6}><Spinner /></td></tr>}
             {!loading && data?.items?.length === 0 && <tr><td colSpan={6}><EmptyState title="No orders found" /></td></tr>}
             {!loading && data?.items?.map((o: any) => (
-              <tr key={o.id} className="adm-tr-click" onClick={() => setSelId(o.id)}>
+              <tr key={o.id} data-testid={`order-row-${o.id}`} className="adm-tr-click" onClick={() => setSelId(o.id)}>
                 <td style={{ fontWeight: 700 }}>#{o.order_number || (o.id || "").slice(0, 6)}</td>
                 <td><StatusBadge status={o.status} /></td>
                 <td style={{ maxWidth: 240, fontSize: 13 }}>{o.pickup || "—"} → {o.dropoff || "—"}</td>
@@ -96,14 +96,14 @@ function OrderDrawer({ id, onClose, onChanged, notify }: { id: string | null; on
         {active && <div className="adm-card">
           <div className="adm-card-title">Reassign driver</div>
           <div style={{ display: "flex", gap: 10 }}>
-            <select className="adm-select" style={{ flex: 1 }} value={reassignId} onChange={(e) => setReassignId(e.target.value)}>
+            <select className="adm-select" data-testid="order-reassign-select" style={{ flex: 1 }} value={reassignId} onChange={(e) => setReassignId(e.target.value)}>
               <option value="">Select driver…</option>
               {drivers.map((d) => <option key={d.id} value={d.id}>{d.name} {d.is_suspended ? "(suspended)" : ""}</option>)}
             </select>
-            <button className="adm-btn adm-btn-ghost" onClick={reassign} disabled={!reassignId}>Assign</button>
+            <button className="adm-btn adm-btn-ghost" data-testid="order-reassign-btn" onClick={reassign} disabled={!reassignId}>Assign</button>
           </div>
         </div>}
-        {active && <button className="adm-btn adm-btn-danger" onClick={cancel} style={{ justifyContent: "center" }}>Cancel order</button>}
+        {active && <button className="adm-btn adm-btn-danger" data-testid="order-cancel" onClick={cancel} style={{ justifyContent: "center" }}>Cancel order</button>}
       </>)}
     </Drawer>
   );

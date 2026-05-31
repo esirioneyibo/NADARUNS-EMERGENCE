@@ -24,8 +24,8 @@ export default function Shippers({ notify }: { notify: Notify }) {
   return (
     <div>
       <div className="adm-toolbar">
-        <div className="adm-search"><Search size={16} /><input className="adm-input" placeholder="Search company, contact, email…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} /></div>
-        <select className="adm-select" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }}>
+        <div className="adm-search"><Search size={16} /><input className="adm-input" data-testid="shippers-search" placeholder="Search company, contact, email…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} /></div>
+        <select className="adm-select" data-testid="shippers-status-filter" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }}>
           <option value="all">All</option><option value="verified">Verified</option><option value="suspended">Suspended</option>
         </select>
       </div>
@@ -36,7 +36,7 @@ export default function Shippers({ notify }: { notify: Notify }) {
             {loading && <tr><td colSpan={5}><Spinner /></td></tr>}
             {!loading && data?.items?.length === 0 && <tr><td colSpan={5}><EmptyState title="No shippers found" /></td></tr>}
             {!loading && data?.items?.map((s: any) => (
-              <tr key={s.id} className="adm-tr-click" onClick={() => setSelId(s.id)}>
+              <tr key={s.id} data-testid={`shipper-row-${s.id}`} className="adm-tr-click" onClick={() => setSelId(s.id)}>
                 <td><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Avatar src={s.avatar} name={s.company_name} size={36} /><div style={{ fontWeight: 700 }}>{s.company_name || "—"}</div></div></td>
                 <td><div style={{ fontSize: 13 }}>{s.contact_name || "—"}</div><div style={{ fontSize: 12.5, color: "#94A3B8" }}>{s.email}</div></td>
                 <td style={{ fontWeight: 700 }}>{s.total_orders}</td>
@@ -86,8 +86,8 @@ function ShipperDrawer({ id, onClose, onChanged, notify }: { id: string | null; 
             <Field label="Address" value={form.address} onChange={(v) => setForm({ ...form, address: v })} />
             <Field label="Tax ID" value={form.tax_id} onChange={(v) => setForm({ ...form, tax_id: v })} />
             <div style={{ display: "flex", gap: 10 }}>
-              <button className="adm-btn adm-btn-primary" onClick={save} disabled={saving} style={{ flex: 1, justifyContent: "center" }}>{saving ? "Saving…" : "Save changes"}</button>
-              <button className="adm-btn adm-btn-ghost" onClick={verify}>{det.shipper.is_verified ? "Unverify" : "Verify"}</button>
+              <button className="adm-btn adm-btn-primary" data-testid="shipper-save" onClick={save} disabled={saving} style={{ flex: 1, justifyContent: "center" }}>{saving ? "Saving…" : "Save changes"}</button>
+              <button className="adm-btn adm-btn-ghost" data-testid="shipper-verify" onClick={verify}>{det.shipper.is_verified ? "Unverify" : "Verify"}</button>
             </div>
           </div>
         </div>
@@ -95,7 +95,7 @@ function ShipperDrawer({ id, onClose, onChanged, notify }: { id: string | null; 
           {(det.recent_orders || []).length === 0 ? <div style={{ color: "#94A3B8", fontSize: 14 }}>No orders yet</div> :
             (det.recent_orders || []).slice(0, 8).map((o: any) => (<div key={o.id} className="adm-row-info"><span><StatusBadge status={o.status} /> #{o.order_number || (o.id || "").slice(0, 6)}</span><span>{money(o.price_quote || o.earnings)} · {fmtDate(o.created_at)}</span></div>))}
         </div>
-        <button className={`adm-btn ${det.shipper.is_suspended ? "adm-btn-success" : "adm-btn-danger"}`} onClick={toggle} style={{ justifyContent: "center" }}>{det.shipper.is_suspended ? "Reactivate shipper" : "Suspend shipper"}</button>
+        <button data-testid="shipper-suspend-toggle" className={`adm-btn ${det.shipper.is_suspended ? "adm-btn-success" : "adm-btn-danger"}`} onClick={toggle} style={{ justifyContent: "center" }}>{det.shipper.is_suspended ? "Reactivate shipper" : "Suspend shipper"}</button>
       </>)}
     </Drawer>
   );

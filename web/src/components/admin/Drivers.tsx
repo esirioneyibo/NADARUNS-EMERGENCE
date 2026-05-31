@@ -28,8 +28,8 @@ export default function Drivers({ notify }: { notify: Notify }) {
   return (
     <div>
       <div className="adm-toolbar">
-        <div className="adm-search"><Search size={16} /><input className="adm-input" placeholder="Search name, email, phone, plate…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} /></div>
-        <select className="adm-select" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }}>
+        <div className="adm-search"><Search size={16} /><input className="adm-input" data-testid="drivers-search" placeholder="Search name, email, phone, plate…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} /></div>
+        <select className="adm-select" data-testid="drivers-status-filter" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }}>
           <option value="all">All statuses</option>
           <option value="online">Online</option>
           <option value="offline">Offline</option>
@@ -44,7 +44,7 @@ export default function Drivers({ notify }: { notify: Notify }) {
               {loading && <tr><td colSpan={6}><Spinner /></td></tr>}
               {!loading && data?.items?.length === 0 && <tr><td colSpan={6}><EmptyState title="No drivers found" /></td></tr>}
               {!loading && data?.items?.map((d: any) => (
-                <tr key={d.id} className="adm-tr-click" onClick={() => setSelId(d.id)}>
+                <tr key={d.id} data-testid={`driver-row-${d.id}`} className="adm-tr-click" onClick={() => setSelId(d.id)}>
                   <td><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Avatar src={d.avatar} name={d.name} size={36} /><div><div style={{ fontWeight: 700 }}>{d.name || "Unnamed"}</div><div style={{ fontSize: 12, color: "#94A3B8" }}>{d.vehicles_count} vehicle(s)</div></div></div></td>
                   <td><div style={{ fontSize: 13 }}>{d.email}</div><div style={{ fontSize: 12.5, color: "#94A3B8" }}>{d.phone || "—"}</div></td>
                   <td style={{ textTransform: "capitalize" }}>{(d.vehicle_type || "—").replace(/_/g, " ")}</td>
@@ -103,7 +103,7 @@ function DriverDrawer({ id, onClose, onChanged, notify }: { id: string | null; o
               <Field label="Phone" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} />
               <Field label="Vehicle type" value={form.vehicle_type} onChange={(v) => setForm({ ...form, vehicle_type: v })} />
               <Field label="Plate" value={form.plate} onChange={(v) => setForm({ ...form, plate: v })} />
-              <button className="adm-btn adm-btn-primary" onClick={save} disabled={saving} style={{ justifyContent: "center" }}>{saving ? "Saving…" : "Save changes"}</button>
+              <button className="adm-btn adm-btn-primary" data-testid="driver-save" onClick={save} disabled={saving} style={{ justifyContent: "center" }}>{saving ? "Saving…" : "Save changes"}</button>
             </div>
           </div>
           <div className="adm-card">
@@ -120,7 +120,7 @@ function DriverDrawer({ id, onClose, onChanged, notify }: { id: string | null; o
                 <div key={o.id} className="adm-row-info"><span><StatusBadge status={o.status} /> #{o.order_number || (o.id || "").slice(0, 6)}</span><span>{money(o.earnings)} · {fmtDate(o.created_at)}</span></div>
               ))}
           </div>
-          <button className={`adm-btn ${det.driver.is_suspended ? "adm-btn-success" : "adm-btn-danger"}`} onClick={toggle} style={{ justifyContent: "center" }}>{det.driver.is_suspended ? "Reactivate driver" : "Suspend driver"}</button>
+          <button data-testid="driver-suspend-toggle" className={`adm-btn ${det.driver.is_suspended ? "adm-btn-success" : "adm-btn-danger"}`} onClick={toggle} style={{ justifyContent: "center" }}>{det.driver.is_suspended ? "Reactivate driver" : "Suspend driver"}</button>
         </>
       )}
     </Drawer>

@@ -36,8 +36,8 @@ export default function Kyc({ notify }: { notify: Notify }) {
           {Object.keys(docs).length === 0 && <div style={{ fontSize: 13, color: "#94A3B8" }}>No documents uploaded</div>}
         </div>
         {st === "pending" && <div style={{ display: "flex", gap: 10 }}>
-          <button className="adm-btn adm-btn-success" onClick={() => approve(d.id)} style={{ flex: 1, justifyContent: "center" }}>Approve</button>
-          <button className="adm-btn adm-btn-danger" onClick={() => reject(d.id)} style={{ flex: 1, justifyContent: "center" }}>Reject</button>
+          <button data-testid={`kyc-approve-${d.id}`} className="adm-btn adm-btn-success" onClick={() => approve(d.id)} style={{ flex: 1, justifyContent: "center" }}>Approve</button>
+          <button data-testid={`kyc-reject-${d.id}`} className="adm-btn adm-btn-danger" onClick={() => reject(d.id)} style={{ flex: 1, justifyContent: "center" }}>Reject</button>
         </div>}
       </div>
     );

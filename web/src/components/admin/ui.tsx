@@ -152,13 +152,13 @@ export function Pager({
         {total === 0 ? "0" : (page - 1) * limit + 1}{"\u2013"}{Math.min(page * limit, total)} of {total}
       </span>
       <div style={{ display: "flex", gap: 8 }}>
-        <button className="adm-btn adm-btn-ghost adm-btn-sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+        <button className="adm-btn adm-btn-ghost adm-btn-sm" data-testid="pager-prev" disabled={page <= 1} onClick={() => onPage(page - 1)}>
           Prev
         </button>
         <span style={{ alignSelf: "center" }}>
           {page} / {pages}
         </span>
-        <button className="adm-btn adm-btn-ghost adm-btn-sm" disabled={page >= pages} onClick={() => onPage(page + 1)}>
+        <button className="adm-btn adm-btn-ghost adm-btn-sm" data-testid="pager-next" disabled={page >= pages} onClick={() => onPage(page + 1)}>
           Next
         </button>
       </div>

@@ -57,14 +57,14 @@ export default function AdminPage() {
           </div>
           <nav className="adm-nav">
             {nav.map((n) => (
-              <button key={n.key} className={`adm-navbtn ${section === n.key ? "active" : ""}`} onClick={() => setSection(n.key)}>
+              <button key={n.key} data-testid={`admin-nav-${n.key}`} className={`adm-navbtn ${section === n.key ? "active" : ""}`} onClick={() => setSection(n.key)}>
                 <n.icon size={18} /> {n.label}
                 {n.count ? <span className="count">{n.count}</span> : null}
               </button>
             ))}
           </nav>
           <div className="adm-side-foot">
-            <button className="adm-navbtn" onClick={logout}><LogOut size={18} /> Sign out</button>
+            <button className="adm-navbtn" data-testid="admin-logout" onClick={logout}><LogOut size={18} /> Sign out</button>
           </div>
         </aside>
         <main className="adm-main">
@@ -109,14 +109,14 @@ function Login({ onLogin }: { onLogin: () => void }) {
         <p style={{ color: "#64748B", fontSize: 14, marginBottom: 24 }}>NadaRuns control center</p>
         <div className="adm-field" style={{ marginBottom: 14 }}>
           <label>Email</label>
-          <input className="adm-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input className="adm-input" data-testid="admin-login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </div>
         <div className="adm-field" style={{ marginBottom: 20 }}>
           <label>Password</label>
-          <input className="adm-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" required />
+          <input className="adm-input" data-testid="admin-login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" required />
         </div>
         {err && <div style={{ color: "#DC2626", fontSize: 13, marginBottom: 14, fontWeight: 600 }}>{err}</div>}
-        <button className="adm-btn adm-btn-primary" type="submit" style={{ width: "100%", justifyContent: "center" }} disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
+        <button className="adm-btn adm-btn-primary" data-testid="admin-login-submit" type="submit" style={{ width: "100%", justifyContent: "center" }} disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
       </form>
     </div>
   );
