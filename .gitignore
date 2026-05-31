@@ -21,6 +21,10 @@ node_modules/
 
 # Next.js
 /.next/
+.next/
+web/.next/
+web/out/
+**/.next/
 /out/
 next-env.d.ts
 *.tsbuildinfo

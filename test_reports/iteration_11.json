@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 11 end-to-end VERIFICATION of profile redesign + multi-vehicle feature on NadaRuns. Backend pytest suite (/app/backend/tests/test_iter10_profile_vehicles.py) executed against the public Expo backend URL: 9 passed, 1 skipped (the single skip is a known test-only issue using wrong endpoint /shipper/create-shipment — non-blocking, matching-by-primary-vehicle is covered separately and passed). Covered: GET/PATCH /driver/me (incl. data:image avatar), GET/PATCH /shipper/me (incl. avatar), multi-vehicle CRUD with primary mirroring to driver.vehicle_type, set-primary, last-vehicle-delete blocked with 400, primary-delete promotes next, change-password full cycle for driver + shipper (wrong current → 400, new<8 chars → 422, new==current → 400, success+re-login, demo1234 restored). Frontend (mobile viewport 390x844): driver flow login → /settings shows Account dashboard with Edit profile / My vehicles (count 1) / Change password rows; /driver-edit renders Personal Info form prefilled (Updated Driver Name / demo.driver@nadaruns.com / +358 40 123 4567) + Save changes + Change Password block (current/new/confirm + Update password). /driver-vehicles shows Cargo Van with ACTIVE pill, DEMO-001 · 1,500 kg, and Add a vehicle CTA. Shipper flow login → Profile tab → /shipper-settings Business Settings dashboard with Appearance, Account (Edit profile / Change password) and Company Information summary (Demo Logistics Co / Demo Manager / +358 40 987 6543 / Mannerheimintie 1, Helsinki / FI12345678). Edit profile → /shipper-edit prefilled with company/contact/phone/address/tax fields + Save changes + Change Password block. Demo credentials (demo.driver@nadaruns.com & demo.shipper@nadaruns.com — both demo1234) remain valid after tests. No backend or frontend bugs found in this verification run.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "driver-edit.tsx / shipper-edit.tsx / driver-vehicles.tsx / shipper-settings.tsx", "issue": "Form inputs (name/email/phone/company/contact/address/tax/avatar/current-password/new-password/confirm-password), Save changes / Update password buttons, vehicle row action icons (set-active check, delete trash), and the shipper-settings Edit profile / Change password rows have no testID attributes. Use get_by_text in tests for now. Carry-over LOW from iter 10.", "testID": "(missing)", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "driver-settings / driver-edit / driver-vehicles", "issues": ["390x844 renders cleanly; clear section headers (APPEARANCE/ACCOUNT/NOTIFICATIONS/DOCUMENTS/SUPPORT, PERSONAL INFO, CHANGE PASSWORD); ACTIVE pill on primary vehicle is visible; touch targets look >=44pt."]},
+      {"screen": "shipper-settings / shipper-edit", "issues": ["Business Settings header card with purple gradient looks polished; Account links use chevrons and proper rows; COMPANY INFORMATION + CHANGE PASSWORD sections are clearly grouped on /shipper-edit."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter10_profile_vehicles.py",
+    "/app/test_reports/pytest/iter11_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Add testID attributes to form inputs and primary CTAs on driver-edit.tsx, driver-vehicles.tsx, shipper-edit.tsx, and to row links on shipper-settings.tsx. Improves E2E test stability — no functional impact.",
+    "(Optional) Remove or rewrite the test_full_order_lifecycle case to use /shipper/shipments (ShipmentCreateRequest) instead of /shipper/create-shipment; currently skipped, non-blocking."
+  ],
+  "critical_code_review_comments": [
+    "server.py remains very large (~4500 lines). Recommend splitting into routers (auth, driver, shipper, orders, admin, pricing) for maintainability. Not blocking this iteration.",
+    "Multi-vehicle code paths are correct: legacy single-vehicle drivers are auto-migrated to vehicles[] with is_primary=true; _sync_primary_vehicle mirrors vehicle_type/plate/capacity to top-level driver doc on add/set-primary/delete-promote; deleting the last vehicle is correctly blocked (400)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (9/9 executed pytest tests passed; 1 skipped)", "frontend": "100% (driver + shipper profile, edit, vehicles flows verified on web preview at 390x844)"},
+  "seed_data_creation": "No persistent seed data created. The vehicle CRUD test creates and deletes TEST-BX1/TEST-FB1 within the test then restores to a single cargo_van DEMO-001 primary. Driver name remains 'Updated Driver Name' (left from iter 9). Shipper profile remains Demo Logistics Co / Demo Manager / +358 40 987 6543 / Mannerheimintie 1, Helsinki / FI12345678. Demo passwords verified restored to demo1234 for both roles.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Profile + multi-vehicle feature is fully working end-to-end. Demo creds (demo.driver@nadaruns.com / demo1234 and demo.shipper@nadaruns.com / demo1234) intact. Use settings.tsx testIDs link-edit-profile, link-vehicles, link-password for driver. shipper-settings.tsx rows are only discoverable by visible text ('Edit profile', 'Change password'). Dev-only warning 'REPLACE driver-home not handled' and 502 on wss://.../ws/driver/* persist as preview-only infra noise and do not affect functionality.",
+  "rca_of_issue": "N/A — no bug observed in this verification run."
+}

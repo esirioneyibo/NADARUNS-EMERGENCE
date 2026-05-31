@@ -1,0 +1,12 @@
+# Next.js build output & caches (never commit — can exceed GitHub 100MB limit)
+/.next/
+.next/
+/out/
+
+# dependencies
+/node_modules
+
+# misc
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
