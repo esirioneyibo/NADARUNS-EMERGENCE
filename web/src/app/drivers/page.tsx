@@ -1,6 +1,5 @@
-import Link from "next/link";
 import AppBadges from "@/components/AppBadges";
-import { Clock, Banknote, Truck, Navigation, Bell, Headphones, ArrowRight, CheckCircle } from "lucide-react";
+import { Clock, Banknote, Truck, Navigation, Bell, Headphones, CheckCircle } from "lucide-react";
 
 export const metadata = {
   title: "Drive with NadaRuns — Earn on your schedule",
@@ -31,26 +30,40 @@ const REQUIREMENTS = [
   "Right to work in Finland",
 ];
 
+const PAYOUT = [
+  { k: "Base fare", v: "€42.00" },
+  { k: "Shipper bonus", v: "€8.00" },
+  { k: "Platform fee (20%)", v: "−€8.40" },
+];
+
+const FAQS = [
+  { q: "How much can I earn?", a: "Earnings depend on the hours you drive and your vehicle type. You keep up to 80% of every base fare plus 100% of any bonus a shipper adds — and you can see your projected payout before you accept." },
+  { q: "Which vehicles can I drive?", a: "Anything you’re licensed and insured for, from a cargo van to a semi-truck. You can register multiple vehicles and switch your active one whenever you like." },
+  { q: "When and how do I get paid?", a: "Your earnings are tracked live in the app — today, this week and all-time — and paid out to your account on a regular weekly cycle." },
+  { q: "Do I need my own company?", a: "No. Light-entrepreneurs and sole traders are welcome. You just need a valid licence, registration and insurance for your vehicle." },
+  { q: "Can I choose which jobs I take?", a: "Always. You only ever accept the jobs that suit your route, vehicle and schedule — there are no forced dispatches." },
+];
+
 export default function DriversPage() {
   return (
-    <div style={{ paddingTop: 72 }}>
+    <div className="page">
       {/* Hero */}
-      <section className="hero-gradient" style={{ padding: "90px 0" }}>
+      <section className="hero-gradient sec">
         <div className="container">
-          <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
+          <div className="split">
             <div>
-              <div className="badge badge-green" style={{ marginBottom: 24 }}>🚚 For drivers</div>
-              <h1 style={{ fontSize: 50, fontWeight: 800, lineHeight: 1.1, color: "#111827", marginBottom: 18 }}>
+              <div className="badge badge-green eyebrow-lg">🚚 For drivers</div>
+              <h1 className="display" style={{ marginBottom: 18 }}>
                 Your vehicle.<br /><span className="gradient-text">Your schedule.</span><br />Your earnings.
               </h1>
-              <p style={{ fontSize: 18, color: "#6B7280", lineHeight: 1.7, marginBottom: 32, maxWidth: 480 }}>
+              <p className="lead" style={{ marginBottom: 32, maxWidth: 480 }}>
                 Turn your van or truck into income. Accept delivery jobs near you, navigate in one tap,
                 and keep the majority of every fare — with fast, transparent pay.
               </p>
               <AppBadges />
             </div>
-            <div className="hero-visual" style={{ display: "flex", justifyContent: "center" }}>
-              <div style={{ background: "#fff", borderRadius: 24, padding: 28, width: 320, boxShadow: "0 30px 60px -20px rgba(0,0,0,0.18)" }}>
+            <div className="hero-visual-wrap">
+              <div className="hero-card">
                 <div style={{ fontSize: 13, color: "#10B981", fontWeight: 700, marginBottom: 6 }}>● Online · earning</div>
                 <div style={{ fontSize: 14, color: "#6B7280" }}>Today’s earnings</div>
                 <div style={{ fontSize: 44, fontWeight: 800, color: "#111827", margin: "4px 0 18px" }}>€128.50</div>
@@ -71,36 +84,65 @@ export default function DriversPage() {
       </section>
 
       {/* Benefits */}
-      <section className="section" style={{ background: "#fff", paddingTop: 80, paddingBottom: 80 }}>
+      <section className="sec bg-white">
         <div className="container">
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <h2 className="section-title" style={{ textAlign: "center" }}>Why drive with NadaRuns</h2>
-            <p className="section-subtitle">Everything you need to earn more, with less hassle.</p>
+          <div className="sec-head">
+            <h2 className="h2">Why drive with NadaRuns</h2>
+            <p className="section-subtitle" style={{ marginTop: 12 }}>Everything you need to earn more, with less hassle.</p>
           </div>
-          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
+          <div className="grid-auto-3">
             {BENEFITS.map((b, i) => (
               <div key={i} className="feature-card">
                 <div className={`feature-icon ${b.cls}`}><b.icon size={28} /></div>
-                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 10 }}>{b.title}</h3>
-                <p style={{ color: "#6B7280", lineHeight: 1.7 }}>{b.desc}</p>
+                <h3 className="h3" style={{ marginBottom: 10 }}>{b.title}</h3>
+                <p style={{ color: "#6B7280", lineHeight: 1.7, margin: 0 }}>{b.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="section" style={{ background: "#F9FAFB", paddingTop: 80, paddingBottom: 80 }}>
+      {/* Earnings highlight */}
+      <section className="sec bg-light">
         <div className="container">
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <h2 className="section-title" style={{ textAlign: "center" }}>Start earning in 4 steps</h2>
+          <div className="split">
+            <div>
+              <div className="badge badge-amber eyebrow-lg">💸 Transparent pay</div>
+              <h2 className="h2" style={{ marginBottom: 16 }}>See exactly what you’ll earn — before you accept</h2>
+              <p className="lead" style={{ marginBottom: 16 }}>
+                No guesswork and no hidden cuts. Every job shows your projected payout up front, so
+                you always know what a delivery is worth before you swipe to accept.
+              </p>
+              <p className="lead">
+                You keep up to 80% of the base fare and 100% of any bonus the shipper adds on top.
+              </p>
+            </div>
+            <div className="panel-gradient">
+              <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 700, marginBottom: 6 }}>Sample job payout</div>
+              <div style={{ fontSize: 40, fontWeight: 800, marginBottom: 18 }}>€41.60</div>
+              {PAYOUT.map((r, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid rgba(255,255,255,0.2)", fontSize: 15 }}>
+                  <span style={{ opacity: 0.92 }}>{r.k}</span><span style={{ fontWeight: 700 }}>{r.v}</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 0 0", fontSize: 17, fontWeight: 800 }}>
+                <span>You receive</span><span>€41.60</span>
+              </div>
+            </div>
           </div>
-          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }}>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="sec bg-white">
+        <div className="container">
+          <div className="sec-head"><h2 className="h2">Start earning in 4 steps</h2></div>
+          <div className="grid-auto-4">
             {STEPS.map((s, i) => (
-              <div key={i} style={{ background: "#fff", borderRadius: 20, padding: 28, border: "1px solid #F3F4F6" }}>
-                <div style={{ width: 44, height: 44, borderRadius: 22, background: "linear-gradient(135deg, #10B981 0%, #6366F1 100%)", color: "#fff", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>{s.n}</div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{s.title}</h3>
-                <p style={{ color: "#6B7280", lineHeight: 1.6, fontSize: 15 }}>{s.desc}</p>
+              <div key={i} className="tile">
+                <div className="step-num">{s.n}</div>
+                <h3 className="h3" style={{ marginBottom: 8 }}>{s.title}</h3>
+                <p style={{ color: "#6B7280", lineHeight: 1.6, fontSize: 15, margin: 0 }}>{s.desc}</p>
               </div>
             ))}
           </div>
@@ -108,26 +150,51 @@ export default function DriversPage() {
       </section>
 
       {/* Requirements */}
-      <section className="section" style={{ background: "#fff", paddingTop: 72, paddingBottom: 72 }}>
+      <section className="sec bg-light">
         <div className="container">
-          <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 56, alignItems: "center" }}>
+          <div className="split">
             <div>
-              <h2 style={{ fontSize: 34, fontWeight: 800, color: "#111827", marginBottom: 18 }}>What you’ll need</h2>
+              <h2 className="h2" style={{ marginBottom: 18 }}>What you’ll need</h2>
+              <p className="lead" style={{ marginBottom: 24 }}>Getting verified is quick. Have these ready and you can be online today.</p>
               <div>
                 {REQUIREMENTS.map((r, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                    <CheckCircle size={22} color="#10B981" />
-                    <span style={{ fontSize: 16, color: "#374151" }}>{r}</span>
+                  <div key={i} className="check-row">
+                    <CheckCircle size={22} color="#10B981" style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>{r}</span>
                   </div>
                 ))}
               </div>
             </div>
-            <div style={{ background: "#F9FAFB", borderRadius: 24, padding: 40, textAlign: "center" }}>
-              <h3 style={{ fontSize: 24, fontWeight: 800, color: "#111827", marginBottom: 12 }}>Ready to roll?</h3>
+            <div className="tile center" style={{ background: "#fff" }}>
+              <h3 className="h3" style={{ marginBottom: 12 }}>Ready to roll?</h3>
               <p style={{ color: "#6B7280", marginBottom: 24, lineHeight: 1.6 }}>Download the app and go online today.</p>
               <div style={{ display: "flex", justifyContent: "center" }}><AppBadges /></div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="sec bg-white">
+        <div className="container">
+          <div className="sec-head"><h2 className="h2">Driver questions, answered</h2></div>
+          <div className="faq-list">
+            {FAQS.map((f, i) => (
+              <details key={i} className="faq-item">
+                <summary>{f.q}</summary>
+                <p>{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="cta-band" style={{ background: "linear-gradient(135deg, #10B981 0%, #6366F1 100%)" }}>
+        <div className="container center">
+          <h2 className="cta-title">Your next delivery is waiting</h2>
+          <p className="cta-sub maxw-560 mx-auto">Download the app, go online, and start earning on your own terms.</p>
+          <div style={{ display: "flex", justifyContent: "center" }}><AppBadges /></div>
         </div>
       </section>
     </div>

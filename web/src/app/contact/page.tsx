@@ -4,6 +4,13 @@ import { useState } from "react";
 import { Mail, Phone, MapPin, Clock, Send, CheckCircle } from "lucide-react";
 import { site } from "@/lib/site";
 
+const FAQS = [
+  { q: "How quickly will you reply?", a: "Our team usually responds within one business day. For anything urgent about a live order, in-app support is the fastest route." },
+  { q: "I need help with an order", a: "The quickest way is through in-app support, where we can see your shipment details. You can also email us and we’ll pick it up as soon as possible." },
+  { q: "Are you hiring drivers?", a: "Yes! We’re always welcoming new drivers across Finland. Head to the For Drivers page to learn how it works and download the app." },
+  { q: "Do you serve my city?", a: "We’re expanding quickly across Finland. Send us a message with your location and we’ll let you know about coverage in your area." },
+];
+
 export default function ContactPage() {
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
@@ -35,30 +42,30 @@ export default function ContactPage() {
   const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8 };
 
   return (
-    <div style={{ paddingTop: 72 }}>
+    <div className="page">
       {/* Hero */}
-      <section className="hero-gradient" style={{ padding: "80px 0" }}>
-        <div className="container" style={{ textAlign: "center", maxWidth: 720 }}>
-          <div className="badge badge-green" style={{ marginBottom: 24 }}>💬 Get in touch</div>
-          <h1 style={{ fontSize: 48, fontWeight: 800, lineHeight: 1.1, color: "#111827", marginBottom: 16 }}>
+      <section className="hero-gradient sec-sm" style={{ paddingTop: "clamp(56px,8vw,88px)", paddingBottom: "clamp(56px,8vw,88px)" }}>
+        <div className="container center maxw-720 mx-auto">
+          <div className="badge badge-green eyebrow-lg">💬 Get in touch</div>
+          <h1 className="display" style={{ marginBottom: 16 }}>
             We’d love to <span className="gradient-text">hear from you</span>
           </h1>
-          <p style={{ fontSize: 18, color: "#6B7280", lineHeight: 1.7 }}>
+          <p className="lead">
             Questions, partnerships or support — our team usually replies within one business day.
           </p>
         </div>
       </section>
 
       {/* Methods */}
-      <section style={{ padding: "56px 0 0", background: "#fff" }}>
+      <section className="bg-white" style={{ padding: "clamp(40px,6vw,56px) 0 0" }}>
         <div className="container">
-          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
+          <div className="grid-auto-3">
             {METHODS.map((m, i) => {
               const inner = (
                 <>
                   <div className={`feature-icon ${m.cls}`}><m.icon size={26} /></div>
                   <div style={{ fontSize: 13, color: "#6B7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{m.label}</div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: "#111827", marginTop: 4 }}>{m.value}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: "#111827", marginTop: 4, wordBreak: "break-word" }}>{m.value}</div>
                 </>
               );
               return m.href ? (
@@ -72,11 +79,11 @@ export default function ContactPage() {
       </section>
 
       {/* Form + info */}
-      <section className="section" style={{ background: "#fff", paddingTop: 64, paddingBottom: 80 }}>
+      <section className="sec bg-white" style={{ paddingTop: "clamp(40px,6vw,64px)" }}>
         <div className="container">
-          <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 48, alignItems: "start" }}>
+          <div className="split-form">
             {/* Form */}
-            <div style={{ background: "#fff", borderRadius: 24, padding: 36, border: "1px solid #F3F4F6", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.1)" }}>
+            <div style={{ background: "#fff", borderRadius: 24, padding: "clamp(24px,3vw,36px)", border: "1px solid #F3F4F6", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.1)" }}>
               {submitted ? (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
                   <div className="feature-icon feature-icon-green" style={{ margin: "0 auto 16px" }}><CheckCircle size={30} /></div>
@@ -112,7 +119,7 @@ export default function ContactPage() {
 
             {/* Info + hours + map */}
             <div>
-              <div style={{ background: "#F9FAFB", borderRadius: 20, padding: 28, marginBottom: 20 }}>
+              <div className="tile-soft" style={{ marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                   <Clock size={20} color="#10B981" />
                   <h3 style={{ fontSize: 18, fontWeight: 800, color: "#111827" }}>Support hours</h3>
@@ -135,6 +142,21 @@ export default function ContactPage() {
                 />
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="sec bg-light">
+        <div className="container">
+          <div className="sec-head"><h2 className="h2">Quick answers</h2></div>
+          <div className="faq-list">
+            {FAQS.map((f, i) => (
+              <details key={i} className="faq-item">
+                <summary>{f.q}</summary>
+                <p>{f.a}</p>
+              </details>
+            ))}
           </div>
         </div>
       </section>

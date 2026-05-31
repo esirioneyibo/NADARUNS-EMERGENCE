@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Package, MapPin, ShieldCheck, BarChart3, Clock, Headphones, Truck, ArrowRight, CheckCircle } from "lucide-react";
+import { Package, MapPin, ShieldCheck, BarChart3, Clock, Headphones, Truck, ArrowRight, Store, Factory, UtensilsCrossed, Hammer, Pill, Sofa } from "lucide-react";
 
 export const metadata = {
   title: "NadaRuns for Business — Ship smarter",
@@ -32,29 +32,46 @@ const STEPS = [
   { n: "4", title: "Delivered", desc: "Confirmed with OTP and proof of delivery. Done." },
 ];
 
+const INDUSTRIES = [
+  { icon: Store, title: "Retail & e-commerce", desc: "Same-day parcel and order delivery that keeps customers coming back." },
+  { icon: UtensilsCrossed, title: "Food & grocery", desc: "Temperature-controlled vehicles keep perishables fresh, every trip." },
+  { icon: Hammer, title: "Construction", desc: "Move tools, materials and pallets to site with flatbeds and cranes." },
+  { icon: Factory, title: "Manufacturing", desc: "Reliable B2B freight between warehouses, plants and distributors." },
+  { icon: Pill, title: "Pharma & healthcare", desc: "Careful, tracked handling for sensitive and time-critical deliveries." },
+  { icon: Sofa, title: "Furniture & bulky goods", desc: "Box trucks and crews for oversized items, handled with care." },
+];
+
+const FAQS = [
+  { q: "How is the price calculated?", a: "Pricing combines a base fee, distance, cargo weight, vehicle type, urgency and a small fuel component — and the full quote is shown up front before you confirm. No hidden fees." },
+  { q: "How fast will a driver be matched?", a: "Usually within minutes. We match your shipment with the nearest verified driver whose vehicle fits your cargo." },
+  { q: "Can I track my delivery?", a: "Yes. Every order includes a live map with the driver’s location and ETA, plus in-app chat from pickup to drop-off." },
+  { q: "What can I ship?", a: "Anything from a single parcel to a full truckload. With 11 vehicle types — including refrigerated and specialized handling — there’s a fit for almost any cargo." },
+  { q: "Do you offer business accounts?", a: "Yes. For regular or high-volume shipping, talk to our team about a business account with consolidated billing and priority support." },
+];
+
 export default function BusinessPage() {
   return (
-    <div style={{ paddingTop: 72 }}>
+    <div className="page">
       {/* Hero */}
-      <section className="hero-gradient" style={{ padding: "90px 0" }}>
+      <section className="hero-gradient sec">
         <div className="container">
-          <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
+          <div className="split">
             <div>
-              <div className="badge badge-purple" style={{ marginBottom: 24 }}>📦 For business</div>
-              <h1 style={{ fontSize: 50, fontWeight: 800, lineHeight: 1.1, color: "#111827", marginBottom: 18 }}>
+              <div className="badge badge-purple eyebrow-lg">📦 For business</div>
+              <h1 className="display" style={{ marginBottom: 18 }}>
                 Ship anything,<br /><span className="gradient-text">anywhere in Finland</span>
               </h1>
-              <p style={{ fontSize: 18, color: "#6B7280", lineHeight: 1.7, marginBottom: 32, maxWidth: 480 }}>
+              <p className="lead" style={{ marginBottom: 32, maxWidth: 480 }}>
                 From a single parcel to a full truckload — get an instant, transparent price, a verified driver,
                 and live tracking from pickup to delivery.
               </p>
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <div className="cluster">
                 <Link href="/download" className="btn-secondary">Start shipping <ArrowRight size={18} /></Link>
                 <Link href="/contact" className="btn-outline">Talk to sales</Link>
               </div>
             </div>
-            <div className="hero-visual" style={{ display: "flex", justifyContent: "center" }}>
-              <div style={{ background: "#fff", borderRadius: 24, padding: 28, width: 320, boxShadow: "0 30px 60px -20px rgba(0,0,0,0.18)" }}>
+            <div className="hero-visual-wrap">
+              <div className="hero-card">
                 <div style={{ fontSize: 14, color: "#6B7280", marginBottom: 6 }}>Estimated price</div>
                 <div style={{ fontSize: 40, fontWeight: 800, color: "#111827", marginBottom: 4 }}>€49.90</div>
                 <div style={{ fontSize: 13, color: "#10B981", fontWeight: 700, marginBottom: 18 }}>Helsinki → Espoo · 22 km</div>
@@ -75,18 +92,18 @@ export default function BusinessPage() {
       </section>
 
       {/* Features */}
-      <section className="section" style={{ background: "#fff", paddingTop: 80, paddingBottom: 80 }}>
+      <section className="sec bg-white">
         <div className="container">
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <h2 className="section-title" style={{ textAlign: "center" }}>Everything your logistics needs</h2>
-            <p className="section-subtitle">Powerful, transparent and built to scale with your business.</p>
+          <div className="sec-head">
+            <h2 className="h2">Everything your logistics needs</h2>
+            <p className="section-subtitle" style={{ marginTop: 12 }}>Powerful, transparent and built to scale with your business.</p>
           </div>
-          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
+          <div className="grid-auto-3">
             {FEATURES.map((f, i) => (
               <div key={i} className="feature-card">
                 <div className={`feature-icon ${f.cls}`}><f.icon size={28} /></div>
-                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 10 }}>{f.title}</h3>
-                <p style={{ color: "#6B7280", lineHeight: 1.7 }}>{f.desc}</p>
+                <h3 className="h3" style={{ marginBottom: 10 }}>{f.title}</h3>
+                <p style={{ color: "#6B7280", lineHeight: 1.7, margin: 0 }}>{f.desc}</p>
               </div>
             ))}
           </div>
@@ -94,16 +111,16 @@ export default function BusinessPage() {
       </section>
 
       {/* Fleet */}
-      <section className="section" style={{ background: "#F9FAFB", paddingTop: 80, paddingBottom: 80 }}>
+      <section className="sec bg-light">
         <div className="container">
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <h2 className="section-title" style={{ textAlign: "center" }}>One platform, every vehicle</h2>
-            <p className="section-subtitle">Eleven vehicle types so your cargo always travels the right way.</p>
+          <div className="sec-head">
+            <h2 className="h2">One platform, every vehicle</h2>
+            <p className="section-subtitle" style={{ marginTop: 12 }}>Eleven vehicle types so your cargo always travels the right way.</p>
           </div>
-          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+          <div className="grid-auto-3">
             {FLEET.map((v, i) => (
-              <div key={i} style={{ background: "#fff", borderRadius: 18, padding: 24, border: "1px solid #F3F4F6", display: "flex", alignItems: "center", gap: 16 }}>
-                <div className="feature-icon feature-icon-green" style={{ width: 52, height: 52, marginBottom: 0 }}><Truck size={24} /></div>
+              <div key={i} className="tile" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div className="feature-icon feature-icon-green" style={{ width: 52, height: 52, marginBottom: 0, flexShrink: 0 }}><Truck size={24} /></div>
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 700, color: "#111827" }}>{v.name}</div>
                   <div style={{ fontSize: 14, color: "#6B7280" }}>{v.note}</div>
@@ -115,31 +132,63 @@ export default function BusinessPage() {
       </section>
 
       {/* How it works */}
-      <section className="section" style={{ background: "#fff", paddingTop: 80, paddingBottom: 80 }}>
+      <section className="sec bg-white">
         <div className="container">
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <h2 className="section-title" style={{ textAlign: "center" }}>How it works</h2>
-          </div>
-          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }}>
+          <div className="sec-head"><h2 className="h2">How it works</h2></div>
+          <div className="grid-auto-4">
             {STEPS.map((s, i) => (
-              <div key={i} style={{ background: "#F9FAFB", borderRadius: 20, padding: 28 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 22, background: "linear-gradient(135deg, #6366F1 0%, #10B981 100%)", color: "#fff", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>{s.n}</div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{s.title}</h3>
-                <p style={{ color: "#6B7280", lineHeight: 1.6, fontSize: 15 }}>{s.desc}</p>
+              <div key={i} className="tile-soft">
+                <div className="step-num">{s.n}</div>
+                <h3 className="h3" style={{ marginBottom: 8 }}>{s.title}</h3>
+                <p style={{ color: "#6B7280", lineHeight: 1.6, fontSize: 15, margin: 0 }}>{s.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
+      {/* Industries */}
+      <section className="sec bg-light">
+        <div className="container">
+          <div className="sec-head">
+            <h2 className="h2">Built for every industry</h2>
+            <p className="section-subtitle" style={{ marginTop: 12 }}>From corner shops to factories — teams across Finland move with NadaRuns.</p>
+          </div>
+          <div className="grid-auto-3">
+            {INDUSTRIES.map((ind, i) => (
+              <div key={i} className="feature-card">
+                <div className="feature-icon feature-icon-purple"><ind.icon size={28} /></div>
+                <h3 className="h3" style={{ marginBottom: 10 }}>{ind.title}</h3>
+                <p style={{ color: "#6B7280", lineHeight: 1.7, margin: 0 }}>{ind.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="sec bg-white">
+        <div className="container">
+          <div className="sec-head"><h2 className="h2">Frequently asked questions</h2></div>
+          <div className="faq-list">
+            {FAQS.map((f, i) => (
+              <details key={i} className="faq-item">
+                <summary>{f.q}</summary>
+                <p>{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
-      <section style={{ padding: "90px 0", background: "linear-gradient(135deg, #6366F1 0%, #10B981 100%)" }}>
-        <div className="container" style={{ textAlign: "center" }}>
-          <h2 style={{ fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 16 }}>Ready to ship smarter?</h2>
-          <p style={{ fontSize: 19, color: "rgba(255,255,255,0.85)", marginBottom: 36 }}>Get your first quote in under a minute.</p>
-          <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/download" style={{ background: "#fff", color: "#111827", padding: "14px 28px", borderRadius: 12, fontWeight: 700, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8 }}>Get the app <ArrowRight size={18} /></Link>
-            <Link href="/contact" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", padding: "14px 28px", borderRadius: 12, fontWeight: 700, textDecoration: "none", border: "1px solid rgba(255,255,255,0.3)" }}>Contact sales</Link>
+      <section className="cta-band" style={{ background: "linear-gradient(135deg, #6366F1 0%, #10B981 100%)" }}>
+        <div className="container center">
+          <h2 className="cta-title">Ready to ship smarter?</h2>
+          <p className="cta-sub maxw-560 mx-auto">Get your first quote in under a minute.</p>
+          <div className="cluster cluster-center">
+            <Link href="/download" className="btn-on-dark">Get the app <ArrowRight size={18} /></Link>
+            <Link href="/contact" className="btn-ghost-dark">Contact sales</Link>
           </div>
         </div>
       </section>

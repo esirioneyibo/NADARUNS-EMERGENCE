@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Target, Heart, Leaf, ShieldCheck, Zap, Globe, ArrowRight } from "lucide-react";
+import { Target, Heart, Leaf, ShieldCheck, Zap, Globe, ArrowRight, CheckCircle2 } from "lucide-react";
 import { site } from "@/lib/site";
 
 export const metadata = {
@@ -24,18 +24,33 @@ const VALUES = [
   { icon: Globe, cls: "feature-icon-purple", title: "Built for the Nordics", desc: "Pricing, vehicles and coverage tuned for Finland — and ready to scale across the region." },
 ];
 
+const TIMELINE = [
+  { year: "2024", title: "NadaRuns is born", desc: "Founded in Helsinki with a simple belief: logistics should be fair for drivers and effortless for businesses." },
+  { year: "2024", title: "First 1,000 deliveries", desc: "Local shops and couriers proved the model — transparent pricing and same-day matching that just works." },
+  { year: "2025", title: "Eleven vehicle types", desc: "From cargo vans to crane trucks, we expanded the fleet so any cargo travels the right way." },
+  { year: "Today", title: "Scaling across Finland", desc: "Thousands of verified drivers, live tracking on every order, and a roadmap that reaches the whole Nordics." },
+];
+
+const DIFFERENTIATORS = [
+  "Up-front, transparent pricing — no surprises",
+  "Drivers keep up to 80% + 100% of any bonus",
+  "Live tracking and ETA on every shipment",
+  "11 vehicle types, from cargo van to crane truck",
+  "Built for Finland, ready for the Nordics",
+];
+
 export default function AboutPage() {
   return (
-    <div style={{ paddingTop: 72 }}>
+    <div className="page">
       {/* Hero */}
-      <section className="hero-gradient" style={{ padding: "96px 0" }}>
-        <div className="container" style={{ textAlign: "center", maxWidth: 840 }}>
-          <div className="badge badge-green" style={{ marginBottom: 24 }}>✨ Our story</div>
-          <h1 style={{ fontSize: 52, fontWeight: 800, lineHeight: 1.1, color: "#111827", marginBottom: 20 }}>
+      <section className="hero-gradient sec">
+        <div className="container center maxw-820 mx-auto">
+          <div className="badge badge-green eyebrow-lg">✨ Our story</div>
+          <h1 className="display" style={{ marginBottom: 20 }}>
             Moving Finland forward,<br />
             <span className="gradient-text">one delivery at a time</span>
           </h1>
-          <p style={{ fontSize: 19, color: "#6B7280", lineHeight: 1.7, maxWidth: 680, margin: "0 auto" }}>
+          <p className="lead maxw-720 mx-auto">
             NadaRuns is the modern logistics platform connecting trusted drivers with businesses
             that need to move things — from a single parcel to a full truckload — quickly, fairly and reliably.
           </p>
@@ -43,9 +58,9 @@ export default function AboutPage() {
       </section>
 
       {/* Stats */}
-      <section style={{ padding: "64px 0", background: "#fff" }}>
+      <section className="sec-sm bg-white">
         <div className="container">
-          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }}>
+          <div className="grid-auto-4">
             {STATS.map((s, i) => (
               <div key={i} className="stat-card">
                 <div className="stat-number">{s.number}</div>
@@ -57,35 +72,29 @@ export default function AboutPage() {
       </section>
 
       {/* Mission */}
-      <section className="section" style={{ background: "#F9FAFB", paddingTop: 80, paddingBottom: 80 }}>
+      <section className="sec bg-light">
         <div className="container">
-          <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
+          <div className="split">
             <div>
-              <div className="badge badge-purple" style={{ marginBottom: 20 }}>Our mission</div>
-              <h2 style={{ fontSize: 38, fontWeight: 800, color: "#111827", lineHeight: 1.2, marginBottom: 18 }}>
+              <div className="badge badge-purple eyebrow-lg">Our mission</div>
+              <h2 className="h2" style={{ marginBottom: 18 }}>
                 Logistics that’s fair for drivers and effortless for businesses
               </h2>
-              <p style={{ fontSize: 17, color: "#6B7280", lineHeight: 1.8, marginBottom: 16 }}>
+              <p className="lead" style={{ marginBottom: 16 }}>
                 Traditional freight is slow, opaque and stacked with middlemen. We built NadaRuns to fix that —
                 transparent pricing set up front, drivers who keep the majority of every fare, and real-time
                 tracking from pickup to drop-off.
               </p>
-              <p style={{ fontSize: 17, color: "#6B7280", lineHeight: 1.8 }}>
+              <p className="lead">
                 Whether you’re a small shop sending parcels or an enterprise moving pallets, NadaRuns gives you
                 the right vehicle, a fair price and a driver you can trust — in minutes.
               </p>
             </div>
-            <div style={{ background: "linear-gradient(135deg, #10B981 0%, #6366F1 100%)", borderRadius: 24, padding: 40, color: "#fff", boxShadow: "0 30px 60px -20px rgba(99,102,241,0.4)" }}>
+            <div className="panel-gradient">
               <h3 style={{ fontSize: 24, fontWeight: 800, marginBottom: 18 }}>Why we’re different</h3>
-              {[
-                "Up-front, transparent pricing — no surprises",
-                "Drivers keep up to 80% + 100% of any bonus",
-                "Live tracking and ETA on every shipment",
-                "11 vehicle types, from cargo van to crane truck",
-                "Built for Finland, ready for the Nordics",
-              ].map((t, i) => (
+              {DIFFERENTIATORS.map((t, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: 13, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✓</div>
+                  <CheckCircle2 size={22} style={{ flexShrink: 0, opacity: 0.95 }} />
                   <span style={{ fontSize: 15.5, lineHeight: 1.5 }}>{t}</span>
                 </div>
               ))}
@@ -94,19 +103,40 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Values */}
-      <section className="section" style={{ background: "#fff", paddingTop: 80, paddingBottom: 80 }}>
+      {/* Timeline */}
+      <section className="sec bg-white">
         <div className="container">
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <h2 className="section-title" style={{ textAlign: "center" }}>What we stand for</h2>
-            <p className="section-subtitle">The principles behind every delivery we power.</p>
+          <div className="sec-head">
+            <h2 className="h2">Our journey so far</h2>
+            <p className="section-subtitle" style={{ marginTop: 12 }}>From a Helsinki idea to a platform moving the country.</p>
           </div>
-          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
+          <div className="timeline">
+            {TIMELINE.map((t, i) => (
+              <div key={i} className="timeline-item">
+                <div className="timeline-year">{t.year}</div>
+                <div className="tile-soft">
+                  <h3 className="h3" style={{ marginBottom: 8 }}>{t.title}</h3>
+                  <p style={{ color: "#6B7280", lineHeight: 1.7, margin: 0 }}>{t.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Values */}
+      <section className="sec bg-light">
+        <div className="container">
+          <div className="sec-head">
+            <h2 className="h2">What we stand for</h2>
+            <p className="section-subtitle" style={{ marginTop: 12 }}>The principles behind every delivery we power.</p>
+          </div>
+          <div className="grid-auto-3">
             {VALUES.map((v, i) => (
               <div key={i} className="feature-card">
                 <div className={`feature-icon ${v.cls}`}><v.icon size={28} /></div>
-                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 10 }}>{v.title}</h3>
-                <p style={{ color: "#6B7280", lineHeight: 1.7 }}>{v.desc}</p>
+                <h3 className="h3" style={{ marginBottom: 10 }}>{v.title}</h3>
+                <p style={{ color: "#6B7280", lineHeight: 1.7, margin: 0 }}>{v.desc}</p>
               </div>
             ))}
           </div>
@@ -114,19 +144,13 @@ export default function AboutPage() {
       </section>
 
       {/* CTA */}
-      <section style={{ padding: "90px 0", background: "linear-gradient(135deg, #10B981 0%, #6366F1 100%)" }}>
-        <div className="container" style={{ textAlign: "center" }}>
-          <h2 style={{ fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 16 }}>Join the movement</h2>
-          <p style={{ fontSize: 19, color: "rgba(255,255,255,0.85)", marginBottom: 36, maxWidth: 560, margin: "0 auto 36px" }}>
-            Whether you drive or you ship, NadaRuns was built for you.
-          </p>
-          <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/drivers" style={{ background: "#fff", color: "#111827", padding: "14px 28px", borderRadius: 12, fontWeight: 700, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8 }}>
-              Drive with us <ArrowRight size={18} />
-            </Link>
-            <Link href="/business" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", padding: "14px 28px", borderRadius: 12, fontWeight: 700, textDecoration: "none", border: "1px solid rgba(255,255,255,0.3)" }}>
-              Ship with us
-            </Link>
+      <section className="cta-band" style={{ background: "linear-gradient(135deg, #10B981 0%, #6366F1 100%)" }}>
+        <div className="container center">
+          <h2 className="cta-title">Join the movement</h2>
+          <p className="cta-sub maxw-560 mx-auto">Whether you drive or you ship, NadaRuns was built for you.</p>
+          <div className="cluster cluster-center">
+            <Link href="/drivers" className="btn-on-dark">Drive with us <ArrowRight size={18} /></Link>
+            <Link href="/business" className="btn-ghost-dark">Ship with us</Link>
           </div>
         </div>
       </section>
