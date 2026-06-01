@@ -16,7 +16,7 @@ import { radius, shadows, spacing } from "../theme";
 import SwipeToConfirm from "./SwipeToConfirm";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const SHEET_HEIGHT = 360;
+const SHEET_HEIGHT = 450;
 
 interface JobDetailSheetProps {
   orders: Order[];
@@ -138,6 +138,16 @@ export default function JobDetailSheet({
   // Calculate timer progress
   const timerProgress = timeLeft / 15;
 
+  // Cargo / package summary
+  const pkg = (currentOrder.items || [])
+    .map((i) => `${i.quantity}× ${i.name}`)
+    .join(", ") || "Package";
+  const cargoMeta = [
+    currentOrder.cargo_type,
+    currentOrder.cargo_weight_kg ? `${currentOrder.cargo_weight_kg} kg` : null,
+    currentOrder.vehicle_type ? currentOrder.vehicle_type.replace(/_/g, " ") : null,
+  ].filter(Boolean).join("  ·  ");
+
   return (
     <Animated.View
       style={[
@@ -196,6 +206,32 @@ export default function JobDetailSheet({
           <Text style={styles.statValue}>{currentOrder.eta_minutes} min</Text>
           <Text style={styles.statLabel}>ETA</Text>
         </View>
+      </View>
+
+      {/* Geo + payout chips */}
+      {(currentOrder.pickup_distance_km != null || currentOrder.payout_per_km != null) && (
+        <View style={styles.chipsRow}>
+          {currentOrder.pickup_distance_km != null && (
+            <View style={styles.chip}>
+              <Ionicons name="navigate" size={13} color={theme.primary} />
+              <Text style={styles.chipText}>{currentOrder.pickup_distance_km} km to pickup</Text>
+            </View>
+          )}
+          {currentOrder.payout_per_km != null && (
+            <View style={styles.chip}>
+              <Ionicons name="cash-outline" size={13} color={theme.primary} />
+              <Text style={styles.chipText}>€{currentOrder.payout_per_km.toFixed(2)}/km</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Cargo / package details */}
+      <View style={styles.cargoRow}>
+        <Ionicons name="cube" size={16} color={theme.textSecondary} />
+        <Text testID="cargo" style={styles.cargoText} numberOfLines={2}>
+          {pkg}{cargoMeta ? `  ·  ${cargoMeta}` : ""}
+        </Text>
       </View>
 
       {/* Addresses */}
@@ -334,6 +370,42 @@ const createStyles = (theme: any) =>
       flexDirection: "row",
       paddingHorizontal: spacing.lg,
       marginBottom: spacing.md,
+    },
+    chipsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      paddingHorizontal: spacing.lg,
+      marginBottom: spacing.sm,
+    },
+    chip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: theme.surfaceMuted,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: radius.pill,
+    },
+    chipText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme.primary,
+    },
+    cargoRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+      paddingHorizontal: spacing.lg,
+      marginBottom: spacing.md,
+    },
+    cargoText: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "600",
+      color: theme.textPrimary,
+      textTransform: "capitalize",
+      lineHeight: 18,
     },
     statBlock: {
       flex: 1,

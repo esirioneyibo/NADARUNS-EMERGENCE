@@ -250,6 +250,10 @@ class Order(BaseModel):
     driver_payout_amount: Optional[float] = None  # driver's share (EUR)
     authorized_at: Optional[str] = None
     captured_at: Optional[str] = None
+    # ---- Geospatial discovery ----
+    pickup_location: Optional[dict] = None       # GeoJSON Point [lng, lat] for 2dsphere index
+    pickup_distance_km: Optional[float] = None    # driver -> pickup (computed per query)
+    payout_per_km: Optional[float] = None         # earnings / trip distance (computed)
 
 
 # ===================== Logistics Vehicle Types =====================
@@ -1035,6 +1039,8 @@ async def create_database_indexes():
         await db.orders.create_index([("status", 1), ("created_at", -1)])
         await db.orders.create_index([("shipper_id", 1), ("status", 1)])
         await db.orders.create_index([("driver_id", 1), ("status", 1)])
+        # Geospatial index for proximity-based job discovery ($geoNear / $near)
+        await db.orders.create_index([("pickup_location", "2dsphere")], sparse=True)
         
         # Drivers collection indexes
         await db.drivers.create_index("id", unique=True)
@@ -1400,25 +1406,45 @@ async def get_available_orders(
             {"cargo_weight_kg": {"$exists": False}},
         ]
     
-    cursor = db.orders.find(query, {"_id": 0}).limit(200)
-    items = await cursor.to_list(200)
+    def _enrich(o: dict) -> dict:
+        dist = o.get("distance_km") or 0
+        try:
+            o["payout_per_km"] = round(float(o.get("earnings") or 0) / dist, 2) if dist else None
+        except Exception:
+            o["payout_per_km"] = None
+        return o
 
-    # Proximity filter: only keep jobs whose pickup is within radius of driver,
-    # sorted nearest-first. This makes the "X jobs nearby" count meaningful.
     if lat is not None and lng is not None:
-        nearby = []
+        # Make sure pending orders carry a GeoJSON pickup_location for $geoNear.
+        try:
+            await db.orders.update_many(
+                {"status": "pending", "pickup_location": {"$exists": False},
+                 "pickup.lat": {"$type": "number"}, "pickup.lng": {"$type": "number"}},
+                [{"$set": {"pickup_location": {"type": "Point", "coordinates": ["$pickup.lng", "$pickup.lat"]}}}],
+            )
+        except Exception as exc:
+            logger.warning(f"lazy pickup_location backfill failed: {exc}")
+
+        # 2dsphere proximity search — returns jobs nearest-first with real distance.
+        pipeline = [
+            {"$geoNear": {
+                "near": {"type": "Point", "coordinates": [lng, lat]},
+                "distanceField": "pickup_distance_m",
+                "maxDistance": radius_km * 1000,
+                "spherical": True,
+                "query": query,
+            }},
+            {"$limit": 50},
+            {"$project": {"_id": 0}},
+        ]
+        items = await db.orders.aggregate(pipeline).to_list(50)
         for o in items:
-            pickup = o.get("pickup") or {}
-            plat, plng = pickup.get("lat"), pickup.get("lng")
-            if plat is None or plng is None:
-                continue
-            dist = _haversine_km(lat, lng, plat, plng)
-            if dist <= radius_km:
-                nearby.append((dist, o))
-        nearby.sort(key=lambda x: x[0])
-        items = [o for _, o in nearby][:50]
+            o["pickup_distance_km"] = round((o.pop("pickup_distance_m", 0) or 0) / 1000, 1)
+            _enrich(o)
     else:
-        items = items[:50]
+        items = await db.orders.find(query, {"_id": 0}).limit(50).to_list(50)
+        for o in items:
+            _enrich(o)
 
     return [Order(**o) for o in items]
 
@@ -5736,6 +5762,90 @@ async def admin_reject_withdrawal(withdrawal_id: str, body: WithdrawalRejectBody
     return await _process_withdrawal(withdrawal_id, "rejected", user["id"], note=body.reason)
 
 
+# ===================== Admin: Live Dispatch Map =====================
+
+@api_router.get("/admin/dispatch/map")
+async def admin_dispatch_map(user: dict = Depends(get_admin_user)):
+    """Feed for the live dispatch map: open jobs, in-transit jobs, online drivers + alerts."""
+    def _pkg(o: dict) -> str:
+        items = o.get("items") or []
+        if items:
+            names = ", ".join(f"{it.get('quantity', 1)}× {it.get('name')}" for it in items[:2] if it.get("name"))
+            if names:
+                return names
+        return o.get("cargo_type") or "Package"
+
+    jobs = []
+
+    # Open (pending) jobs — green markers
+    async for o in db.orders.find({"status": "pending"}, {"_id": 0}).limit(300):
+        p = o.get("pickup") or {}
+        d = o.get("dropoff") or {}
+        if p.get("lat") is None or p.get("lng") is None:
+            continue
+        jobs.append({
+            "id": o.get("id"), "order_number": o.get("order_number"), "status": "open",
+            "lat": p.get("lat"), "lng": p.get("lng"),
+            "dropoff_lat": d.get("lat"), "dropoff_lng": d.get("lng"),
+            "pickup_name": p.get("name") or p.get("address"),
+            "dropoff_name": d.get("name") or d.get("address"),
+            "package": _pkg(o), "earnings": o.get("earnings"),
+            "vehicle_type": o.get("vehicle_type"), "distance_km": o.get("distance_km"),
+        })
+
+    # In-transit jobs — blue markers (use live driver location when available)
+    async for o in db.orders.find({"status": {"$in": list(sm.ACTIVE_STATES)}}, {"_id": 0}).limit(300):
+        p = o.get("pickup") or {}
+        d = o.get("dropoff") or {}
+        loc = None
+        if o.get("driver_id"):
+            drv = await db.drivers.find_one({"id": o["driver_id"]}, {"_id": 0, "current_location": 1})
+            loc = (drv or {}).get("current_location")
+        lat = (loc or {}).get("lat") if loc else p.get("lat")
+        lng = (loc or {}).get("lng") if loc else p.get("lng")
+        if lat is None or lng is None:
+            continue
+        jobs.append({
+            "id": o.get("id"), "order_number": o.get("order_number"), "status": "in_transit",
+            "lat": lat, "lng": lng,
+            "dropoff_lat": d.get("lat"), "dropoff_lng": d.get("lng"),
+            "pickup_name": p.get("name") or p.get("address"),
+            "dropoff_name": d.get("name") or d.get("address"),
+            "package": _pkg(o), "earnings": o.get("earnings"),
+            "vehicle_type": o.get("vehicle_type"), "order_status": o.get("status"),
+        })
+
+    # Online drivers — car markers
+    drivers = []
+    async for drv in db.drivers.find({"is_online": True}, {"_id": 0}):
+        loc = drv.get("current_location")
+        if not loc or loc.get("lat") is None or loc.get("lng") is None:
+            continue
+        drivers.append({
+            "id": drv.get("id"), "name": drv.get("name"),
+            "lat": loc.get("lat"), "lng": loc.get("lng"),
+            "vehicle_type": drv.get("vehicle_type"),
+            "updated_at": drv.get("location_updated_at"),
+        })
+
+    open_count = sum(1 for j in jobs if j["status"] == "open")
+    transit_count = sum(1 for j in jobs if j["status"] == "in_transit")
+    online_count = len(drivers)
+
+    alerts = []
+    if open_count > 0 and online_count == 0:
+        alerts.append({"severity": "high", "message": f"{open_count} open jobs but no drivers online — consider surge pricing."})
+    elif online_count > 0 and open_count / online_count > 8:
+        alerts.append({"severity": "medium", "message": f"High demand: {open_count} open jobs for only {online_count} online drivers."})
+
+    return {
+        "jobs": jobs,
+        "drivers": drivers,
+        "alerts": alerts,
+        "summary": {"open": open_count, "in_transit": transit_count, "online_drivers": online_count},
+    }
+
+
 # ===================== Admin: Stripe Settings =====================
 
 async def load_stripe_settings():
@@ -5848,10 +5958,25 @@ app.add_middleware(
 )
 
 
+async def backfill_pickup_locations():
+    """Populate GeoJSON pickup_location on orders that predate the 2dsphere index."""
+    try:
+        res = await db.orders.update_many(
+            {"pickup_location": {"$exists": False},
+             "pickup.lat": {"$type": "number"}, "pickup.lng": {"$type": "number"}},
+            [{"$set": {"pickup_location": {"type": "Point", "coordinates": ["$pickup.lng", "$pickup.lat"]}}}],
+        )
+        if res.modified_count:
+            logger.info("Backfilled pickup_location for %d orders", res.modified_count)
+    except Exception as exc:
+        logger.warning(f"pickup_location backfill failed: {exc}")
+
+
 @app.on_event("startup")
 async def on_startup():
     await ensure_seed()
     await load_stripe_settings()
+    await backfill_pickup_locations()
 
 
 @app.on_event("shutdown")

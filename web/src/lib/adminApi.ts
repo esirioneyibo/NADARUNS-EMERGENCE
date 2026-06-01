@@ -125,4 +125,7 @@ export const adminApi = {
   getStripeSettings: () => req<any>("/admin/settings/stripe"),
   updateStripeSettings: (body: { test_secret_key?: string; live_secret_key?: string; mode?: string; webhook_secret?: string }) =>
     req<any>("/admin/settings/stripe", { method: "POST", body: JSON.stringify(body) }),
+
+  // Live dispatch map
+  dispatchMap: () => req<any>("/admin/dispatch/map"),
 };

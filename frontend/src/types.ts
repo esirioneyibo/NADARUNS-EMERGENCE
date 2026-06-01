@@ -54,6 +54,15 @@ export interface Order {
   completed_at?: string | null;
   rating_given?: number | null;
   feedback?: string | null;
+  // Logistics / cargo
+  vehicle_type?: string | null;
+  cargo_weight_kg?: number | null;
+  cargo_dimensions?: string | null;
+  cargo_type?: string | null;
+  special_requirements?: string[] | null;
+  // Geospatial discovery (computed by /orders/available)
+  pickup_distance_km?: number | null;
+  payout_per_km?: number | null;
 }
 
 export interface WalletTransaction {

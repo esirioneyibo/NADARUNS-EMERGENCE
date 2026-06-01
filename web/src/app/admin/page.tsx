@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from "react";
-import { LayoutDashboard, Truck, Users, Package, Car, ShieldCheck, LogOut, BadgeEuro, Settings as SettingsIcon } from "lucide-react";
+import { LayoutDashboard, Truck, Users, Package, Car, ShieldCheck, LogOut, BadgeEuro, Settings as SettingsIcon, MapPinned } from "lucide-react";
 import { adminApi, setToken, clearToken, hasToken } from "@/lib/adminApi";
 import Overview from "@/components/admin/Overview";
 import Drivers from "@/components/admin/Drivers";
@@ -11,8 +11,9 @@ import Vehicles from "@/components/admin/Vehicles";
 import Kyc from "@/components/admin/Kyc";
 import Financials from "@/components/admin/Financials";
 import Settings from "@/components/admin/Settings";
+import DispatchMap from "@/components/admin/DispatchMap";
 
-type Section = "overview" | "drivers" | "shippers" | "orders" | "vehicles" | "kyc" | "financials" | "settings";
+type Section = "overview" | "dispatch" | "drivers" | "shippers" | "orders" | "vehicles" | "kyc" | "financials" | "settings";
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -37,6 +38,7 @@ export default function AdminPage() {
 
   const nav: { key: Section; label: string; icon: any; count?: number }[] = [
     { key: "overview", label: "Overview", icon: LayoutDashboard },
+    { key: "dispatch", label: "Live Dispatch", icon: MapPinned },
     { key: "drivers", label: "Drivers", icon: Truck },
     { key: "shippers", label: "Shippers", icon: Users },
     { key: "orders", label: "Orders", icon: Package },
@@ -46,7 +48,7 @@ export default function AdminPage() {
     { key: "settings", label: "Settings", icon: SettingsIcon },
   ];
   const titles: Record<Section, string> = {
-    overview: "Dashboard overview", drivers: "Drivers", shippers: "Shippers",
+    overview: "Dashboard overview", dispatch: "Live dispatch map", drivers: "Drivers", shippers: "Shippers",
     orders: "Orders & deliveries", vehicles: "Fleet & vehicles", financials: "Financials & payments", kyc: "KYC verification", settings: "Settings",
   };
   const logout = () => { clearToken(); setAuthed(false); };
@@ -81,6 +83,7 @@ export default function AdminPage() {
           </div>
           <div className="adm-content">
             {section === "overview" && <Overview />}
+            {section === "dispatch" && <DispatchMap />}
             {section === "drivers" && <Drivers notify={notify} />}
             {section === "shippers" && <Shippers notify={notify} />}
             {section === "orders" && <Orders notify={notify} />}

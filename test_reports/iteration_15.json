@@ -1,0 +1,41 @@
+{
+  "summary": "Tested NEW geospatial + admin dispatch features end-to-end. All 10 backend pytest cases pass (geo-sorted available jobs, payout/km, radius+vehicle filters, /admin/dispatch/map shape & summary consistency, auth gating, payments regression). Mobile driver-home loads and authenticates correctly; however the JobDetailSheet could NOT be opened via UI because demo.driver already has an ACTIVE delivery from prior seed (active-order-banner shown, no map markers / sheet trigger). Verified via code review that chips (pickup_distance_km, payout_per_km) and cargo row render correctly when an order has those fields. Added the missing testID='cargo' (the chip Text had testIDs but the cargo Text did not). Backend /api/orders/available now returns the chip fields exactly as expected, e.g. pickup_distance_km present on every job, payout_per_km on jobs with distance_km>0, sorted ascending. /api/admin/dispatch/map returns {jobs, drivers, alerts, summary{open,in_transit,online_drivers}} and counts match arrays (open=79, in_transit=19, online_drivers=1; 1 demand-imbalance alert). Observed a non-blocking ingress issue: WebSocket /ws/driver/<id> returns 502 (driver realtime channel). Not part of this review but worth noting.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Driver realtime WS", "issue": "wss://.../ws/driver/<id> upgrade returns 502 (ingress). Not in scope but visible from driver-home console.", "affected_testIDs": []}
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* / pointerEvents props", "issue": "Console warnings: 'shadow*' style props are deprecated, use 'boxShadow'; props.pointerEvents is deprecated, use style.pointerEvents. Pre-existing.", "file_ref": "various RN components"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_geo_dispatch.py",
+    "/app/test_reports/pytest/iter15_geo_dispatch.xml"
+  ],
+  "action_items": [
+    "JobDetailSheet UI flow could not be exercised because demo.driver is already in an active delivery after seed-demo. Consider seeding a SECOND demo driver with no active order (or resetting demo.driver to idle) so the map markers + JobDetailSheet are reachable for QA. Alternatively expose a quick admin endpoint to release demo.driver's active order between runs.",
+    "Investigate the 502 on wss://.../ws/driver/<id> (ingress WebSocket upgrade); the driver currently logs immediate disconnect on driver-home."
+  ],
+  "critical_code_review_comments": [
+    "/api/orders/available correctly uses $geoNear with distanceField=pickup_distance_km when lat/lng provided, falls back to in-process sort when not, and attaches payout_per_km only when distance_km>0 — matches spec.",
+    "/api/admin/dispatch/map summary counts are derived from the same arrays it returns, so they're guaranteed consistent — verified in tests.",
+    "JobDetailSheet renders chips (pickup_distance_km, payout_per_km) conditionally; both null-safe. Cargo line builds 'Nx Item · type · weight kg · vehicle' deterministically.",
+    "Added testID='cargo' on the cargo Text in JobDetailSheet so the chip+cargo can be QA'd via testID (no behavior change)."
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/JobDetailSheet.tsx (added testID='cargo' on the cargo Text)",
+    "/app/backend/tests/test_geo_dispatch.py (new pytest suite, 10 tests, all green)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "partial - driver-home loads & auth works; JobDetailSheet not reachable due to driver having active order"},
+  "seed_data_creation": "Used POST /api/seed-demo (idempotent). One TEST_ shipment created via shipper for payments regression; payment_status went unpaid → authorized → captured.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "To test JobDetailSheet UI you must either (a) start with a driver that has no active order, or (b) complete demo.driver's current delivery before login. After login on /login as demo.driver@nadaruns.com / demo1234 you currently land on driver-home with active-order-banner visible (Resume button) — no map markers, sheet cannot be opened. Backend API tests live in /app/backend/tests/test_geo_dispatch.py and are reusable: run with EXPO_PUBLIC_BACKEND_URL=<public_url> pytest backend/tests/test_geo_dispatch.py -v.",
+  "rca_of_issue": "N/A — no functional bug. Only blocker for UI verification of JobDetailSheet is environmental state of the seeded demo driver."
+}
