@@ -493,11 +493,16 @@ export default function ShipperCreateScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         await clearDraft();
         idempotencyKey.current = genId(); // fresh key for next shipment
-        showBanner(`Shipment ${data.order_number} created! Finding a driver for you…`, "success", false);
+        showBanner(`Shipment ${data.order_number} created! Authorize payment to confirm your booking…`, "success", false);
         setTimeout(() => {
           resetForm(); // clear the wizard so a new shipment starts blank
-          router.back();
-        }, 1400);
+          // Send the shipper straight to the payment step (tracking screen has the Authorize card).
+          if (data.order_id) {
+            router.replace(`/shipper-tracking?id=${data.order_id}&pay=1`);
+          } else {
+            router.back();
+          }
+        }, 1200);
       } else {
         const err = await res.json().catch(() => ({}));
         showBanner(err.detail || "Failed to create shipment", "error");

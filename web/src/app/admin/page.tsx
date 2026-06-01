@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from "react";
-import { LayoutDashboard, Truck, Users, Package, Car, ShieldCheck, LogOut, BadgeEuro } from "lucide-react";
+import { LayoutDashboard, Truck, Users, Package, Car, ShieldCheck, LogOut, BadgeEuro, Settings as SettingsIcon } from "lucide-react";
 import { adminApi, setToken, clearToken, hasToken } from "@/lib/adminApi";
 import Overview from "@/components/admin/Overview";
 import Drivers from "@/components/admin/Drivers";
@@ -10,8 +10,9 @@ import Orders from "@/components/admin/Orders";
 import Vehicles from "@/components/admin/Vehicles";
 import Kyc from "@/components/admin/Kyc";
 import Financials from "@/components/admin/Financials";
+import Settings from "@/components/admin/Settings";
 
-type Section = "overview" | "drivers" | "shippers" | "orders" | "vehicles" | "kyc" | "financials";
+type Section = "overview" | "drivers" | "shippers" | "orders" | "vehicles" | "kyc" | "financials" | "settings";
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -42,10 +43,11 @@ export default function AdminPage() {
     { key: "vehicles", label: "Vehicles", icon: Car },
     { key: "financials", label: "Financials", icon: BadgeEuro },
     { key: "kyc", label: "KYC", icon: ShieldCheck, count: pendingKyc || undefined },
+    { key: "settings", label: "Settings", icon: SettingsIcon },
   ];
   const titles: Record<Section, string> = {
     overview: "Dashboard overview", drivers: "Drivers", shippers: "Shippers",
-    orders: "Orders & deliveries", vehicles: "Fleet & vehicles", financials: "Financials & payments", kyc: "KYC verification",
+    orders: "Orders & deliveries", vehicles: "Fleet & vehicles", financials: "Financials & payments", kyc: "KYC verification", settings: "Settings",
   };
   const logout = () => { clearToken(); setAuthed(false); };
 
@@ -85,6 +87,7 @@ export default function AdminPage() {
             {section === "vehicles" && <Vehicles />}
             {section === "financials" && <Financials notify={notify} />}
             {section === "kyc" && <Kyc notify={notify} />}
+            {section === "settings" && <Settings notify={notify} />}
           </div>
         </main>
       </div>

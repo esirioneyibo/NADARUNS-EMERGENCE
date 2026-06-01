@@ -670,6 +670,13 @@ class CaptureBody(BaseModel):
     amount: Optional[float] = None  # optional partial capture (EUR)
 
 
+class StripeSettingsBody(BaseModel):
+    test_secret_key: Optional[str] = None
+    live_secret_key: Optional[str] = None
+    mode: Optional[str] = None  # "test" | "live"
+    webhook_secret: Optional[str] = None
+
+
 # ===================== Notification Models =====================
 
 class Notification(BaseModel):
@@ -5729,6 +5736,105 @@ async def admin_reject_withdrawal(withdrawal_id: str, body: WithdrawalRejectBody
     return await _process_withdrawal(withdrawal_id, "rejected", user["id"], note=body.reason)
 
 
+# ===================== Admin: Stripe Settings =====================
+
+async def load_stripe_settings():
+    """Load Stripe credentials from DB on startup, or seed DB from env."""
+    try:
+        doc = await db.settings.find_one({"key": "stripe"}, {"_id": 0})
+        if doc:
+            payments.configure(
+                test_key=doc.get("test_secret_key", ""),
+                live_key=doc.get("live_secret_key", ""),
+                mode=doc.get("mode", "test"),
+                webhook_secret=doc.get("webhook_secret", ""),
+            )
+            logger.info("Loaded Stripe settings from DB (mode=%s)", doc.get("mode"))
+        else:
+            await db.settings.update_one(
+                {"key": "stripe"},
+                {"$set": {
+                    "key": "stripe",
+                    "test_secret_key": payments.STRIPE_TEST_KEY,
+                    "live_secret_key": payments.STRIPE_LIVE_KEY,
+                    "mode": payments.STRIPE_MODE,
+                    "webhook_secret": payments.STRIPE_WEBHOOK_SECRET,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+            logger.info("Seeded Stripe settings into DB from environment")
+    except Exception as exc:
+        logger.warning(f"Could not load Stripe settings: {exc}")
+
+
+async def _persist_stripe_settings(admin_id: Optional[str] = None):
+    await db.settings.update_one(
+        {"key": "stripe"},
+        {"$set": {
+            "key": "stripe",
+            "test_secret_key": payments.STRIPE_TEST_KEY,
+            "live_secret_key": payments.STRIPE_LIVE_KEY,
+            "mode": payments.STRIPE_MODE,
+            "webhook_secret": payments.STRIPE_WEBHOOK_SECRET,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": admin_id,
+        }},
+        upsert=True,
+    )
+
+
+@api_router.get("/admin/settings/stripe")
+async def admin_get_stripe_settings(user: dict = Depends(get_admin_user)):
+    return payments.get_status()
+
+
+@api_router.post("/admin/settings/stripe")
+async def admin_update_stripe_settings(body: StripeSettingsBody, user: dict = Depends(get_admin_user)):
+    updates: dict = {}
+
+    if body.test_secret_key:
+        key = body.test_secret_key.strip()
+        if not key.startswith("sk_test_"):
+            raise HTTPException(400, "Test secret key must start with 'sk_test_'")
+        ok, err = payments.validate_key(key)
+        if not ok:
+            raise HTTPException(400, f"Stripe rejected the test key: {err}")
+        updates["test_secret_key"] = key
+
+    if body.live_secret_key:
+        key = body.live_secret_key.strip()
+        if not key.startswith("sk_live_"):
+            raise HTTPException(400, "Live secret key must start with 'sk_live_'")
+        ok, err = payments.validate_key(key)
+        if not ok:
+            raise HTTPException(400, f"Stripe rejected the live key: {err}")
+        updates["live_secret_key"] = key
+
+    if body.webhook_secret is not None:
+        updates["webhook_secret"] = body.webhook_secret.strip()
+
+    mode = body.mode
+    if mode and mode not in ("test", "live"):
+        raise HTTPException(400, "mode must be 'test' or 'live'")
+
+    new_test = updates.get("test_secret_key", payments.STRIPE_TEST_KEY)
+    new_live = updates.get("live_secret_key", payments.STRIPE_LIVE_KEY)
+    if mode == "live" and not new_live:
+        raise HTTPException(400, "Add a live secret key before switching to LIVE mode")
+    if mode == "test" and not new_test:
+        raise HTTPException(400, "Add a test secret key before switching to TEST mode")
+
+    payments.configure(
+        test_key=updates.get("test_secret_key"),
+        live_key=updates.get("live_secret_key"),
+        mode=mode,
+        webhook_secret=updates.get("webhook_secret"),
+    )
+    await _persist_stripe_settings(user.get("id"))
+    return payments.get_status()
+
+
 # ===================== Lifecycle =====================
 
 app.include_router(api_router)
@@ -5745,6 +5851,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def on_startup():
     await ensure_seed()
+    await load_stripe_settings()
 
 
 @app.on_event("shutdown")

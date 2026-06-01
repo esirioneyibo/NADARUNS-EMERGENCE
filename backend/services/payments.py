@@ -29,24 +29,87 @@ logger = logging.getLogger(__name__)
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
 # ----------------------------------------------------------------------------
-# Configuration
+# Configuration (dynamic — admin can switch test/live at runtime)
 # ----------------------------------------------------------------------------
-# The pod provisions the Stripe TEST secret key as STRIPE_API_KEY. We also
-# accept STRIPE_SECRET_KEY as an alias for portability.
-STRIPE_SECRET_KEY = os.environ.get("STRIPE_API_KEY") or os.environ.get("STRIPE_SECRET_KEY", "")
-STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
-
 CURRENCY = "eur"
 
-if STRIPE_SECRET_KEY:
-    stripe.api_key = STRIPE_SECRET_KEY
-else:  # pragma: no cover - configuration guard
-    logger.warning("STRIPE_API_KEY is not set; Stripe calls will fail until configured.")
+STRIPE_TEST_KEY = ""
+STRIPE_LIVE_KEY = ""
+STRIPE_MODE = "test"            # "test" | "live"
+STRIPE_SECRET_KEY = ""          # currently ACTIVE secret key
+STRIPE_WEBHOOK_SECRET = ""      # currently ACTIVE webhook signing secret
+STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+
+
+def configure(*, test_key=None, live_key=None, mode=None, webhook_secret=None):
+    """Update Stripe credentials/mode and point the SDK at the active key.
+
+    Any argument left as None keeps its current value. Returns get_status().
+    """
+    global STRIPE_TEST_KEY, STRIPE_LIVE_KEY, STRIPE_MODE, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+    if test_key is not None:
+        STRIPE_TEST_KEY = (test_key or "").strip()
+    if live_key is not None:
+        STRIPE_LIVE_KEY = (live_key or "").strip()
+    if mode in ("test", "live"):
+        STRIPE_MODE = mode
+    if webhook_secret is not None:
+        STRIPE_WEBHOOK_SECRET = (webhook_secret or "").strip()
+    STRIPE_SECRET_KEY = STRIPE_LIVE_KEY if STRIPE_MODE == "live" else STRIPE_TEST_KEY
+    if STRIPE_SECRET_KEY:
+        stripe.api_key = STRIPE_SECRET_KEY
+    else:
+        logger.warning("No Stripe key for mode '%s'; Stripe calls will fail until configured.", STRIPE_MODE)
+    return get_status()
+
+
+def _mask(k: str):
+    if not k:
+        return None
+    return f"{k[:11]}…{k[-4:]}" if len(k) > 16 else "set"
+
+
+def get_status() -> dict:
+    return {
+        "configured": bool(STRIPE_SECRET_KEY),
+        "mode": STRIPE_MODE,
+        "currency": "EUR",
+        "test_configured": bool(STRIPE_TEST_KEY),
+        "live_configured": bool(STRIPE_LIVE_KEY),
+        "test_key_masked": _mask(STRIPE_TEST_KEY),
+        "live_key_masked": _mask(STRIPE_LIVE_KEY),
+        "webhook_configured": bool(STRIPE_WEBHOOK_SECRET),
+        "active_key_masked": _mask(STRIPE_SECRET_KEY),
+    }
+
+
+def validate_key(key: str):
+    """Lightweight live check that a secret key is valid. Returns (ok, error)."""
+    if not key:
+        return False, "Empty key"
+    try:
+        stripe.Account.retrieve(api_key=key)
+        return True, None
+    except Exception as exc:  # invalid key / network
+        return False, str(exc)
+
+
+# Seed credentials from the environment on import (STRIPE_API_KEY / STRIPE_SECRET_KEY).
+def _bootstrap_from_env():
+    env_key = os.environ.get("STRIPE_API_KEY") or os.environ.get("STRIPE_SECRET_KEY", "")
+    env_key = (env_key or "").strip()
+    test_k = env_key if env_key.startswith("sk_test_") else ""
+    live_k = env_key if env_key.startswith("sk_live_") else ""
+    wh = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    boot_mode = "live" if (live_k and not test_k) else "test"
+    configure(test_key=test_k, live_key=live_k, mode=boot_mode, webhook_secret=wh)
+
+
+_bootstrap_from_env()
 
 
 def is_configured() -> bool:
-    """True when a Stripe secret key is available."""
+    """True when an active Stripe secret key is available."""
     return bool(STRIPE_SECRET_KEY)
 
 

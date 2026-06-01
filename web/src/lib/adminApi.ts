@@ -120,4 +120,9 @@ export const adminApi = {
     req<any>(`/admin/financials/withdrawals/${id}/pay`, { method: "POST", body: JSON.stringify({ reference }) }),
   rejectWithdrawal: (id: string, reason?: string) =>
     req<any>(`/admin/financials/withdrawals/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+
+  // Stripe settings (test/live keys + mode)
+  getStripeSettings: () => req<any>("/admin/settings/stripe"),
+  updateStripeSettings: (body: { test_secret_key?: string; live_secret_key?: string; mode?: string; webhook_secret?: string }) =>
+    req<any>("/admin/settings/stripe", { method: "POST", body: JSON.stringify(body) }),
 };
