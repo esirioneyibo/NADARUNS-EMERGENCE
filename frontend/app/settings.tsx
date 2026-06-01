@@ -16,12 +16,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 
 import { api } from "../src/api";
 import { useAuth } from "../src/contexts/AuthContext";
 import { Driver, NotificationPrefs } from "../src/types";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme, ThemeMode } from "../src/contexts/ThemeContext";
+import LanguageSelector from "../src/components/LanguageSelector";
 
 const VEHICLE_CATEGORIES = [
   {
@@ -71,6 +73,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme, mode, setMode, isDark } = useTheme();
   const { logout, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { t } = useTranslation();
   const [driver, setDriver] = useState(null);
   const [name, setName] = useState("");
   const [plate, setPlate] = useState("");
@@ -98,17 +101,17 @@ export default function SettingsScreen() {
 
     // On web, Alert might not work properly, so handle it gracefully
     if (typeof window !== "undefined" && window.confirm) {
-      if (window.confirm("Are you sure you want to sign out?")) {
+      if (window.confirm(t("settings.signOutConfirm"))) {
         doLogout();
       }
     } else {
       Alert.alert(
-        "Sign Out",
-        "Are you sure you want to sign out?",
+        t("settings.signOutTitle"),
+        t("settings.signOutConfirm"),
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
           {
-            text: "Sign Out",
+            text: t("settings.signOutTitle"),
             style: "destructive",
             onPress: doLogout,
           },
@@ -120,7 +123,7 @@ export default function SettingsScreen() {
   const load = useCallback(async () => {
     if (authLoading) return;
     if (!isAuthenticated) {
-      setLoadError("Please login to view settings");
+      setLoadError(t("settings.loginPrompt"));
       return;
     }
     try {
@@ -136,7 +139,7 @@ export default function SettingsScreen() {
       setNotifications(d.notifications);
     } catch (e: any) {
       console.warn("Settings load failed:", e);
-      setLoadError("Session expired. Please login again.");
+      setLoadError(t("settings.sessionExpired"));
     }
   }, [authLoading, isAuthenticated]);
 
@@ -150,13 +153,13 @@ export default function SettingsScreen() {
       <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.xl }}>
         <Ionicons name="person-circle-outline" size={80} color={theme.textSecondary} />
         <Text style={{ fontSize: 20, fontWeight: "700", color: theme.textPrimary, marginTop: spacing.lg, textAlign: "center" }}>
-          {loadError || "Login Required"}
+          {loadError || t("common.loginRequired")}
         </Text>
         <TouchableOpacity 
           style={{ marginTop: spacing.xl, backgroundColor: theme.primary, paddingHorizontal: 40, paddingVertical: 16, borderRadius: radius.pill }}
           onPress={() => router.push("/login")}
         >
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>Go to Login</Text>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>{t("common.goToLogin")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -218,7 +221,7 @@ export default function SettingsScreen() {
         >
           <Ionicons name="chevron-back" size={22} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.heading}>Account</Text>
+        <Text style={styles.heading}>{t("settings.title")}</Text>
         <View style={{ width: 44 }} />
       </Animated.View>
 
@@ -241,38 +244,44 @@ export default function SettingsScreen() {
             </View>
             <View style={styles.metaPill}>
               <Ionicons name="cube-outline" size={13} color={theme.primary} />
-              <Text style={styles.metaPillText}>{driver.deliveries_today} today</Text>
+              <Text style={styles.metaPillText}>{t("settings.deliveriesToday", { count: driver.deliveries_today })}</Text>
             </View>
           </View>
         </Animated.View>
 
         {/* Appearance / Theme */}
-        <SectionTitle title="Appearance" theme={theme} />
+        <SectionTitle title={t("settings.appearance")} theme={theme} />
         <Animated.View entering={FadeInUp.delay(100)} style={[styles.card, shadows.sm]}>
           <View style={styles.themeGrid}>
-            {THEME_OPTIONS.map((t) => {
-              const selected = t.id === mode;
+            {THEME_OPTIONS.map((opt) => {
+              const selected = opt.id === mode;
               return (
                 <TouchableOpacity
-                  key={t.id}
+                  key={opt.id}
                   style={[styles.themeTile, selected && { backgroundColor: theme.primary, borderColor: theme.primary }]}
-                  onPress={() => selectTheme(t.id)}
-                  testID={`theme-${t.id}`}
+                  onPress={() => selectTheme(opt.id)}
+                  testID={`theme-${opt.id}`}
                 >
-                  <Ionicons name={t.icon} size={22} color={selected ? "#fff" : theme.textPrimary} />
-                  <Text style={[styles.themeLabel, selected && { color: "#fff" }]}>{t.label}</Text>
+                  <Ionicons name={opt.icon} size={22} color={selected ? "#fff" : theme.textPrimary} />
+                  <Text style={[styles.themeLabel, selected && { color: "#fff" }]}>{t(`settings.theme${opt.label}`)}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
         </Animated.View>
 
+        {/* Language */}
+        <SectionTitle title={t("language.title")} theme={theme} />
+        <Animated.View entering={FadeInUp.delay(120)} style={[styles.card, shadows.sm]}>
+          <LanguageSelector accentColor={theme.primary} />
+        </Animated.View>
+
         {/* Account */}
-        <SectionTitle title="Account" theme={theme} />
+        <SectionTitle title={t("settings.account")} theme={theme} />
         <Animated.View entering={FadeInUp.delay(140)} style={[styles.card, shadows.sm]}>
           <LinkRow
             icon="person-outline"
-            label="Edit profile"
+            label={t("settings.editProfile")}
             testID="link-edit-profile"
             onPress={() => router.push("/driver-edit")}
             theme={theme}
@@ -280,7 +289,7 @@ export default function SettingsScreen() {
           <Divider theme={theme} />
           <LinkRow
             icon="car-sport-outline"
-            label="My vehicles"
+            label={t("settings.myVehicles")}
             badge={`${driver.vehicles?.length || 1}`}
             testID="link-vehicles"
             onPress={() => router.push("/driver-vehicles")}
@@ -289,7 +298,7 @@ export default function SettingsScreen() {
           <Divider theme={theme} />
           <LinkRow
             icon="lock-closed-outline"
-            label="Change password"
+            label={t("settings.changePassword")}
             testID="link-password"
             onPress={() => router.push("/driver-edit")}
             theme={theme}
@@ -297,11 +306,11 @@ export default function SettingsScreen() {
         </Animated.View>
 
         {/* Notifications */}
-        <SectionTitle title="Notifications" theme={theme} />
+        <SectionTitle title={t("settings.notifications")} theme={theme} />
         <Animated.View entering={FadeInUp.delay(260)} style={[styles.card, shadows.sm]}>
           <ToggleRow
             icon="notifications-outline"
-            label="Push notifications"
+            label={t("settings.pushNotifications")}
             value={notifications.push}
             onToggle={() => toggleNotification("push")}
             testID="toggle-push"
@@ -310,7 +319,7 @@ export default function SettingsScreen() {
           <Divider theme={theme} />
           <ToggleRow
             icon="volume-high-outline"
-            label="Notification sound"
+            label={t("settings.notificationSound")}
             value={notifications.sound}
             onToggle={() => toggleNotification("sound")}
             testID="toggle-sound"
@@ -319,7 +328,7 @@ export default function SettingsScreen() {
           <Divider theme={theme} />
           <ToggleRow
             icon="cube-outline"
-            label="New order alerts"
+            label={t("settings.newOrderAlerts")}
             value={notifications.new_orders}
             onToggle={() => toggleNotification("new_orders")}
             testID="toggle-new-orders"
@@ -328,7 +337,7 @@ export default function SettingsScreen() {
           <Divider theme={theme} />
           <ToggleRow
             icon="cash-outline"
-            label="Daily earnings summary"
+            label={t("settings.dailyEarningsSummary")}
             value={notifications.earnings_summary}
             onToggle={() => toggleNotification("earnings_summary")}
             testID="toggle-earnings"
@@ -337,29 +346,29 @@ export default function SettingsScreen() {
         </Animated.View>
 
         {/* Documents & More */}
-        <SectionTitle title="Documents" theme={theme} />
+        <SectionTitle title={t("settings.documents")} theme={theme} />
         <Animated.View entering={FadeInUp.delay(300)} style={[styles.card, shadows.sm]}>
           <LinkRow 
             icon="document-text-outline" 
-            label="KYC Verification" 
-            badge="Required"
+            label={t("settings.kycVerification")} 
+            badge={t("settings.kycRequired")}
             badgeColor={theme.warning}
             testID="link-kyc" 
             onPress={() => router.push("/kyc")}
             theme={theme}
           />
           <Divider theme={theme} />
-          <LinkRow icon="card" label="Payouts & bank" badge="Weekly" testID="link-payouts" onPress={() => router.push("/wallet")} theme={theme} />
+          <LinkRow icon="card" label={t("settings.payoutsBank")} badge={t("settings.payoutsWeekly")} testID="link-payouts" onPress={() => router.push("/wallet")} theme={theme} />
           <Divider theme={theme} />
-          <LinkRow icon="receipt-outline" label="Tax documents" testID="link-tax" theme={theme} />
+          <LinkRow icon="receipt-outline" label={t("settings.taxDocuments")} testID="link-tax" theme={theme} />
         </Animated.View>
 
         {/* Support */}
-        <SectionTitle title="Support" theme={theme} />
+        <SectionTitle title={t("settings.support")} theme={theme} />
         <Animated.View entering={FadeInUp.delay(340)} style={[styles.card, shadows.sm]}>
-          <LinkRow icon="help-circle-outline" label="Help & Support" testID="link-support" theme={theme} />
+          <LinkRow icon="help-circle-outline" label={t("settings.helpSupport")} testID="link-support" theme={theme} />
           <Divider theme={theme} />
-          <LinkRow icon="shield-checkmark-outline" label="Privacy & terms" testID="link-privacy" theme={theme} />
+          <LinkRow icon="shield-checkmark-outline" label={t("settings.privacyTerms")} testID="link-privacy" theme={theme} />
         </Animated.View>
 
         {/* Sign out */}
@@ -369,10 +378,10 @@ export default function SettingsScreen() {
           onPress={handleSignOut}
         >
           <Ionicons name="log-out-outline" size={20} color={theme.error} />
-          <Text style={styles.signOutText}>Sign out</Text>
+          <Text style={styles.signOutText}>{t("common.signOut")}</Text>
         </TouchableOpacity>
 
-        <Text style={styles.versionText}>Driver app v1.0.0</Text>
+        <Text style={styles.versionText}>{t("settings.driverAppVersion")}</Text>
       </ScrollView>
     </View>
   );

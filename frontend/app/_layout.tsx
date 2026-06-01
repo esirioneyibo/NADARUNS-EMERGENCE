@@ -9,9 +9,12 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import * as Linking from "expo-linking";
 import { View, Platform, StyleSheet, Text, ActivityIndicator } from "react-native";
+import { useTranslation } from "react-i18next";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 import { NotificationProvider } from "../src/contexts/NotificationContext";
+import { LanguageProvider } from "../src/contexts/LanguageContext";
+import "../src/i18n";
 
 // Prevent splash screen from auto-hiding until app is ready
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -70,6 +73,7 @@ function TabsNavigator() {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   // Role-aware tabs: drivers and shippers each get their own bottom navigation.
   const role = user?.type;
@@ -118,7 +122,7 @@ function TabsNavigator() {
         <Tabs.Screen
           name="driver-home"
           options={{
-            title: "Home",
+            title: t("tabs.home"),
             href: isDriver ? undefined : null,
             tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
           }}
@@ -126,7 +130,7 @@ function TabsNavigator() {
         <Tabs.Screen
           name="history"
           options={{
-            title: "History",
+            title: t("tabs.history"),
             href: isDriver ? undefined : null,
             tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} />,
           }}
@@ -134,7 +138,7 @@ function TabsNavigator() {
         <Tabs.Screen
           name="wallet"
           options={{
-            title: "Wallet",
+            title: t("tabs.wallet"),
             href: isDriver ? undefined : null,
             tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" size={size} color={color} />,
           }}
@@ -142,7 +146,7 @@ function TabsNavigator() {
         <Tabs.Screen
           name="settings"
           options={{
-            title: "Profile",
+            title: t("tabs.profile"),
             href: isDriver ? undefined : null,
             tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
           }}
@@ -152,7 +156,7 @@ function TabsNavigator() {
         <Tabs.Screen
           name="shipper-home"
           options={{
-            title: "Home",
+            title: t("tabs.home"),
             href: isShipper ? undefined : null,
             tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
           }}
@@ -160,7 +164,7 @@ function TabsNavigator() {
         <Tabs.Screen
           name="shipper-create"
           options={{
-            title: "New",
+            title: t("tabs.new"),
             href: isShipper ? undefined : null,
             // Full-screen wizard: hide the tab bar while creating a shipment
             // so it doesn't collide with the wizard's fixed bottom action bar.
@@ -171,7 +175,7 @@ function TabsNavigator() {
         <Tabs.Screen
           name="shipper-settings"
           options={{
-            title: "Profile",
+            title: t("tabs.profile"),
             href: isShipper ? undefined : null,
             tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
           }}
@@ -283,9 +287,11 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

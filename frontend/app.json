@@ -79,7 +79,8 @@
       "expo-font",
       "expo-audio",
       "expo-notifications",
-      "./plugins/withSuprSendFcm"
+      "./plugins/withSuprSendFcm",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true

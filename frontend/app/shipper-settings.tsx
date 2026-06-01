@@ -15,11 +15,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 
 import { getAuthToken } from "../src/api";
 import { useAuth } from "../src/contexts/AuthContext";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
+import LanguageSelector from "../src/components/LanguageSelector";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -27,6 +29,7 @@ const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 const VEHICLE_CATEGORIES = [
   {
     category: "Medium Vehicles",
+    categoryKey: "vehicles.categories.medium",
     vehicles: [
       { id: "cargo_van", name: "Cargo Van", icon: "car-outline" as keyof typeof Ionicons.glyphMap, capacity: 1500 },
       { id: "box_truck", name: "Box Truck", icon: "bus-outline" as keyof typeof Ionicons.glyphMap, capacity: 5000 },
@@ -35,6 +38,7 @@ const VEHICLE_CATEGORIES = [
   },
   {
     category: "Heavy Vehicles",
+    categoryKey: "vehicles.categories.heavy",
     vehicles: [
       { id: "semi_truck", name: "Semi-Truck", icon: "bus-outline" as keyof typeof Ionicons.glyphMap, capacity: 20000 },
       { id: "trailer_truck", name: "Trailer Truck", icon: "train-outline" as keyof typeof Ionicons.glyphMap, capacity: 25000 },
@@ -44,6 +48,7 @@ const VEHICLE_CATEGORIES = [
   },
   {
     category: "Specialized",
+    categoryKey: "vehicles.categories.specialized",
     vehicles: [
       { id: "refrigerated", name: "Refrigerated", icon: "snow-outline" as keyof typeof Ionicons.glyphMap, capacity: 15000 },
       { id: "crane_truck", name: "Crane Truck", icon: "construct-outline" as keyof typeof Ionicons.glyphMap, capacity: 12000 },
@@ -52,6 +57,7 @@ const VEHICLE_CATEGORIES = [
   },
   {
     category: "Other",
+    categoryKey: "vehicles.categories.other",
     vehicles: [
       { id: "other", name: "Other", icon: "ellipsis-horizontal-outline" as keyof typeof Ionicons.glyphMap, capacity: 10000 },
     ],
@@ -79,6 +85,7 @@ export default function ShipperSettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme, mode, setMode } = useTheme();
   const { logout } = useAuth();
+  const { t } = useTranslation();
 
   const [profile, setProfile] = useState<ShipperProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -123,7 +130,7 @@ export default function ShipperSettingsScreen() {
       setPreferredVehicle(data.preferred_vehicle_type || null);
     } catch (e) {
       console.warn("Error loading profile:", e);
-      Alert.alert("Error", "Failed to load profile");
+      Alert.alert(t("common.error"), t("shipperSettings.loadProfileError"));
     } finally {
       setLoading(false);
     }
@@ -162,10 +169,10 @@ export default function ShipperSettingsScreen() {
       const data = await res.json();
       setProfile(data);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert("Success", "Profile updated successfully");
+      Alert.alert(t("common.success"), t("shipperSettings.profileUpdated"));
     } catch (e) {
       console.warn("Error saving profile:", e);
-      Alert.alert("Error", "Failed to save profile");
+      Alert.alert(t("common.error"), t("shipperSettings.saveProfileError"));
     } finally {
       setSaving(false);
     }
@@ -186,17 +193,17 @@ export default function ShipperSettingsScreen() {
 
     // On web, Alert might not work properly, so handle it gracefully
     if (typeof window !== "undefined" && window.confirm) {
-      if (window.confirm("Are you sure you want to sign out?")) {
+      if (window.confirm(t("settings.signOutConfirm"))) {
         doLogout();
       }
     } else {
       Alert.alert(
-        "Sign Out",
-        "Are you sure you want to sign out?",
+        t("settings.signOutTitle"),
+        t("settings.signOutConfirm"),
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
           {
-            text: "Sign Out",
+            text: t("settings.signOutTitle"),
             style: "destructive",
             onPress: doLogout,
           },
@@ -222,7 +229,7 @@ export default function ShipperSettingsScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Business Settings</Text>
+        <Text style={styles.headerTitle}>{t("shipperSettings.title")}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -244,30 +251,30 @@ export default function ShipperSettingsScreen() {
           <Text style={styles.profileEmail}>{profile?.email}</Text>
           <View style={styles.profileBadge}>
             <Ionicons name="cube" size={14} color="#fff" />
-            <Text style={styles.badgeText}>{profile?.total_shipments || 0} Shipments</Text>
+            <Text style={styles.badgeText}>{t("shipperSettings.shipments", { count: profile?.total_shipments || 0 })}</Text>
           </View>
         </Animated.View>
 
         {/* Appearance Section */}
         <Animated.View entering={FadeInUp.delay(75)}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
+          <Text style={styles.sectionTitle}>{t("shipperSettings.appearance")}</Text>
           <View style={[styles.card, shadows.sm]}>
             <View style={styles.themeGrid}>
               {[
-                { id: "light" as const, label: "Light", icon: "sunny-outline" as const },
-                { id: "dark" as const, label: "Dark", icon: "moon-outline" as const },
-                { id: "system" as const, label: "System", icon: "phone-portrait-outline" as const },
-              ].map((t) => {
-                const selected = t.id === mode;
+                { id: "light" as const, labelKey: "settings.themeLight", icon: "sunny-outline" as const },
+                { id: "dark" as const, labelKey: "settings.themeDark", icon: "moon-outline" as const },
+                { id: "system" as const, labelKey: "settings.themeSystem", icon: "phone-portrait-outline" as const },
+              ].map((opt) => {
+                const selected = opt.id === mode;
                 return (
                   <TouchableOpacity
-                    key={t.id}
+                    key={opt.id}
                     style={[styles.themeTile, selected && { backgroundColor: "#6366F1", borderColor: "#6366F1" }]}
-                    onPress={() => selectTheme(t.id)}
-                    testID={`theme-${t.id}`}
+                    onPress={() => selectTheme(opt.id)}
+                    testID={`theme-${opt.id}`}
                   >
-                    <Ionicons name={t.icon} size={22} color={selected ? "#fff" : theme.textPrimary} />
-                    <Text style={[styles.themeLabel, selected && { color: "#fff" }]}>{t.label}</Text>
+                    <Ionicons name={opt.icon} size={22} color={selected ? "#fff" : theme.textPrimary} />
+                    <Text style={[styles.themeLabel, selected && { color: "#fff" }]}>{t(opt.labelKey)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -275,19 +282,27 @@ export default function ShipperSettingsScreen() {
           </View>
         </Animated.View>
 
+        {/* Language Section */}
+        <Animated.View entering={FadeInUp.delay(85)}>
+          <Text style={styles.sectionTitle}>{t("language.title")}</Text>
+          <View style={[styles.card, shadows.sm]}>
+            <LanguageSelector accentColor="#6366F1" />
+          </View>
+        </Animated.View>
+
         {/* Account */}
         <Animated.View entering={FadeInUp.delay(90)}>
-          <Text style={styles.sectionTitle}>Account</Text>
+          <Text style={styles.sectionTitle}>{t("shipperSettings.account")}</Text>
           <View style={[styles.card, shadows.sm]}>
             <TouchableOpacity style={styles.accountRow} onPress={() => router.push("/shipper-edit")}>
               <Ionicons name="create-outline" size={20} color={theme.textSecondary} />
-              <Text style={styles.accountRowLabel}>Edit profile</Text>
+              <Text style={styles.accountRowLabel}>{t("shipperSettings.editProfile")}</Text>
               <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
             </TouchableOpacity>
             <View style={styles.divider} />
             <TouchableOpacity style={styles.accountRow} onPress={() => router.push("/shipper-edit")}>
               <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} />
-              <Text style={styles.accountRowLabel}>Change password</Text>
+              <Text style={styles.accountRowLabel}>{t("shipperSettings.changePassword")}</Text>
               <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -295,25 +310,25 @@ export default function ShipperSettingsScreen() {
 
         {/* Company Info (read-only summary) */}
         <Animated.View entering={FadeInUp.delay(110)}>
-          <Text style={styles.sectionTitle}>Company Information</Text>
+          <Text style={styles.sectionTitle}>{t("shipperSettings.companyInformation")}</Text>
           <TouchableOpacity activeOpacity={0.8} style={[styles.card, shadows.sm]} onPress={() => router.push("/shipper-edit")}>
-            <SummaryRow icon="business-outline" label="Company" value={companyName || "—"} theme={theme} />
+            <SummaryRow icon="business-outline" label={t("shipperSettings.company")} value={companyName || "—"} theme={theme} />
             <View style={styles.divider} />
-            <SummaryRow icon="person-outline" label="Contact" value={contactName || "—"} theme={theme} />
+            <SummaryRow icon="person-outline" label={t("shipperSettings.contact")} value={contactName || "—"} theme={theme} />
             <View style={styles.divider} />
-            <SummaryRow icon="call-outline" label="Phone" value={phone || "—"} theme={theme} />
+            <SummaryRow icon="call-outline" label={t("shipperSettings.phone")} value={phone || "—"} theme={theme} />
             <View style={styles.divider} />
-            <SummaryRow icon="location-outline" label="Address" value={address || "—"} theme={theme} />
+            <SummaryRow icon="location-outline" label={t("shipperSettings.address")} value={address || "—"} theme={theme} />
             <View style={styles.divider} />
-            <SummaryRow icon="document-text-outline" label="Tax ID / VAT" value={taxId || "—"} theme={theme} />
+            <SummaryRow icon="document-text-outline" label={t("shipperSettings.taxId")} value={taxId || "—"} theme={theme} />
           </TouchableOpacity>
         </Animated.View>
 
         {/* Preferred Vehicle Section */}
         <Animated.View entering={FadeInUp.delay(200)}>
-          <Text style={styles.sectionTitle}>Preferred Vehicle Type</Text>
+          <Text style={styles.sectionTitle}>{t("shipperSettings.preferredVehicleType")}</Text>
           <Text style={styles.sectionDescription}>
-            Set your default vehicle preference for new shipments
+            {t("shipperSettings.preferredVehicleDescription")}
           </Text>
           
           <View style={[styles.card, shadows.sm]}>
@@ -324,9 +339,9 @@ export default function ShipperSettingsScreen() {
                   <Ionicons name={selectedVehicle.icon} size={24} color={theme.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.currentVehicleLabel}>{selectedVehicle.name}</Text>
+                  <Text style={styles.currentVehicleLabel}>{t(`vehicles.${selectedVehicle.id}`)}</Text>
                   <Text style={styles.currentVehicleCapacity}>
-                    Up to {selectedVehicle.capacity.toLocaleString()} kg
+                    {t("shipperSettings.upToCapacity", { capacity: selectedVehicle.capacity.toLocaleString() })}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => setPreferredVehicle(null)}>
@@ -336,7 +351,7 @@ export default function ShipperSettingsScreen() {
             ) : (
               <View style={styles.noVehicleSelected}>
                 <Ionicons name="help-circle-outline" size={24} color={theme.textSecondary} />
-                <Text style={styles.noVehicleText}>No preference set (any vehicle)</Text>
+                <Text style={styles.noVehicleText}>{t("shipperSettings.noPreference")}</Text>
               </View>
             )}
 
@@ -351,7 +366,7 @@ export default function ShipperSettingsScreen() {
             >
               {VEHICLE_CATEGORIES.map((category) => (
                 <View key={category.category} style={styles.vehicleCategory}>
-                  <Text style={styles.vehicleCategoryTitle}>{category.category}</Text>
+                  <Text style={styles.vehicleCategoryTitle}>{t(category.categoryKey)}</Text>
                   <View style={styles.vehicleGrid}>
                     {category.vehicles.map((v) => {
                       const selected = v.id === preferredVehicle;
@@ -369,7 +384,7 @@ export default function ShipperSettingsScreen() {
                             style={[styles.vehicleLabel, selected && { color: "#fff" }]}
                             numberOfLines={1}
                           >
-                            {v.name}
+                            {t(`vehicles.${v.id}`)}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -393,7 +408,7 @@ export default function ShipperSettingsScreen() {
             ) : (
               <>
                 <Ionicons name="checkmark-circle" size={22} color="#fff" />
-                <Text style={styles.saveBtnText}>Save Changes</Text>
+                <Text style={styles.saveBtnText}>{t("common.saveChanges")}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -403,7 +418,7 @@ export default function ShipperSettingsScreen() {
         <Animated.View entering={FadeInUp.delay(400)}>
           <TouchableOpacity style={styles.signOutBtn} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={22} color="#EF4444" />
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Text style={styles.signOutText}>{t("common.signOut")}</Text>
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>

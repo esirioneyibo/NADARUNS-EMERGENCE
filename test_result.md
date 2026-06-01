@@ -104,6 +104,19 @@
 
 user_problem_statement: "Continue iterating on the NadaRuns Driver MVP. Started with feature (a) Photo proof at delivery."
 
+frontend:
+  - task: "i18n (English/Finnish) foundation + language switching"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/i18n/index.ts, frontend/src/contexts/LanguageContext.tsx, frontend/src/components/LanguageSelector.tsx, frontend/app/_layout.tsx, frontend/app/index.tsx, frontend/app/settings.tsx, frontend/app/shipper-settings.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Set up i18next + react-i18next with expo-localization device auto-detection and AsyncStorage persistence (key @nadaruns_language, fallback en). Added LanguageProvider wrapping the app, reusable LanguageSelector component, and Language sections in both Driver (settings.tsx) and Business (shipper-settings.tsx) profile screens. Localized: tab bar labels, welcome/role-selection screen, full Driver settings, full Business settings, shared vehicle names + categories. en.json/fi.json created. Welcome screen verified rendering in English via screenshot; lint clean. Language SWITCH/persistence not yet validated end-to-end (requires authenticated settings screen). Remaining screens (login, home, create, onboarding, kyc, tracking, etc.) + Next.js website still pending string extraction."
+
 backend:
   - task: "Stripe Payment Module - authorize (checkout) + auth/capture lifecycle"
     implemented: true
