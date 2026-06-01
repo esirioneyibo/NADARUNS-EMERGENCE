@@ -1,0 +1,51 @@
+{
+  "summary": "Validated driver-home OFFLINE state localization (English default + Finnish) for NadaRuns demo driver. After re-seeding via DELETE+POST /api/seed-demo (the pre-existing demo driver had a leftover active order which prevented OFFLINE state from rendering), the OFFLINE dashboard rendered correctly with all required strings in both locales. Tab bar localization, date locale formatting, and EN<->FI round-trip all work. One minor gap found: 'Slide to go online' text inside SlideToGoOnline component is NOT translated. Pre-existing harmless console warnings (expo-notifications, shadow*) noted; one navigation warning ('REPLACE' driver-home not handled) and WSS 502 noted as out-of-scope.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "SlideToGoOnline",
+        "issue": "The slide-to-go-online button label remains 'Slide to go online' in English even when the app language is set to Finnish. The driver-home OFFLINE screen otherwise fully localizes, but this component-level string is not wired through i18n. File: /app/frontend/src/components/SlideToGoOnline.tsx",
+        "testID": "slide-to-go-online",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Driver login -> driver-home navigation",
+        "issue": "Console error on every login: \"The action 'REPLACE' with payload {\\\"name\\\":\\\"driver-home\\\",\\\"params\\\":{}} was not handled by any navigator. Do you have a route named 'driver-home'?\" The page still lands at /driver-home via fallback URL navigation, so functionality works, but the router REPLACE intent is being dispatched against the wrong navigator (likely the tabs navigator instead of the root stack). Should target the tab route or use router.replace('/(tabs)') / proper tab name.",
+        "affected_testIDs": ["login-submit", "home-screen"]
+      },
+      {
+        "flow": "Driver WebSocket",
+        "issue": "wss://.../ws/driver/{driverId} returns HTTP 502 during WebSocket handshake on driver-home. Not in scope for this i18n run, but persistent error in console.",
+        "affected_testIDs": []
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Localize the 'Slide to go online' label in /app/frontend/src/components/SlideToGoOnline.tsx using useTranslation() + add key driverHome.slideToGoOnline to en.json and fi.json (e.g. FI: 'Liu'uta verkkoon' / 'Liu'uta mennäksesi linjoille').",
+    "Fix the post-login navigation warning: the auth flow dispatches REPLACE to a route name 'driver-home' that is not registered on the active navigator. Verify Expo Router segment names match (likely should route to '/(tabs)' or use router.replace('/driver-home') with the correct group).",
+    "Investigate wss handshake 502 on /ws/driver/{id} (ingress / backend WS proxy config). Out of this iteration's scope but should be tracked.",
+    "Note for testers: the demo driver from previous iterations had a stale active order, which forces driver-home into the ONLINE/map render branch. To test the OFFLINE dashboard, call DELETE /api/seed-demo followed by POST /api/seed-demo to reset state before login."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/driver-home.tsx is 1199 lines — exceeds the 700-line guideline. Consider splitting the OFFLINE dashboard, ONLINE map view, and incoming-request overlay into separate components.",
+    "driver-home.tsx contains a large dead block guarded by `{false && showRequest ? (` (lines ~673-759) for the deprecated incoming-order overlay. Either delete or move behind a feature flag to reduce file size and reviewer confusion.",
+    "getGreeting() / formatDate() are defined at module scope and read i18n.language only when invoked at render time — this works but won't trigger a re-render on language change unless the component re-renders for other reasons. In this run a tab-switch re-renders so it is fine, but consider moving these inside the component (or wrapping with useMemo on i18n.language) so a pure language change without remount also updates the greeting/date.",
+    "Hardcoded English strings remain inside the ONLINE branch: line 543 \"job{s} nearby\", lines 636/641/646 'Today\\'s earnings'/'Deliveries'/'Accept rate' inside the bottom sheet, line 656 'View performance & earnings'. Out of scope for this iteration (per request only OFFLINE was in scope) but flagging as known untranslated."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "95%"},
+  "seed_data_creation": "Called DELETE /api/seed-demo then POST /api/seed-demo to clear the stale active order on the demo driver. Re-seed created driver/shipper + 25 orders + 8 history items.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Driver-home OFFLINE i18n (EN default + Finnish) is fully working for greeting, stat labels (Päivän ansiot/Toimitukset/Arvosana), acceptance line ('95 % hyväksyntä'), performance card ('Suoritus ja ansiot' + 'Matkat, hyväksyntä- ja valmistumisaste'), ready message ('Valmis aloittamaan ansaitsemisen? Liu'uta alta mennäksesi linjoille...'), Finnish date locale ('maanantai 1. kesäkuuta'), and tab bar (Etusivu/Historia/Lompakko/Profiili). Round-trip back to English restores all strings. Outstanding gap: 'Slide to go online' label inside SlideToGoOnline component is not localized. Demo driver from previous test runs may carry a stale active order that masks the OFFLINE branch — always re-seed before retesting.",
+  "rca_of_issue": "Initial test run showed OFFLINE markers absent because the demo driver account already had an in-progress active order from a previous iteration's seed (the seed POST returned orders:0 because driver/shipper already existed and were not re-created, but the existing active order made `isOffline = !driver.is_online && !active` evaluate to false). Resolved by DELETE+POST /api/seed-demo to fully reset demo state; OFFLINE dashboard then rendered and all EN+FI localization assertions passed."
+}
