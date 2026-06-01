@@ -43,14 +43,12 @@ export default function OtpModal({ visible, kind, expectedHint, onClose, onSubmi
       (e) => {
         const kbHeight = e.endCoordinates.height;
         setKeyboardHeight(kbHeight);
-        // On Android, only move up a small amount to keep OTP inputs visible
-        // The sheet is already at the bottom, just needs a gentle lift
-        const moveAmount = Platform.OS === "android" 
-          ? Math.min(kbHeight * 0.25, 80)  // Android: max 80px or 25% of keyboard
-          : kbHeight;  // iOS handles this better natively
+        // Lift the whole sheet by the FULL keyboard height so the OTP inputs
+        // and Cancel button always stay above the keyboard (Android was only
+        // lifting ~80px which left them hidden).
         RNAnimated.timing(translateY, {
-          toValue: -moveAmount,
-          duration: Platform.OS === "ios" ? 250 : 100,
+          toValue: -kbHeight,
+          duration: Platform.OS === "ios" ? 250 : 150,
           useNativeDriver: true,
         }).start();
       }
