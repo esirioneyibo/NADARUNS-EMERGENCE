@@ -168,5 +168,41 @@
     "shipperCreated": "Yritystilisi on luotu onnistuneesti.",
     "registrationFailedTitle": "Rekisteröinti epäonnistui",
     "registrationFailedMsg": "Rekisteröinti epäonnistui. Yritä uudelleen."
+  },
+  "driverHome": {
+    "greetingMorning": "Hyvää huomenta",
+    "greetingAfternoon": "Hyvää iltapäivää",
+    "greetingEvening": "Hyvää iltaa",
+    "status": {
+      "accepted": "Työ hyväksytty",
+      "enroute_pickup": "Matkalla noutoon",
+      "arrived_pickup": "Noutopaikalla",
+      "picked_up": "Lasti kyydissä",
+      "enroute_dropoff": "Matkalla toimitukseen",
+      "arrived_dropoff": "Toimituspaikalla"
+    },
+    "onDelivery": "Toimituksessa",
+    "youreOnline": "Olet linjoilla",
+    "loginToContinue": "Kirjaudu sisään jatkaaksesi",
+    "loginAsDriver": "Kirjaudu sisään kuljettajana",
+    "loginDashboardPrompt": "Kirjaudu sisään kuljettajatililläsi päästäksesi koontinäkymään",
+    "jobTakenTitle": "Työ varattu",
+    "jobTakenMsg": "Toinen kuljettaja ehti jo hyväksyä tämän työn.",
+    "todaysEarnings": "Päivän ansiot",
+    "deliveries": "Toimitukset",
+    "rating": "Arvosana",
+    "acceptRate": "Hyväksyntä",
+    "acceptance": "{{rate}} % hyväksyntä",
+    "noVehicleSet": "Ei ajoneuvoa",
+    "performanceEarnings": "Suoritus ja ansiot",
+    "performanceSub": "Matkat, hyväksyntä- ja valmistumisaste",
+    "readyMessage": "Valmis aloittamaan ansaitsemisen? Liu'uta alta mennäksesi linjoille ja saadaksesi toimituspyyntöjä lähistöltä.",
+    "jobsNearby": "{{count}} työtä lähellä",
+    "reconnecting": "Yhdistetään uudelleen…",
+    "activeDelivery": "Aktiivinen toimitus",
+    "resume": "Jatka",
+    "viewPerformance": "Näytä suoritus ja ansiot",
+    "tapMarker": "Napauta merkkiä nähdäksesi työn tiedot",
+    "searchingJobs": "Etsitään töitä lähistöltä..."
   }
 }

@@ -17,7 +17,9 @@ import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInDown, SlideInUp } from "
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
+import { useTranslation } from "react-i18next";
 
+import i18n from "../src/i18n";
 import { api } from "../src/api";
 import { Driver, Order } from "../src/types";
 import { radius, shadows, spacing } from "../src/theme";
@@ -33,28 +35,29 @@ import JobDetailSheet from "../src/components/JobDetailSheet";
 // Helper to get greeting based on time of day
 function getGreeting() {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return i18n.t("driverHome.greetingMorning");
+  if (hour < 17) return i18n.t("driverHome.greetingAfternoon");
+  return i18n.t("driverHome.greetingEvening");
 }
 
 // Format current date
 function formatDate() {
-  return new Date().toLocaleDateString("en-US", {
+  const locale = i18n.language === "fi" ? "fi-FI" : "en-US";
+  return new Date().toLocaleDateString(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
 }
 
-// Live driver status labels derived from the active order's lifecycle state
-const STATUS_LABELS: Record<string, string> = {
-  accepted: "Job accepted",
-  enroute_pickup: "En route to pickup",
-  arrived_pickup: "At pickup",
-  picked_up: "Cargo on board",
-  enroute_dropoff: "En route to dropoff",
-  arrived_dropoff: "At dropoff",
+// Live driver status label keys derived from the active order's lifecycle state
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  accepted: "driverHome.status.accepted",
+  enroute_pickup: "driverHome.status.enroute_pickup",
+  arrived_pickup: "driverHome.status.arrived_pickup",
+  picked_up: "driverHome.status.picked_up",
+  enroute_dropoff: "driverHome.status.enroute_dropoff",
+  arrived_dropoff: "driverHome.status.arrived_dropoff",
 };
 
 export default function HomeScreen() {
@@ -62,6 +65,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { notify } = useNotify();
+  const { t } = useTranslation();
   const seenJobIdsRef = useRef<Set<string>>(new Set());
   const initialJobsLoadedRef = useRef(false);
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
@@ -173,7 +177,7 @@ export default function HomeScreen() {
     
     // Check if user is a driver
     if (user?.type !== "driver") {
-      setAuthError("Please login as a driver");
+      setAuthError(t("driverHome.loginAsDriver"));
       setLoading(false);
       return;
     }
@@ -195,7 +199,7 @@ export default function HomeScreen() {
       console.warn("Home load failed", e);
       // If 401 or 403, redirect to login
       if (e.message?.includes("401") || e.message?.includes("403") || e.message?.includes("Authentication")) {
-        setAuthError("Session expired. Please login again.");
+        setAuthError(t("settings.sessionExpired"));
       } else {
         setConnectionLost(true);
       }
@@ -324,7 +328,7 @@ export default function HomeScreen() {
       setAvailableOrders(prev => prev.filter(o => o.id !== orderId));
       router.push("/order");
     } catch (error: any) {
-      Alert.alert("Job Taken", "This job was already accepted by another driver.");
+      Alert.alert(t("driverHome.jobTakenTitle"), t("driverHome.jobTakenMsg"));
       // Refresh available orders
       const available = await api.getAvailableOrders(driverCoordsRef.current ?? undefined);
       setAvailableOrders(available || []);
@@ -368,10 +372,10 @@ export default function HomeScreen() {
       <View style={[styles.container, { justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.xl }]}>
         <Ionicons name="person-circle-outline" size={80} color={theme.textSecondary} />
         <Text style={{ fontSize: 20, fontWeight: "700", color: theme.textPrimary, marginTop: spacing.lg, textAlign: "center" }}>
-          {authError || "Login Required"}
+          {authError || t("common.loginRequired")}
         </Text>
         <Text style={{ fontSize: 14, color: theme.textSecondary, marginTop: spacing.sm, textAlign: "center" }}>
-          Please login with your driver account to access the dashboard
+          {t("driverHome.loginDashboardPrompt")}
         </Text>
         <TouchableOpacity 
           style={{ 
@@ -383,7 +387,7 @@ export default function HomeScreen() {
           }}
           onPress={() => router.push("/login")}
         >
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>Go to Login</Text>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>{t("common.goToLogin")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -432,7 +436,7 @@ export default function HomeScreen() {
                 <Ionicons name="wallet-outline" size={24} color="#3B82F6" />
               </View>
               <Text style={styles.statCardValue}>€{driver.earnings_today.toFixed(2)}</Text>
-              <Text style={styles.statCardLabel}>Today's earnings</Text>
+              <Text style={styles.statCardLabel}>{t("driverHome.todaysEarnings")}</Text>
             </View>
             
             <View style={styles.statCardItem}>
@@ -440,7 +444,7 @@ export default function HomeScreen() {
                 <Ionicons name="bicycle-outline" size={24} color="#F59E0B" />
               </View>
               <Text style={styles.statCardValue}>{driver.deliveries_today}</Text>
-              <Text style={styles.statCardLabel}>Deliveries</Text>
+              <Text style={styles.statCardLabel}>{t("driverHome.deliveries")}</Text>
             </View>
             
             <View style={styles.statCardItem}>
@@ -448,7 +452,7 @@ export default function HomeScreen() {
                 <Ionicons name="star-outline" size={24} color="#6366F1" />
               </View>
               <Text style={styles.statCardValue}>{driver.rating.toFixed(2)}</Text>
-              <Text style={styles.statCardLabel}>Rating</Text>
+              <Text style={styles.statCardLabel}>{t("driverHome.rating")}</Text>
             </View>
           </Animated.View>
 
@@ -456,12 +460,12 @@ export default function HomeScreen() {
           <Animated.View entering={FadeInUp.delay(300).duration(400)} style={[styles.vehicleInfoBar, shadows.sm]}>
             <View style={styles.vehicleInfoItem}>
               <Ionicons name="car-outline" size={18} color={theme.textPrimary} />
-              <Text style={styles.vehicleInfoText}>{driver.vehicle || "No vehicle set"}</Text>
+              <Text style={styles.vehicleInfoText}>{driver.vehicle || t("driverHome.noVehicleSet")}</Text>
             </View>
             <View style={styles.vehicleInfoDivider} />
             <View style={styles.vehicleInfoItem}>
               <Ionicons name="checkmark-circle-outline" size={18} color="#10B981" />
-              <Text style={styles.vehicleInfoText}>{driver.acceptance_rate.toFixed(0)}% acceptance</Text>
+              <Text style={styles.vehicleInfoText}>{t("driverHome.acceptance", { rate: driver.acceptance_rate.toFixed(0) })}</Text>
             </View>
           </Animated.View>
 
@@ -476,8 +480,8 @@ export default function HomeScreen() {
                 <Ionicons name="stats-chart" size={20} color="#6366F1" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.offlinePerfTitle}>Performance &amp; earnings</Text>
-                <Text style={styles.offlinePerfSub}>Trips, acceptance & completion rates</Text>
+                <Text style={styles.offlinePerfTitle}>{t("driverHome.performanceEarnings")}</Text>
+                <Text style={styles.offlinePerfSub}>{t("driverHome.performanceSub")}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
             </TouchableOpacity>
@@ -487,7 +491,7 @@ export default function HomeScreen() {
           <Animated.View entering={FadeIn.delay(400).duration(400)} style={styles.readyMessageBox}>
             <Ionicons name="location-outline" size={22} color={theme.textSecondary} />
             <Text style={styles.readyMessageText}>
-              Ready to start earning? Slide below to go online and receive delivery requests nearby.
+              {t("driverHome.readyMessage")}
             </Text>
           </Animated.View>
 
@@ -577,7 +581,7 @@ export default function HomeScreen() {
         >
           <View style={[styles.dot, { backgroundColor: active ? theme.warning : theme.success }]} />
           <Text style={styles.statusText}>
-            {active ? (STATUS_LABELS[active.status] || "On a delivery") : "You're online"}
+            {active ? t(STATUS_LABEL_KEYS[active.status] || "driverHome.onDelivery") : t("driverHome.youreOnline")}
           </Text>
           <View style={styles.brandSep} />
           <Text style={styles.brandText}>NadaRuns</Text>
@@ -588,7 +592,7 @@ export default function HomeScreen() {
       {connectionLost && (
         <Animated.View entering={FadeInDown.duration(200)} style={[styles.reconnectBanner, { top: insets.top + 140 }]}>
           <ActivityIndicator size="small" color="#fff" />
-          <Text style={styles.reconnectText}>Reconnecting…</Text>
+          <Text style={styles.reconnectText}>{t("driverHome.reconnecting")}</Text>
         </Animated.View>
       )}
 
@@ -603,7 +607,7 @@ export default function HomeScreen() {
           {active ? (
             <Animated.View entering={FadeInUp} style={styles.activeBanner} testID="active-order-banner">
               <View style={{ flex: 1 }}>
-                <Text style={styles.activeLabel}>Active delivery</Text>
+                <Text style={styles.activeLabel}>{t("driverHome.activeDelivery")}</Text>
                 <Text style={styles.activeTitle} numberOfLines={1}>
                   {active.pickup.name} → {active.customer.name}
                 </Text>
@@ -613,7 +617,7 @@ export default function HomeScreen() {
                 style={styles.resumeBtn}
                 testID="resume-order-button"
               >
-                <Text style={styles.resumeBtnText}>Resume</Text>
+                <Text style={styles.resumeBtnText}>{t("driverHome.resume")}</Text>
                 <Ionicons name="arrow-forward" size={16} color="#fff" />
               </TouchableOpacity>
             </Animated.View>
@@ -657,8 +661,8 @@ export default function HomeScreen() {
                 <Ionicons name="map" size={20} color={theme.primary} />
                 <Text style={styles.waitingText}>
                   {availableOrders.length > 0 
-                    ? `Tap a marker to view job details`
-                    : `Searching for nearby jobs...`}
+                    ? t("driverHome.tapMarker")
+                    : t("driverHome.searchingJobs")}
                 </Text>
               </View>
             </>
@@ -1192,3 +1196,4 @@ const createStyles = (theme: any) => StyleSheet.create({
   offlinePerfTitle: { fontSize: 15, fontWeight: "700", color: theme.textPrimary },
   offlinePerfSub: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
 });
+;

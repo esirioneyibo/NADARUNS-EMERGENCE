@@ -124,9 +124,9 @@ export default function WelcomeScreen() {
               <Ionicons name="storefront" size={36} color="#fff" />
             </View>
             <View style={styles.roleTextContainer}>
-              <Text style={styles.roleTitle}>I'm a Business</Text>
+              <Text style={styles.roleTitle}>{t("welcome.businessTitle")}</Text>
               <Text style={styles.roleDescription}>
-                Ship products, track deliveries, and grow your business
+                {t("welcome.businessDescription")}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.8)" />
@@ -134,15 +134,15 @@ export default function WelcomeScreen() {
           <View style={styles.roleFeatures}>
             <View style={styles.featureItem}>
               <Ionicons name="checkmark-circle" size={16} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.featureText}>Create shipments</Text>
+              <Text style={styles.featureText}>{t("welcome.businessFeature1")}</Text>
             </View>
             <View style={styles.featureItem}>
               <Ionicons name="checkmark-circle" size={16} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.featureText}>Track in real-time</Text>
+              <Text style={styles.featureText}>{t("welcome.businessFeature2")}</Text>
             </View>
             <View style={styles.featureItem}>
               <Ionicons name="checkmark-circle" size={16} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.featureText}>Manage orders</Text>
+              <Text style={styles.featureText}>{t("welcome.businessFeature3")}</Text>
             </View>
           </View>
         </TouchableOpacity>

@@ -168,5 +168,41 @@
     "shipperCreated": "Your business account has been created successfully.",
     "registrationFailedTitle": "Registration Failed",
     "registrationFailedMsg": "Registration failed. Please try again."
+  },
+  "driverHome": {
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "status": {
+      "accepted": "Job accepted",
+      "enroute_pickup": "En route to pickup",
+      "arrived_pickup": "At pickup",
+      "picked_up": "Cargo on board",
+      "enroute_dropoff": "En route to dropoff",
+      "arrived_dropoff": "At dropoff"
+    },
+    "onDelivery": "On a delivery",
+    "youreOnline": "You're online",
+    "loginToContinue": "Please login to continue",
+    "loginAsDriver": "Please login as a driver",
+    "loginDashboardPrompt": "Please login with your driver account to access the dashboard",
+    "jobTakenTitle": "Job Taken",
+    "jobTakenMsg": "This job was already accepted by another driver.",
+    "todaysEarnings": "Today's earnings",
+    "deliveries": "Deliveries",
+    "rating": "Rating",
+    "acceptRate": "Accept rate",
+    "acceptance": "{{rate}}% acceptance",
+    "noVehicleSet": "No vehicle set",
+    "performanceEarnings": "Performance & earnings",
+    "performanceSub": "Trips, acceptance & completion rates",
+    "readyMessage": "Ready to start earning? Slide below to go online and receive delivery requests nearby.",
+    "jobsNearby": "{{count}} jobs nearby",
+    "reconnecting": "Reconnecting…",
+    "activeDelivery": "Active delivery",
+    "resume": "Resume",
+    "viewPerformance": "View performance & earnings",
+    "tapMarker": "Tap a marker to view job details",
+    "searchingJobs": "Searching for nearby jobs..."
   }
 }
