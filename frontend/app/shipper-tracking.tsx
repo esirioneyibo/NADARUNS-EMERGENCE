@@ -102,6 +102,7 @@ export default function ShipperTrackingScreen() {
   const { theme } = useTheme();
   const { notify } = useNotify();
   const prevStatusRef = useRef<string | null>(null);
+  const authRetryRef = useRef(0);
 
   const [shipment, setShipment] = useState<ShipmentDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -158,6 +159,18 @@ export default function ShipperTrackingScreen() {
   const loadShipment = useCallback(async () => {
     try {
       const token = getAuthToken();
+      if (!token) {
+        // Auth may still be hydrating from storage (hard reload / deep-link). Retry briefly.
+        if (authRetryRef.current < 12) {
+          authRetryRef.current += 1;
+          setTimeout(() => loadShipment(), 350);
+          return;
+        }
+        setError(true);
+        setLoading(false);
+        return;
+      }
+      authRetryRef.current = 0;
       const res = await fetch(`${BASE}/api/shipper/shipments/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
