@@ -5337,7 +5337,7 @@ async def get_payment_status(
     uid = payload.get("sub")
     if utype == "shipper" and order.get("shipper_id") != uid:
         raise HTTPException(403, "Not your order")
-    if utype == "driver" and order.get("driver_id") not in (uid, None):
+    if utype == "driver" and order.get("driver_id") != uid:
         raise HTTPException(403, "Not your order")
 
     if order.get("payment_status") in ("pending", "authorized") and order.get("stripe_payment_intent_id"):
