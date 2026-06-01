@@ -1,0 +1,36 @@
+{
+  "summary": "i18n foundation validated end-to-end on web preview. Driver and Business flows pass: welcome (EN by default), login screen (role cards + Sign in to continue + Continue in Demo Mode all localized), Driver Settings (Language section with English/Suomi tiles), instant switch to Finnish (settings sections + tab bar 'Etusivu/Historia/Lompakko/Profiili' + 'Kirjaudu ulos'), AsyncStorage key '@nadaruns_language' is persisted across reload (verified 'fi' and 'en' both round-trip), switch back to English persists. Shipper Settings localizes to 'Yritysasetukset/Yritystiedot/Ensisijainen ajoneuvotyyppi/Tallenna muutokset' with tabs 'Etusivu/Uusi/Profiili'. No raw i18n keys leaked. One bug found: welcome screen 'I'm a Business' card content is hardcoded English (not wired to t()).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "app/index.tsx Business role card",
+        "issue": "The 'I'm a Business' card on the welcome screen uses hardcoded English strings (\"I'm a Business\", \"Ship products, track deliveries, and grow your business\", \"Create shipments\", \"Track in real-time\", \"Manage orders\") at lines 127-145 instead of t('welcome.businessTitle'), t('welcome.businessDescription'), t('welcome.businessFeature1..3'). The Driver card right above it (lines 92-110) uses t() correctly, so the Business card will NOT switch to Finnish when fi is active. Translation keys already exist in en.json/fi.json.",
+        "testID": "shipper-role-button",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_16.json"],
+  "action_items": [
+    "Replace hardcoded English on the Business card in /app/frontend/app/index.tsx (lines 127-145) with t('welcome.businessTitle'), t('welcome.businessDescription'), and t('welcome.businessFeature1/2/3') — mirror the Driver card pattern above it. Translation keys already exist in en.json/fi.json."
+  ],
+  "critical_code_review_comments": [
+    "index.tsx: Driver card uses i18n but Business card duplicates hardcoded English text — bug, inconsistency.",
+    "i18n/index.ts: Synchronous device-language detection on first render works; LanguageProvider correctly applies the persisted AsyncStorage value before children render (returns null until isLoaded). Solid pattern.",
+    "LanguageSelector: Tiles have correct testIDs (language-en / language-fi) and visible selected-state. Good.",
+    "shipper-settings.tsx: All section labels, vehicle category titles, and vehicle names go through t() — clean implementation.",
+    "settings.tsx: Theme tile labels use t(`settings.theme${opt.label}`) interpolation — works because keys themeLight/themeDark/themeSystem match. Slightly fragile; consider explicit keys.",
+    "Out-of-scope (per task) but worth noting for future: driver-home, shipper-home, history, wallet, onboarding, kyc, admin, driver-edit, shipper-edit, shipper-create, order, summary, chat etc. still contain hardcoded English strings — those screens are not yet translated and were excluded from this validation."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "~95% (one hardcoded-text bug on welcome Business card)"},
+  "seed_data_creation": "Hit POST /api/seed-demo to ensure demo accounts exist (idempotent, returned 0 created because already seeded).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "i18next + LanguageProvider + AsyncStorage persistence confirmed working. AsyncStorage on web is backed by localStorage key '@nadaruns_language'. testIDs language-en/language-fi reliable. Tab labels use t('tabs.*') and re-render on language change. Only remaining bug in this scope is the hardcoded English Business card on the welcome screen — see action_items.",
+  "rca_of_issue": "Welcome Business card: when the file was refactored to add i18n, only the first (Driver) card was migrated to t(); the second (Business) card kept the original hardcoded JSX literal strings. Translation keys (welcome.businessTitle, welcome.businessDescription, welcome.businessFeature1/2/3) are already present in both en.json and fi.json — only the JSX needs to swap literals for t() calls."
+}

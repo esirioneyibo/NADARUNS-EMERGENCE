@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp, FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 
 import { api, setAuthToken } from "../src/api";
 import { useAuth } from "../src/contexts/AuthContext";
@@ -62,6 +63,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { login, isAuthenticated } = useAuth();
+  const { t } = useTranslation();
   
   const [selectedRole, setSelectedRole] = useState<UserRole>("driver");
   const [email, setEmail] = useState("");
@@ -88,7 +90,7 @@ export default function LoginScreen() {
     if (selectedRole === "shipper") {
       router.replace("/shipper-home");
     } else if (selectedRole === "admin") {
-      Alert.alert("Admin Access", "Admin mode requires login credentials.");
+      Alert.alert(t("login.adminAccessTitle"), t("login.adminAccessMsg"));
     } else {
       router.replace("/driver-home");
     }
@@ -96,7 +98,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Error", "Please enter both email and password");
+      Alert.alert(t("common.error"), t("login.errorEmailPassword"));
       return;
     }
     
@@ -140,8 +142,8 @@ export default function LoginScreen() {
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (error: any) {
-      const message = error?.message || "Login failed. Please check your credentials.";
-      Alert.alert("Login Failed", message);
+      const message = error?.message || t("login.loginFailedMsg");
+      Alert.alert(t("login.loginFailedTitle"), message);
     } finally {
       setLoading(false);
     }
@@ -156,12 +158,12 @@ export default function LoginScreen() {
     }
     
     if (!email.trim() || !password.trim() || !name.trim()) {
-      Alert.alert("Error", "Please fill in all required fields");
+      Alert.alert(t("common.error"), t("login.fillRequired"));
       return;
     }
     
     if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
+      Alert.alert(t("common.error"), t("login.passwordMin"));
       return;
     }
     
@@ -186,10 +188,10 @@ export default function LoginScreen() {
       router.replace("/shipper-home");
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert("Welcome!", "Your business account has been created successfully.");
+      Alert.alert(t("login.welcomeTitle"), t("login.shipperCreated"));
     } catch (error: any) {
-      const message = error?.message || "Registration failed. Please try again.";
-      Alert.alert("Registration Failed", message);
+      const message = error?.message || t("login.registrationFailedMsg");
+      Alert.alert(t("login.registrationFailedTitle"), message);
     } finally {
       setLoading(false);
     }
@@ -217,16 +219,18 @@ export default function LoginScreen() {
           </View>
           <Text style={styles.title}>NadaRuns</Text>
           <Text style={styles.subtitle}>
-            {isRegister ? "Create your account" : "Sign in to continue"}
+            {isRegister ? t("login.createAccount") : t("login.signInToContinue")}
           </Text>
         </Animated.View>
 
         {/* Role Selector */}
         <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.roleSection}>
-          <Text style={styles.roleSectionTitle}>I am a...</Text>
+          <Text style={styles.roleSectionTitle}>{t("login.iAmA")}</Text>
           <View style={styles.roleGrid}>
             {ROLE_OPTIONS.filter(r => isRegister ? r.id !== "admin" : true).map((role) => {
               const isSelected = selectedRole === role.id;
+              const labelKey = role.id === "driver" ? "login.roleDriver" : role.id === "shipper" ? "login.roleBusiness" : "login.roleAdmin";
+              const descKey = role.id === "driver" ? "login.roleDriverDesc" : role.id === "shipper" ? "login.roleBusinessDesc" : "login.roleAdminDesc";
               return (
                 <TouchableOpacity
                   key={role.id}
@@ -243,8 +247,8 @@ export default function LoginScreen() {
                   <View style={[styles.roleIconWrap, { backgroundColor: isSelected ? role.color : theme.surfaceMuted }]}>
                     <Ionicons name={role.icon} size={24} color={isSelected ? "#fff" : theme.textSecondary} />
                   </View>
-                  <Text style={[styles.roleLabel, isSelected && { color: role.color }]}>{role.label}</Text>
-                  <Text style={styles.roleDesc}>{role.description}</Text>
+                  <Text style={[styles.roleLabel, isSelected && { color: role.color }]}>{t(labelKey)}</Text>
+                  <Text style={styles.roleDesc}>{t(descKey)}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -255,12 +259,12 @@ export default function LoginScreen() {
         <Animated.View entering={FadeInUp.delay(200).duration(400)} style={styles.form}>
           {isRegister && selectedRole === "shipper" && (
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Business Name</Text>
+              <Text style={styles.inputLabel}>{t("login.businessName")}</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="storefront-outline" size={20} color={theme.textSecondary} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Your business name"
+                  placeholder={t("login.businessNamePlaceholder")}
                   placeholderTextColor={theme.textSecondary}
                   value={name}
                   onChangeText={setName}
@@ -275,12 +279,12 @@ export default function LoginScreen() {
           {(!isRegister || selectedRole === "shipper") && (
             <>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email</Text>
+                <Text style={styles.inputLabel}>{t("login.email")}</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons name="mail-outline" size={20} color={theme.textSecondary} />
                   <TextInput
                     style={styles.input}
-                    placeholder="your@email.com"
+                    placeholder={t("login.emailPlaceholder")}
                     placeholderTextColor={theme.textSecondary}
                     value={email}
                     onChangeText={setEmail}
@@ -294,12 +298,12 @@ export default function LoginScreen() {
 
               {isRegister && selectedRole === "shipper" && (
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Phone (optional)</Text>
+                  <Text style={styles.inputLabel}>{t("login.phoneOptional")}</Text>
                   <View style={styles.inputContainer}>
                     <Ionicons name="call-outline" size={20} color={theme.textSecondary} />
                     <TextInput
                       style={styles.input}
-                      placeholder="+358 40 123 4567"
+                      placeholder={t("login.phonePlaceholder")}
                       placeholderTextColor={theme.textSecondary}
                       value={phone}
                       onChangeText={setPhone}
@@ -311,7 +315,7 @@ export default function LoginScreen() {
               )}
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Password</Text>
+                <Text style={styles.inputLabel}>{t("login.password")}</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} />
                   <TextInput
@@ -335,7 +339,7 @@ export default function LoginScreen() {
 
               {!isRegister && (
                 <TouchableOpacity style={styles.forgotBtn} testID="forgot-password">
-                  <Text style={styles.forgotText}>Forgot password?</Text>
+                  <Text style={styles.forgotText}>{t("login.forgotPassword")}</Text>
                 </TouchableOpacity>
               )}
             </>
@@ -346,7 +350,7 @@ export default function LoginScreen() {
             <View style={styles.driverRegisterInfo}>
               <Ionicons name="information-circle" size={24} color={theme.primary} />
               <Text style={styles.driverRegisterText}>
-                Driver registration requires a quick 4-step onboarding process to set up your profile and vehicle information.
+                {t("login.driverRegisterInfo")}
               </Text>
             </View>
           )}
@@ -363,8 +367,8 @@ export default function LoginScreen() {
               <>
                 <Text style={styles.submitBtnText}>
                   {isRegister 
-                    ? (selectedRole === "driver" ? "Start Onboarding" : "Create Account")
-                    : "Sign In"}
+                    ? (selectedRole === "driver" ? t("login.startOnboarding") : t("login.createAccountBtn"))
+                    : t("login.signIn")}
                 </Text>
                 <Ionicons name="arrow-forward" size={20} color="#fff" />
               </>
@@ -383,9 +387,9 @@ export default function LoginScreen() {
             testID="switch-mode"
           >
             <Text style={styles.switchModeText}>
-              {isRegister ? "Already have an account? " : "Don't have an account? "}
+              {isRegister ? t("login.alreadyHaveAccount") : t("login.dontHaveAccount")}
               <Text style={[styles.switchModeHighlight, { color: selectedRoleData.color }]}>
-                {isRegister ? "Sign In" : "Register"}
+                {isRegister ? t("login.signIn") : t("login.register")}
               </Text>
             </Text>
           </TouchableOpacity>
@@ -395,7 +399,7 @@ export default function LoginScreen() {
         <Animated.View entering={FadeIn.delay(400).duration(400)} style={styles.demoSection}>
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
+            <Text style={styles.dividerText}>{t("login.or")}</Text>
             <View style={styles.dividerLine} />
           </View>
 
@@ -405,10 +409,10 @@ export default function LoginScreen() {
             testID="demo-mode-button"
           >
             <Ionicons name="play-circle-outline" size={22} color={theme.primary} />
-            <Text style={styles.demoBtnText}>Continue in Demo Mode</Text>
+            <Text style={styles.demoBtnText}>{t("login.continueDemoMode")}</Text>
           </TouchableOpacity>
           <Text style={styles.demoNote}>
-            Try the app without signing in. Your data won't be saved.
+            {t("login.demoNote")}
           </Text>
         </Animated.View>
       </ScrollView>
