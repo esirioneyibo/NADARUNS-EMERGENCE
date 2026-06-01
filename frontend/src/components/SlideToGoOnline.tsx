@@ -24,6 +24,7 @@ interface Props {
 const THUMB = 64;
 
 export default function SlideToGoOnline({ onGoOnline, disabled, testID }: Props) {
+  const { t } = useTranslation();
   const x = useSharedValue(0);
   const [width, setWidth] = useState(320);
 
@@ -84,7 +85,7 @@ export default function SlideToGoOnline({ onGoOnline, disabled, testID }: Props)
       />
       <Animated.View style={[styles.fill, fillStyle]} />
       <Animated.View style={[styles.labelContainer, labelStyle]}>
-        <Text style={styles.label}>Slide to go online</Text>
+        <Text style={styles.label}>{t("driverHome.slideToGoOnline")}</Text>
         <Animated.View style={arrowStyle}>
           <Ionicons name="arrow-forward" size={20} color="rgba(255,255,255,0.7)" />
         </Animated.View>

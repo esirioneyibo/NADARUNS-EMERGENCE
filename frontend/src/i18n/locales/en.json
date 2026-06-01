@@ -203,6 +203,7 @@
     "resume": "Resume",
     "viewPerformance": "View performance & earnings",
     "tapMarker": "Tap a marker to view job details",
-    "searchingJobs": "Searching for nearby jobs..."
+    "searchingJobs": "Searching for nearby jobs...",
+    "slideToGoOnline": "Slide to go online"
   }
 }
