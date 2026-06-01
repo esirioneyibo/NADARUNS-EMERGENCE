@@ -43,7 +43,7 @@ export default function Navbar() {
         </div>
 
         {/* CTA Buttons */}
-        <div className="nav-cta" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="nav-cta">
           <Link href="/drivers" className="btn-outline" style={{ padding: '10px 20px', fontSize: '14px' }}>
             Drive with us
           </Link>

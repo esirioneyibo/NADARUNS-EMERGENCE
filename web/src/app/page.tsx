@@ -17,15 +17,15 @@ export default function Home() {
               <div className="badge badge-green" style={{ marginBottom: '24px' }}>
                 ⚡ #1 Delivery Platform in Finland
               </div>
-              <h1 style={{ fontSize: '56px', fontWeight: '800', lineHeight: 1.1, marginBottom: '24px', color: '#111827' }}>
+              <h1 style={{ fontSize: 'clamp(34px, 8vw, 56px)', fontWeight: '800', lineHeight: 1.1, marginBottom: '24px', color: '#111827' }}>
                 Fast & Reliable<br/>
                 <span className="gradient-text">Delivery</span> For<br/>
                 Everyone
               </h1>
-              <p style={{ fontSize: '20px', color: '#6B7280', lineHeight: 1.7, marginBottom: '40px', maxWidth: '500px' }}>
+              <p style={{ fontSize: 'clamp(16px, 4vw, 20px)', color: '#6B7280', lineHeight: 1.7, marginBottom: '40px', maxWidth: '500px' }}>
                 Connect with professional drivers for quick deliveries or join our fleet to earn money on your own schedule.
               </p>
-              <div style={{ display: 'flex', gap: '16px', marginBottom: '60px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '60px' }}>
                 <Link href="/drivers" className="btn-primary">
                   🚴 Become a Driver
                 </Link>
@@ -35,7 +35,7 @@ export default function Home() {
               </div>
               
               {/* Stats */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px', borderTop: '1px solid #E5E7EB', paddingTop: '32px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'clamp(12px, 4vw, 32px)', borderTop: '1px solid #E5E7EB', paddingTop: '32px' }}>
                 <div>
                   <div className="stat-number">10K+</div>
                   <div className="stat-label">Active Drivers</div>
@@ -252,13 +252,13 @@ export default function Home() {
         <div style={{ position: 'absolute', top: '0', left: '0', right: '0', bottom: '0', background: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.05\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }} />
         
         <div className="container" style={{ position: 'relative', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '44px', fontWeight: '800', color: 'white', marginBottom: '20px' }}>
+          <h2 style={{ fontSize: 'clamp(30px, 7vw, 44px)', fontWeight: '800', color: 'white', marginBottom: '20px' }}>
             Ready to Get Started?
           </h2>
-          <p style={{ fontSize: '20px', color: 'rgba(255,255,255,0.8)', marginBottom: '40px', maxWidth: '500px', margin: '0 auto 40px' }}>
+          <p style={{ fontSize: 'clamp(16px, 4vw, 20px)', color: 'rgba(255,255,255,0.8)', marginBottom: '40px', maxWidth: '500px', margin: '0 auto 40px' }}>
             Join thousands of drivers and businesses already using NadaRuns.
           </p>
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'center' }}>
             <Link href="/drivers" style={{
               background: 'white',
               color: '#10B981',
