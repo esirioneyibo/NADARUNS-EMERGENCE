@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # Ensure the backend .env is loaded before reading keys (this module may be
 # imported before server.py calls load_dotenv).
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
 # ----------------------------------------------------------------------------
 # Configuration
@@ -149,6 +149,28 @@ def capture_payment_intent(intent_id: str, amount_cents: int | None = None) -> s
 def cancel_payment_intent(intent_id: str) -> stripe.PaymentIntent:
     """Cancel an authorization, releasing the hold on the customer's card."""
     return stripe.PaymentIntent.cancel(intent_id)
+
+
+def create_test_authorization(amount_eur: float, metadata: dict | None = None) -> stripe.PaymentIntent:
+    """Create + confirm a manual-capture PaymentIntent using a Stripe test card.
+
+    QA / automation helper only: lets the test suite drive the full
+    authorize -> capture flow without completing the hosted Checkout page.
+    Guarded by the caller to TEST keys only.
+    """
+    return stripe.PaymentIntent.create(
+        amount=to_cents(amount_eur),
+        currency=CURRENCY,
+        capture_method="manual",
+        payment_method="pm_card_visa",
+        confirm=True,
+        automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
+        metadata={k: str(v) for k, v in (metadata or {}).items() if v is not None},
+    )
+
+
+def is_test_key() -> bool:
+    return STRIPE_SECRET_KEY.startswith("sk_test_")
 
 
 def construct_webhook_event(payload: bytes, sig_header: str):

@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from "react";
-import { LayoutDashboard, Truck, Users, Package, Car, ShieldCheck, LogOut } from "lucide-react";
+import { LayoutDashboard, Truck, Users, Package, Car, ShieldCheck, LogOut, BadgeEuro } from "lucide-react";
 import { adminApi, setToken, clearToken, hasToken } from "@/lib/adminApi";
 import Overview from "@/components/admin/Overview";
 import Drivers from "@/components/admin/Drivers";
@@ -9,8 +9,9 @@ import Shippers from "@/components/admin/Shippers";
 import Orders from "@/components/admin/Orders";
 import Vehicles from "@/components/admin/Vehicles";
 import Kyc from "@/components/admin/Kyc";
+import Financials from "@/components/admin/Financials";
 
-type Section = "overview" | "drivers" | "shippers" | "orders" | "vehicles" | "kyc";
+type Section = "overview" | "drivers" | "shippers" | "orders" | "vehicles" | "kyc" | "financials";
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -39,11 +40,12 @@ export default function AdminPage() {
     { key: "shippers", label: "Shippers", icon: Users },
     { key: "orders", label: "Orders", icon: Package },
     { key: "vehicles", label: "Vehicles", icon: Car },
+    { key: "financials", label: "Financials", icon: BadgeEuro },
     { key: "kyc", label: "KYC", icon: ShieldCheck, count: pendingKyc || undefined },
   ];
   const titles: Record<Section, string> = {
     overview: "Dashboard overview", drivers: "Drivers", shippers: "Shippers",
-    orders: "Orders & deliveries", vehicles: "Fleet & vehicles", kyc: "KYC verification",
+    orders: "Orders & deliveries", vehicles: "Fleet & vehicles", financials: "Financials & payments", kyc: "KYC verification",
   };
   const logout = () => { clearToken(); setAuthed(false); };
 
@@ -81,6 +83,7 @@ export default function AdminPage() {
             {section === "shippers" && <Shippers notify={notify} />}
             {section === "orders" && <Orders notify={notify} />}
             {section === "vehicles" && <Vehicles />}
+            {section === "financials" && <Financials notify={notify} />}
             {section === "kyc" && <Kyc notify={notify} />}
           </div>
         </main>

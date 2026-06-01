@@ -72,6 +72,55 @@ export interface Wallet {
   transactions: WalletTransaction[];
 }
 
+export type PaymentStatus =
+  | "unpaid" | "pending" | "authorized" | "captured" | "payment_failed" | "refunded" | "canceled";
+
+export interface PaymentSummary {
+  order_id: string;
+  order_number?: string;
+  payment_status: PaymentStatus;
+  payment_amount?: number | null;
+  commission_amount?: number | null;
+  driver_payout_amount?: number | null;
+  currency: string;
+  stripe_payment_intent_id?: string | null;
+  authorized_at?: string | null;
+  captured_at?: string | null;
+}
+
+export interface WalletEarning {
+  order_id: string;
+  order_number?: string;
+  amount: number;
+  gross_amount: number;
+  commission_amount: number;
+  created_at: string;
+}
+
+export interface WithdrawalItem {
+  id: string;
+  driver_id: string;
+  amount: number;
+  currency: string;
+  method: string;
+  account_details?: string | null;
+  status: "pending" | "approved" | "paid" | "rejected";
+  reference?: string | null;
+  note?: string | null;
+  requested_at: string;
+  processed_at?: string | null;
+}
+
+export interface DriverWallet {
+  available_balance: number;
+  pending_balance: number;
+  total_earned: number;
+  total_withdrawn: number;
+  currency: string;
+  earnings: WalletEarning[];
+  withdrawals: WithdrawalItem[];
+}
+
 export interface NotificationPrefs {
   push: boolean;
   sound: boolean;

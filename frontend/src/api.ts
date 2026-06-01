@@ -1,5 +1,5 @@
 import Constants from "expo-constants";
-import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet } from "./types";
+import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet, PaymentSummary, DriverWallet, WithdrawalItem } from "./types";
 
 // Get BASE URL from environment with multiple fallback options
 // Priority: 1. EXPO_PUBLIC_BACKEND_URL env var, 2. Extra config, 3. Hardcoded production URL
@@ -266,6 +266,28 @@ export const api = {
   
   // Wallet
   getWallet: () => request<Wallet>("/driver/wallet"),
+
+  // ---- Payments (Stripe auth -> capture) ----
+  getPaymentConfig: () =>
+    request<{ configured: boolean; test_mode: boolean; currency: string }>("/payments/config"),
+  createPaymentCheckout: (orderId: string, urls?: { success_url?: string; cancel_url?: string }) =>
+    request<{ url: string; session_id: string; payment_status: string }>(
+      `/payments/orders/${orderId}/checkout`,
+      { method: "POST", body: JSON.stringify(urls || {}) }
+    ),
+  getPaymentStatus: (orderId: string) =>
+    request<PaymentSummary>(`/payments/orders/${orderId}/status`),
+  authorizePaymentTest: (orderId: string) =>
+    request<PaymentSummary>(`/payments/orders/${orderId}/authorize-test`, { method: "POST" }),
+
+  // ---- Driver wallet & cash-out (financial module) ----
+  getDriverWallet: () => request<DriverWallet>("/wallet/driver"),
+  requestWithdrawal: (body: { amount: number; method?: string; account_details?: string }) =>
+    request<DriverWallet & { withdrawal: WithdrawalItem }>("/wallet/withdraw", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  getWithdrawals: () => request<{ withdrawals: WithdrawalItem[] }>("/wallet/withdrawals"),
   
   // KYC
   getKYCStatus: () => request<{

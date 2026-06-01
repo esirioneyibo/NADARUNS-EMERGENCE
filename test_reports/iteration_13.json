@@ -1,0 +1,40 @@
+{
+  "summary": "Backend-only testing of the Stripe Payments & Financial Management module. Built /app/backend/tests/test_payments_finance.py (26 pytest cases) covering /payments/config, hosted Checkout smoke (Stripe URL returned, payment_status=pending), TEST-ONLY authorize-test endpoint (real Stripe test calls with pm_card_visa -> payment_status=authorized, ~20% commission split), GET /payments/orders/{id}/status reconciliation, admin manual capture (captures funds & writes a 'capture' entry to payment_transactions ledger), auto-capture on driver-driven delivery (accept -> authorize -> advance x N -> delivered -> payment_status=captured), cancel-authorization (releases hold -> canceled), driver wallet shape & values, cash-out validation (amount<10 -> 400, amount>balance -> 400, valid -> pending), withdrawal admin approve/pay (with reference)/reject (with reason) transitions, admin financials overview KPI shape + 14-day series, transactions pagination, /admin/payments/authorized listing, and all auth guards (admin-only for capture/cancel/financials, driver-only for /wallet/*, owner/admin for /payments/orders/{id}/status). 26/26 PASS against the public EXPO_PUBLIC_BACKEND_URL with the live Stripe TEST secret key.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/admin/financials/withdrawals/{id}/approve", "issue": "Admin can approve/pay a withdrawal without checking that the driver still has sufficient available_balance at approval time (no re-validation). available_balance is, however, computed correctly off the withdrawal_requests collection, so funds are accounted for once a request exists."},
+      {"endpoint": "GET /api/payments/orders/{id}/status", "issue": "When utype=='driver', the guard allows access if order.driver_id is None (unassigned). In practice any logged-in driver could read the payment status of any unassigned order. Low impact (no sensitive PII in the response) but worth tightening."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_payments_finance.py",
+    "/app/test_reports/pytest/iter13_payments.xml"
+  ],
+  "action_items": [
+    "(Optional) Re-validate available_balance inside _process_withdrawal before transitioning to 'approved'/'paid' to guard against race conditions or admin errors.",
+    "(Optional) Tighten driver guard on GET /payments/orders/{id}/status so unassigned drivers cannot read other shippers' orders."
+  ],
+  "critical_code_review_comments": [
+    "services/payments.py + server.py correctly use STRIPE_API_KEY from backend/.env (with STRIPE_SECRET_KEY fallback) and gate authorize-test on is_test_key() so it cannot run with a live key.",
+    "_apply_intent_to_order recomputes the commission split using getattr(intent, 'amount_received') for captures, which correctly handles partial captures.",
+    "advance_order's auto-capture branch is invoked when status transitions to 'delivered' and the test confirmed it works end-to-end against the real Stripe API.",
+    "All payment_transactions / orders / withdrawal_requests queries already exclude MongoDB '_id'.",
+    "server.py is ~5750 lines -- continues to exceed the 700-line guideline. Strongly recommend extracting routers into modules (payments_router.py, wallet_router.py, admin_financials_router.py) in a follow-up.",
+    "Admin notifications are emitted on every withdrawal transition (approve/pay/reject) -- verified via the admin withdrawal listing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_payments_finance.py (new)"
+  ],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "not tested (skipped per request)"},
+  "seed_data_creation": "Used POST /api/seed-demo. Created several TEST_ shipments (cargo_description=TEST_Boxes_*) which exercised authorize/capture/cancel flows and a handful of small (€10/€11/€12) withdrawal requests against the demo driver. All authorize calls used the Stripe test card pm_card_visa; captures were performed via the real Stripe test API.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use /app/backend/tests/test_payments_finance.py as the regression suite for the payments module. The suite assumes EXPO_PUBLIC_BACKEND_URL is reachable and that STRIPE_API_KEY (sk_test_*) is configured server-side. All tests are idempotent given the seed-demo bootstrap. Note that the backend emits a non-blocking 'EMERGENT_PUSH_KEY missing or invalid' warning during order status transitions -- this is unrelated to payments and does not affect any payment behaviour."
+}

@@ -105,6 +105,39 @@
 user_problem_statement: "Continue iterating on the NadaRuns Driver MVP. Started with feature (a) Photo proof at delivery."
 
 backend:
+  - task: "Stripe Payment Module - authorize (checkout) + auth/capture lifecycle"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/services/payments.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Implemented auth->capture Stripe flow using user's real test key (STRIPE_API_KEY in backend/.env). Endpoints: POST /api/payments/orders/{id}/checkout (Checkout Session capture_method=manual), GET /api/payments/orders/{id}/status (syncs with Stripe), POST /api/payments/orders/{id}/capture (admin), POST /api/payments/orders/{id}/cancel-authorization (admin), POST /api/payments/webhook, GET /api/payments/config, and POST /api/payments/orders/{id}/authorize-test (TEST-ONLY: server-side authorize with pm_card_visa so QA can drive the flow without the hosted page). Auto-capture wired into advance_order on delivery. Commission = price_quote - earnings (20%). Verified end-to-end via tests/smoke_payments.py."
+  - task: "Driver Wallet & Cash-out requests"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/wallet/driver (available/pending/earned/withdrawn + earnings + withdrawals), POST /api/wallet/withdraw (min EUR10, validates available balance), GET /api/wallet/withdrawals. Balance derived from captured orders' driver_payout_amount minus pending/approved/paid withdrawals (legacy delivered orders included)."
+  - task: "Admin Financial Management endpoints"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/admin/financials/overview (KPIs + 14d series), /transactions (paged ledger), GET /api/admin/payments/authorized (awaiting capture), GET /api/admin/financials/withdrawals?status=, and POST .../withdrawals/{id}/approve|pay|reject. All admin-guarded. Verified via smoke test."
   - task: "Photo proof endpoint (POST /api/orders/{id}/photo)"
     implemented: true
     working: true

@@ -16,8 +16,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
 
-import { getAuthToken } from "../src/api";
+import { getAuthToken, api } from "../src/api";
+import type { PaymentSummary, PaymentStatus } from "../src/types";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { useNotify } from "../src/contexts/NotificationContext";
@@ -83,6 +85,16 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
   rejected: { label: "Cancelled", color: "#EF4444", icon: "close-circle", description: "This shipment was cancelled" },
 };
 
+const PAYMENT_META: Record<PaymentStatus, { label: string; color: string; icon: string; sub: string }> = {
+  unpaid: { label: "Payment required", color: "#F59E0B", icon: "card-outline", sub: "Authorize payment to confirm your booking" },
+  pending: { label: "Awaiting authorization", color: "#F59E0B", icon: "hourglass-outline", sub: "Complete payment to place a hold on your card" },
+  authorized: { label: "Payment authorized", color: "#3B82F6", icon: "shield-checkmark-outline", sub: "Funds held — captured automatically on delivery" },
+  captured: { label: "Paid", color: "#10B981", icon: "checkmark-circle-outline", sub: "Payment captured on delivery" },
+  payment_failed: { label: "Payment failed", color: "#EF4444", icon: "alert-circle-outline", sub: "Something went wrong. Please try again." },
+  refunded: { label: "Refunded", color: "#6B7280", icon: "return-down-back-outline", sub: "This payment was refunded" },
+  canceled: { label: "Payment released", color: "#6B7280", icon: "close-circle-outline", sub: "The authorization hold was released" },
+};
+
 export default function ShipperTrackingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -95,6 +107,9 @@ export default function ShipperTrackingScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [payment, setPayment] = useState<PaymentSummary | null>(null);
+  const [payLoading, setPayLoading] = useState(false);
+  const [payBanner, setPayBanner] = useState<string | null>(null);
   const [liveDriverLocation, setLiveDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [tracking, setTracking] = useState<{
     eta_minutes: number | null;
@@ -161,12 +176,48 @@ export default function ShipperTrackingScreen() {
     }
   }, [id]);
 
+  const loadPayment = useCallback(async () => {
+    if (!id) return;
+    try {
+      const s = await api.getPaymentStatus(id);
+      setPayment(s);
+    } catch {
+      /* payment status optional */
+    }
+  }, [id]);
+
+  const handlePay = useCallback(async () => {
+    if (!id) return;
+    setPayLoading(true);
+    setPayBanner(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      const { url } = await api.createPaymentCheckout(id);
+      if (Platform.OS === "web") {
+        if (typeof window !== "undefined") window.open(url, "_blank");
+      } else {
+        await WebBrowser.openBrowserAsync(url);
+      }
+      for (let i = 0; i < 4; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const s = await api.getPaymentStatus(id);
+        setPayment(s);
+        if (s.payment_status === "authorized" || s.payment_status === "captured") break;
+      }
+    } catch (e: any) {
+      setPayBanner(e.message || "Could not start payment");
+    } finally {
+      setPayLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     loadShipment();
+    loadPayment();
     // Poll for status updates every 10 seconds as a fallback (WebSocket is realtime)
     const interval = setInterval(loadShipment, 10000);
     return () => clearInterval(interval);
-  }, [loadShipment]);
+  }, [loadShipment, loadPayment]);
 
   // Live ETA / route-deviation polling (HTTP fallback + ETA source).
   const trackableStatuses = ["accepted", "enroute_pickup", "arrived_pickup", "picked_up", "enroute_dropoff", "arrived_dropoff"];
@@ -375,6 +426,47 @@ export default function ShipperTrackingScreen() {
           <Text style={styles.statusTitle}>{statusConfig.label}</Text>
           <Text style={styles.statusDescription}>{statusConfig.description}</Text>
         </Animated.View>
+
+        {/* Payment Card */}
+        {shipment.status !== "rejected" && (() => {
+          const ps = (payment?.payment_status ?? "unpaid") as PaymentStatus;
+          const pm = PAYMENT_META[ps] || PAYMENT_META.unpaid;
+          const canPay = ["unpaid", "pending", "payment_failed"].includes(ps);
+          const amt = payment?.payment_amount ?? shipment.price_quote;
+          return (
+            <Animated.View entering={FadeInUp.delay(175)} style={[styles.card, shadows.sm]} testID="payment-card">
+              <Text style={styles.cardTitle}>Payment</Text>
+              <View style={styles.payRow}>
+                <View style={[styles.payIcon, { backgroundColor: pm.color + "20" }]}>
+                  <Ionicons name={pm.icon as any} size={22} color={pm.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.payStatus, { color: pm.color }]} testID="payment-status-label">{pm.label}</Text>
+                  <Text style={styles.paySub}>{pm.sub}</Text>
+                </View>
+                <Text style={styles.payAmount}>€{amt?.toFixed(2)}</Text>
+              </View>
+              {payBanner && <Text style={styles.payError} testID="payment-error">{payBanner}</Text>}
+              {canPay && (
+                <TouchableOpacity
+                  style={[styles.payBtn, payLoading && { opacity: 0.6 }]}
+                  onPress={handlePay}
+                  disabled={payLoading}
+                  testID="authorize-payment-button"
+                >
+                  {payLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="lock-closed" size={18} color="#fff" />
+                      <Text style={styles.payBtnText}>Authorize €{amt?.toFixed(2)}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </Animated.View>
+          );
+        })()}
 
         {/* Driver Info */}
         {shipment.driver && (
@@ -671,6 +763,18 @@ const createStyles = (theme: any) => StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+
+  payRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  payIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  payStatus: { fontSize: 15, fontWeight: "800" },
+  paySub: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  payAmount: { fontSize: 18, fontWeight: "900", color: theme.textPrimary, letterSpacing: -0.5 },
+  payError: { color: "#EF4444", fontSize: 13, fontWeight: "600", marginTop: spacing.md },
+  payBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: "#6366F1", paddingVertical: 15, borderRadius: radius.lg, marginTop: spacing.lg,
+  },
+  payBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
   
   driverRow: {
     flexDirection: "row",

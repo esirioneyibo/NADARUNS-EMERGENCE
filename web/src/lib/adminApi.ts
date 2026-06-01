@@ -102,4 +102,22 @@ export const adminApi = {
   kycApprove: (id: string) => req<any>(`/admin/kyc/${id}/approve`, { method: "POST" }),
   kycReject: (id: string, reason: string) =>
     req<any>(`/admin/kyc/${id}/reject?reason=${encodeURIComponent(reason)}`, { method: "POST" }),
+
+  // Financials
+  financialsOverview: () => req<any>("/admin/financials/overview"),
+  financialsTransactions: (p: { type?: string; page?: number; limit?: number }) =>
+    req<Paged<any>>(`/admin/financials/transactions${qs(p)}`),
+  authorizedPayments: () => req<{ items: any[]; total: number }>("/admin/payments/authorized"),
+  capturePayment: (orderId: string) =>
+    req<any>(`/payments/orders/${orderId}/capture`, { method: "POST", body: JSON.stringify({}) }),
+  cancelAuthorization: (orderId: string) =>
+    req<any>(`/payments/orders/${orderId}/cancel-authorization`, { method: "POST" }),
+  withdrawals: (p: { status?: string; page?: number; limit?: number }) =>
+    req<Paged<any>>(`/admin/financials/withdrawals${qs(p)}`),
+  approveWithdrawal: (id: string) =>
+    req<any>(`/admin/financials/withdrawals/${id}/approve`, { method: "POST" }),
+  payWithdrawal: (id: string, reference?: string) =>
+    req<any>(`/admin/financials/withdrawals/${id}/pay`, { method: "POST", body: JSON.stringify({ reference }) }),
+  rejectWithdrawal: (id: string, reason?: string) =>
+    req<any>(`/admin/financials/withdrawals/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
 };

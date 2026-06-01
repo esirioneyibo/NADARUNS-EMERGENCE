@@ -1061,6 +1061,22 @@ async def create_database_indexes():
         await db.idempotency_keys.create_index([("key", 1), ("scope", 1)], unique=True)
         await db.idempotency_keys.create_index("created_at", expireAfterSeconds=86400)
 
+        # Payment ledger (Stripe authorize/capture entries)
+        await db.payment_transactions.create_index("order_id")
+        await db.payment_transactions.create_index("driver_id")
+        await db.payment_transactions.create_index("shipper_id")
+        await db.payment_transactions.create_index([("stripe_payment_intent_id", 1), ("type", 1)])
+        await db.payment_transactions.create_index([("created_at", -1)])
+
+        # Driver cash-out / withdrawal requests
+        await db.withdrawal_requests.create_index("driver_id")
+        await db.withdrawal_requests.create_index("status")
+        await db.withdrawal_requests.create_index([("requested_at", -1)])
+
+        # Payment lookups on orders
+        await db.orders.create_index("stripe_payment_intent_id")
+        await db.orders.create_index("payment_status")
+
         logger.info("Database indexes created successfully")
     except Exception as e:
         logger.warning(f"Error creating indexes (may already exist): {e}")
@@ -1617,6 +1633,14 @@ async def advance_order(order_id: str, body: AdvanceRequest, request: Request):
         from_status=current, to_status=next_status,
         actor_id=driver_id, actor_type="driver",
     )
+    # On delivery completion, capture the previously authorized payment (auth -> capture).
+    if next_status == sm.DELIVERED:
+        try:
+            captured = await _auto_capture_on_delivery(order_id)
+            if captured:
+                order.update(captured)
+        except Exception as exc:  # never block delivery on a payment error
+            logger.warning(f"Auto-capture on delivery failed for {order_id}: {exc}")
     # Background push to the shipper on key lifecycle transitions.
     if next_status in ("arrived_pickup", "arrived_dropoff", "delivered"):
         asyncio.create_task(push_status_to_shipper(order, next_status))
@@ -5002,6 +5026,707 @@ async def send_chat_message(order_id: str, request: Request, user: dict = Depend
     
     msg_doc = await chat_manager.send_message(order_id, sender_id, sender_type, sender_name, message)
     return msg_doc
+
+
+# ===================== Payments (Stripe Auth -> Capture) =====================
+
+def _auth_payload(credentials: HTTPAuthorizationCredentials):
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    return decode_token(credentials.credentials)
+
+
+def _public_base(request: Request) -> str:
+    """Best-effort public origin for Stripe success/cancel URLs."""
+    env = os.environ.get("PUBLIC_BASE_URL")
+    if env:
+        return env.rstrip("/")
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    return f"{proto}://{host}"
+
+
+def _payment_summary(order: dict) -> dict:
+    return {
+        "order_id": order.get("id"),
+        "order_number": order.get("order_number"),
+        "payment_status": order.get("payment_status", "unpaid"),
+        "payment_amount": order.get("payment_amount"),
+        "commission_amount": order.get("commission_amount"),
+        "driver_payout_amount": order.get("driver_payout_amount"),
+        "currency": "EUR",
+        "stripe_payment_intent_id": order.get("stripe_payment_intent_id"),
+        "authorized_at": order.get("authorized_at"),
+        "captured_at": order.get("captured_at"),
+    }
+
+
+async def _record_ledger(order: dict, intent, kind: str, status: str, split: dict):
+    """Idempotently write a payment ledger entry (authorization | capture | refund)."""
+    intent_id = getattr(intent, "id", None)
+    if intent_id:
+        exists = await db.payment_transactions.find_one(
+            {"stripe_payment_intent_id": intent_id, "type": kind}
+        )
+        if exists:
+            return
+    charge_id = getattr(intent, "latest_charge", None)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "order_id": order.get("id"),
+        "order_number": order.get("order_number"),
+        "shipper_id": order.get("shipper_id"),
+        "driver_id": order.get("driver_id"),
+        "type": kind,
+        "gross_amount": split["gross_amount"],
+        "commission_amount": split["commission_amount"],
+        "driver_amount": split["driver_amount"],
+        "commission_rate": split["commission_rate"],
+        "currency": "EUR",
+        "stripe_payment_intent_id": intent_id,
+        "stripe_charge_id": charge_id,
+        "status": status,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.payment_transactions.insert_one(doc)
+
+
+async def _apply_intent_to_order(order: dict, intent) -> dict:
+    """Map a Stripe PaymentIntent onto our order + ledger. Returns updated fields."""
+    order_id = order["id"]
+    new_status = payments.map_intent_status(getattr(intent, "status", ""))
+    now = datetime.now(timezone.utc).isoformat()
+    driver_share = float(order.get("earnings") or 0)
+
+    auth_gross = payments.from_cents(getattr(intent, "amount", 0) or 0)
+    split = payments.commission_split(auth_gross, driver_share)
+
+    updates: dict = {
+        "payment_status": new_status,
+        "stripe_payment_intent_id": getattr(intent, "id", order.get("stripe_payment_intent_id")),
+        "payment_amount": split["gross_amount"],
+        "commission_amount": split["commission_amount"],
+        "driver_payout_amount": split["driver_amount"],
+    }
+
+    if new_status == "authorized" and not order.get("authorized_at"):
+        updates["authorized_at"] = now
+        await _record_ledger(order, intent, "authorization", "pending", split)
+
+    if new_status == "captured":
+        captured_gross = payments.from_cents(
+            getattr(intent, "amount_received", 0) or getattr(intent, "amount", 0) or 0
+        )
+        csplit = payments.commission_split(captured_gross, driver_share)
+        updates["payment_amount"] = csplit["gross_amount"]
+        updates["commission_amount"] = csplit["commission_amount"]
+        updates["driver_payout_amount"] = csplit["driver_amount"]
+        if not order.get("captured_at"):
+            updates["captured_at"] = now
+        await _record_ledger(order, intent, "capture", "completed", csplit)
+
+    await db.orders.update_one({"id": order_id}, {"$set": updates})
+    order.update(updates)
+    return updates
+
+
+async def _sync_order_payment(order: dict) -> dict:
+    """Pull the authoritative payment state from Stripe and reconcile the order."""
+    intent_id = order.get("stripe_payment_intent_id")
+    if not intent_id and order.get("stripe_checkout_session_id"):
+        try:
+            sess = payments.retrieve_session(order["stripe_checkout_session_id"])
+            intent_id = getattr(sess, "payment_intent", None) or (sess.get("payment_intent") if isinstance(sess, dict) else None)
+            if intent_id:
+                await db.orders.update_one({"id": order["id"]}, {"$set": {"stripe_payment_intent_id": intent_id}})
+                order["stripe_payment_intent_id"] = intent_id
+        except Exception as exc:
+            logger.warning(f"Could not retrieve checkout session for {order.get('id')}: {exc}")
+    if not intent_id:
+        return {}
+    try:
+        intent = payments.retrieve_payment_intent(intent_id)
+    except Exception as exc:
+        logger.warning(f"Could not retrieve PaymentIntent {intent_id}: {exc}")
+        return {}
+    return await _apply_intent_to_order(order, intent)
+
+
+async def _auto_capture_on_delivery(order_id: str) -> dict:
+    """Capture an authorized payment when its order is delivered."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        return {}
+    status = order.get("payment_status")
+    if status not in ("authorized", "pending"):
+        return {}
+    # If still pending, sync once in case the authorization just landed.
+    if status == "pending":
+        upd = await _sync_order_payment(order)
+        order.update(upd)
+        if order.get("payment_status") != "authorized":
+            return {}
+    intent_id = order.get("stripe_payment_intent_id")
+    if not intent_id:
+        return {}
+    intent = payments.capture_payment_intent(intent_id)
+    return await _apply_intent_to_order(order, intent)
+
+
+async def compute_driver_balance(driver_id: str) -> dict:
+    """Driver wallet balance derived from captured payments + cash-out requests."""
+    def share(o):
+        v = o.get("driver_payout_amount")
+        if v is None:
+            v = float(o.get("earnings") or 0) + float(o.get("tip") or 0)
+        return float(v or 0)
+
+    captured = await db.orders.find(
+        {"driver_id": driver_id, "payment_status": "captured"},
+        {"_id": 0, "driver_payout_amount": 1, "earnings": 1, "tip": 1},
+    ).to_list(2000)
+    captured_total = round(sum(share(o) for o in captured), 2)
+
+    authorized = await db.orders.find(
+        {"driver_id": driver_id, "payment_status": "authorized"},
+        {"_id": 0, "driver_payout_amount": 1, "earnings": 1, "tip": 1},
+    ).to_list(2000)
+    pending_total = round(sum(share(o) for o in authorized), 2)
+
+    # Legacy / demo delivered orders that never went through Stripe still count.
+    legacy = await db.orders.find(
+        {"driver_id": driver_id, "status": "delivered", "payment_status": {"$in": [None, "unpaid"]}},
+        {"_id": 0, "earnings": 1, "tip": 1},
+    ).to_list(2000)
+    legacy_total = round(sum(float(o.get("earnings") or 0) + float(o.get("tip") or 0) for o in legacy), 2)
+
+    wds = await db.withdrawal_requests.find(
+        {"driver_id": driver_id, "status": {"$in": ["pending", "approved", "paid"]}},
+        {"_id": 0, "amount": 1},
+    ).to_list(2000)
+    withdrawn = round(sum(float(w.get("amount") or 0) for w in wds), 2)
+
+    earned = round(captured_total + legacy_total, 2)
+    available = round(earned - withdrawn, 2)
+    return {
+        "available_balance": max(0.0, available),
+        "pending_balance": pending_total,
+        "total_earned": earned,
+        "total_withdrawn": withdrawn,
+        "currency": "EUR",
+    }
+
+
+@api_router.get("/payments/config")
+async def payments_config():
+    return {
+        "configured": payments.is_configured(),
+        "test_mode": payments.is_test_key(),
+        "currency": "EUR",
+    }
+
+
+@api_router.post("/payments/orders/{order_id}/checkout")
+async def create_payment_checkout(
+    order_id: str,
+    body: CheckoutBody,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """Shipper authorizes payment for an order via Stripe Checkout (manual capture)."""
+    payload = _auth_payload(credentials)
+    if payload.get("type") not in ("shipper", "admin"):
+        raise HTTPException(403, "Shipper access required")
+
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if payload.get("type") == "shipper" and order.get("shipper_id") != payload.get("sub"):
+        raise HTTPException(403, "Not your order")
+
+    if order.get("payment_status") in ("authorized", "captured"):
+        raise HTTPException(400, f"Payment already {order.get('payment_status')}")
+
+    amount = float(order.get("price_quote") or order.get("payment_amount") or 0)
+    if amount <= 0:
+        raise HTTPException(400, "Order has no payable amount")
+
+    base = _public_base(request)
+    success_url = body.success_url or f"{base}/api/payments/return?status=success&order_id={order_id}&session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = body.cancel_url or f"{base}/api/payments/return?status=cancel&order_id={order_id}"
+
+    try:
+        session = payments.create_checkout_session(
+            order_id=order_id,
+            order_number=order.get("order_number", order_id),
+            amount_eur=amount,
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "order_id": order_id,
+                "shipper_id": order.get("shipper_id"),
+                "driver_id": order.get("driver_id"),
+            },
+        )
+    except Exception as exc:
+        logger.error(f"Stripe checkout creation failed for {order_id}: {exc}")
+        raise HTTPException(502, f"Could not start payment: {exc}")
+
+    intent_id = getattr(session, "payment_intent", None)
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "payment_status": "pending",
+            "stripe_checkout_session_id": session.id,
+            "stripe_payment_intent_id": intent_id,
+            "payment_amount": round(amount, 2),
+        }},
+    )
+    return {"url": session.url, "session_id": session.id, "payment_status": "pending"}
+
+
+@api_router.post("/payments/orders/{order_id}/authorize-test")
+async def authorize_payment_test(
+    order_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """TEST-ONLY: authorize an order's payment server-side using a Stripe test card.
+
+    Lets QA/automation drive the full authorize -> capture flow without
+    completing the hosted Checkout page. Disabled for live keys.
+    """
+    payload = _auth_payload(credentials)
+    if payload.get("type") not in ("shipper", "admin"):
+        raise HTTPException(403, "Shipper access required")
+    if not payments.is_test_key():
+        raise HTTPException(403, "Test authorization is only available with a Stripe test key")
+
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.get("payment_status") in ("authorized", "captured"):
+        raise HTTPException(400, f"Payment already {order.get('payment_status')}")
+
+    amount = float(order.get("price_quote") or 0)
+    if amount <= 0:
+        raise HTTPException(400, "Order has no payable amount")
+
+    try:
+        intent = payments.create_test_authorization(amount, metadata={"order_id": order_id})
+    except Exception as exc:
+        logger.error(f"Test authorization failed for {order_id}: {exc}")
+        raise HTTPException(502, f"Authorization failed: {exc}")
+
+    await _apply_intent_to_order(order, intent)
+    fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _payment_summary(fresh)
+
+
+@api_router.get("/payments/orders/{order_id}/status")
+async def get_payment_status(
+    order_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """Return the order's payment status, reconciled with Stripe."""
+    payload = _auth_payload(credentials)
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    utype = payload.get("type")
+    uid = payload.get("sub")
+    if utype == "shipper" and order.get("shipper_id") != uid:
+        raise HTTPException(403, "Not your order")
+    if utype == "driver" and order.get("driver_id") not in (uid, None):
+        raise HTTPException(403, "Not your order")
+
+    if order.get("payment_status") in ("pending", "authorized") and order.get("stripe_payment_intent_id"):
+        await _sync_order_payment(order)
+        order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _payment_summary(order)
+
+
+@api_router.post("/payments/orders/{order_id}/capture")
+async def capture_payment(
+    order_id: str,
+    body: CaptureBody,
+    user: dict = Depends(get_admin_user),
+):
+    """Admin manually captures an authorized payment (e.g. on delivery confirmation)."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    if order.get("payment_status") == "captured":
+        return _payment_summary(order)
+
+    if order.get("payment_status") != "authorized":
+        # try a sync first in case the hold just landed
+        await _sync_order_payment(order)
+        order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+        if order.get("payment_status") != "authorized":
+            raise HTTPException(400, f"Order is not authorized (status: {order.get('payment_status')})")
+
+    intent_id = order.get("stripe_payment_intent_id")
+    if not intent_id:
+        raise HTTPException(400, "No PaymentIntent on this order")
+
+    amount_cents = payments.to_cents(body.amount) if body.amount else None
+    try:
+        intent = payments.capture_payment_intent(intent_id, amount_cents)
+    except Exception as exc:
+        logger.error(f"Capture failed for {order_id}: {exc}")
+        raise HTTPException(502, f"Capture failed: {exc}")
+
+    await _apply_intent_to_order(order, intent)
+    fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _payment_summary(fresh)
+
+
+@api_router.post("/payments/orders/{order_id}/cancel-authorization")
+async def cancel_authorization(
+    order_id: str,
+    user: dict = Depends(get_admin_user),
+):
+    """Admin releases an authorization hold (e.g. cancelled before delivery)."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    intent_id = order.get("stripe_payment_intent_id")
+    if not intent_id or order.get("payment_status") not in ("authorized", "pending"):
+        raise HTTPException(400, "No releasable authorization on this order")
+    try:
+        payments.cancel_payment_intent(intent_id)
+    except Exception as exc:
+        raise HTTPException(502, f"Could not release hold: {exc}")
+    await db.orders.update_one({"id": order_id}, {"$set": {"payment_status": "canceled"}})
+    fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _payment_summary(fresh)
+
+
+@api_router.get("/payments/return", response_class=HTMLResponse)
+async def payment_return(status: str = "success", order_id: str = "", session_id: str = ""):
+    """Lightweight landing page Stripe redirects to after hosted Checkout."""
+    ok = status == "success"
+    title = "Payment authorized" if ok else "Payment cancelled"
+    color = "#16a34a" if ok else "#dc2626"
+    msg = ("Your payment has been authorized. You can return to the NadaRuns app."
+           if ok else "The payment was not completed. You can return to the app and try again.")
+    html = f"""<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'>
+<title>{title}</title></head>
+<body style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1220;color:#e5e7eb;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0'>
+<div style='text-align:center;padding:24px;max-width:420px'>
+<div style='font-size:56px'>{'✅' if ok else '⚠️'}</div>
+<h2 style='color:{color}'>{title}</h2>
+<p style='color:#9ca3af;line-height:1.5'>{msg}</p>
+</div></body></html>"""
+    return HTMLResponse(content=html)
+
+
+@api_router.post("/payments/webhook")
+async def stripe_webhook(request: Request):
+    """Stripe webhook: verifies signature (when configured) and reconciles orders."""
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+
+    event = None
+    if payments.STRIPE_WEBHOOK_SECRET:
+        try:
+            event = payments.construct_webhook_event(payload, sig)
+        except Exception as exc:
+            logger.warning(f"Webhook signature verification failed: {exc}")
+            raise HTTPException(400, "Invalid signature")
+    else:
+        # Dev fallback when no signing secret is configured.
+        try:
+            event = json.loads(payload.decode("utf-8"))
+        except Exception:
+            raise HTTPException(400, "Invalid payload")
+
+    etype = event.get("type") if isinstance(event, dict) else event["type"]
+    obj = (event.get("data", {}) or {}).get("object", {}) if isinstance(event, dict) else event["data"]["object"]
+
+    intent_id = None
+    if etype.startswith("payment_intent."):
+        intent_id = obj.get("id")
+    elif etype == "checkout.session.completed":
+        intent_id = obj.get("payment_intent")
+
+    if intent_id:
+        order = await db.orders.find_one({"stripe_payment_intent_id": intent_id}, {"_id": 0})
+        if not order:
+            md = obj.get("metadata", {}) or {}
+            if md.get("order_id"):
+                order = await db.orders.find_one({"id": md["order_id"]}, {"_id": 0})
+        if order:
+            try:
+                intent = payments.retrieve_payment_intent(intent_id)
+                await _apply_intent_to_order(order, intent)
+            except Exception as exc:
+                logger.warning(f"Webhook reconcile failed for {intent_id}: {exc}")
+
+    return {"received": True}
+
+
+# ===================== Driver Wallet & Cash-out =====================
+
+@api_router.get("/wallet/driver")
+async def wallet_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    payload = _auth_payload(credentials)
+    if payload.get("type") != "driver":
+        raise HTTPException(403, "Driver access required")
+    driver_id = payload["sub"]
+
+    balance = await compute_driver_balance(driver_id)
+
+    txns = await db.payment_transactions.find(
+        {"driver_id": driver_id, "type": "capture"}, {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+
+    withdrawals = await db.withdrawal_requests.find(
+        {"driver_id": driver_id}, {"_id": 0}
+    ).sort("requested_at", -1).limit(50).to_list(50)
+
+    return {
+        **balance,
+        "earnings": [
+            {
+                "order_id": t.get("order_id"),
+                "order_number": t.get("order_number"),
+                "amount": t.get("driver_amount"),
+                "gross_amount": t.get("gross_amount"),
+                "commission_amount": t.get("commission_amount"),
+                "created_at": t.get("created_at"),
+            } for t in txns
+        ],
+        "withdrawals": withdrawals,
+    }
+
+
+@api_router.post("/wallet/withdraw")
+async def wallet_withdraw(body: WithdrawalCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    payload = _auth_payload(credentials)
+    if payload.get("type") != "driver":
+        raise HTTPException(403, "Driver access required")
+    driver_id = payload["sub"]
+
+    amount = round(float(body.amount or 0), 2)
+    if amount < 10:
+        raise HTTPException(400, "Minimum cash-out is €10.00")
+
+    balance = await compute_driver_balance(driver_id)
+    if amount > balance["available_balance"]:
+        raise HTTPException(400, f"Amount exceeds available balance (€{balance['available_balance']:.2f})")
+
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "name": 1})
+    wr = WithdrawalRequest(
+        driver_id=driver_id,
+        driver_name=(driver or {}).get("name"),
+        amount=amount,
+        method=body.method,
+        account_details=body.account_details,
+    )
+    await db.withdrawal_requests.insert_one(wr.model_dump())
+
+    await db.notifications.insert_one(Notification(
+        recipient_id=driver_id,
+        recipient_type="driver",
+        type="payment",
+        title="Cash-out requested",
+        message=f"Your cash-out of €{amount:.2f} is pending admin approval.",
+        data={"withdrawal_id": wr.id},
+    ).model_dump())
+
+    new_balance = await compute_driver_balance(driver_id)
+    return {"withdrawal": wr.model_dump(), **new_balance}
+
+
+@api_router.get("/wallet/withdrawals")
+async def wallet_withdrawals(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    payload = _auth_payload(credentials)
+    if payload.get("type") != "driver":
+        raise HTTPException(403, "Driver access required")
+    items = await db.withdrawal_requests.find(
+        {"driver_id": payload["sub"]}, {"_id": 0}
+    ).sort("requested_at", -1).limit(100).to_list(100)
+    return {"withdrawals": items}
+
+
+# ===================== Admin: Financial Management =====================
+
+@api_router.get("/admin/financials/overview")
+async def admin_financials_overview(user: dict = Depends(get_admin_user)):
+    now = datetime.now(timezone.utc)
+    days = 14
+    since = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    since_iso = since.isoformat()
+
+    cap = await db.orders.aggregate([
+        {"$match": {"payment_status": "captured"}},
+        {"$group": {"_id": None,
+                    "revenue": {"$sum": "$payment_amount"},
+                    "commission": {"$sum": "$commission_amount"},
+                    "driver_payouts": {"$sum": "$driver_payout_amount"},
+                    "count": {"$sum": 1}}},
+    ]).to_list(1)
+    captured = cap[0] if cap else {}
+    total_revenue = round(float(captured.get("revenue", 0) or 0), 2)
+    total_commission = round(float(captured.get("commission", 0) or 0), 2)
+    total_driver_payouts = round(float(captured.get("driver_payouts", 0) or 0), 2)
+    captured_count = captured.get("count", 0)
+
+    auth = await db.orders.aggregate([
+        {"$match": {"payment_status": "authorized"}},
+        {"$group": {"_id": None, "amount": {"$sum": "$payment_amount"}, "count": {"$sum": 1}}},
+    ]).to_list(1)
+    authorized_amount = round(float(auth[0]["amount"], ) if auth else 0.0, 2)
+    authorized_count = auth[0]["count"] if auth else 0
+
+    wd_pending = await db.withdrawal_requests.aggregate([
+        {"$match": {"status": {"$in": ["pending", "approved"]}}},
+        {"$group": {"_id": None, "amount": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+    ]).to_list(1)
+    pending_withdrawals = round(float(wd_pending[0]["amount"]) if wd_pending else 0.0, 2)
+    pending_withdrawals_count = wd_pending[0]["count"] if wd_pending else 0
+
+    wd_paid = await db.withdrawal_requests.aggregate([
+        {"$match": {"status": "paid"}},
+        {"$group": {"_id": None, "amount": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+    ]).to_list(1)
+    paid_withdrawals = round(float(wd_paid[0]["amount"]) if wd_paid else 0.0, 2)
+    paid_withdrawals_count = wd_paid[0]["count"] if wd_paid else 0
+
+    day_keys = [(since + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+    rows = {r["_id"]: r for r in await db.orders.aggregate([
+        {"$match": {"payment_status": "captured", "captured_at": {"$gte": since_iso}}},
+        {"$group": {"_id": {"$substr": ["$captured_at", 0, 10]},
+                    "revenue": {"$sum": "$payment_amount"},
+                    "commission": {"$sum": "$commission_amount"},
+                    "count": {"$sum": 1}}},
+    ]).to_list(1000)}
+    series = []
+    for k in day_keys:
+        r = rows.get(k, {})
+        series.append({
+            "date": k,
+            "revenue": round(float(r.get("revenue", 0) or 0), 2),
+            "commission": round(float(r.get("commission", 0) or 0), 2),
+            "captures": r.get("count", 0),
+        })
+
+    return {
+        "kpis": {
+            "total_revenue": total_revenue,
+            "total_commission": total_commission,
+            "total_driver_payouts": total_driver_payouts,
+            "captured_payments": captured_count,
+            "authorized_amount": authorized_amount,
+            "authorized_count": authorized_count,
+            "pending_withdrawals_amount": pending_withdrawals,
+            "pending_withdrawals_count": pending_withdrawals_count,
+            "paid_withdrawals_amount": paid_withdrawals,
+            "paid_withdrawals_count": paid_withdrawals_count,
+            "net_platform": round(total_commission, 2),
+        },
+        "series": series,
+        "currency": "EUR",
+    }
+
+
+@api_router.get("/admin/financials/transactions")
+async def admin_financials_transactions(
+    page: int = 1, limit: int = 25, type: Optional[str] = None,
+    user: dict = Depends(get_admin_user),
+):
+    page = max(1, page)
+    limit = max(1, min(100, limit))
+    query: dict = {}
+    if type:
+        query["type"] = type
+    total = await db.payment_transactions.count_documents(query)
+    items = await db.payment_transactions.find(query, {"_id": 0}).sort("created_at", -1) \
+        .skip((page - 1) * limit).limit(limit).to_list(limit)
+    return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+@api_router.get("/admin/payments/authorized")
+async def admin_payments_authorized(user: dict = Depends(get_admin_user)):
+    """Orders with funds authorized and awaiting capture."""
+    items = []
+    async for o in db.orders.find({"payment_status": "authorized"}, {"_id": 0}).sort("authorized_at", -1).limit(100):
+        items.append({
+            "order_id": o.get("id"),
+            "order_number": o.get("order_number"),
+            "status": o.get("status"),
+            "payment_amount": o.get("payment_amount"),
+            "commission_amount": o.get("commission_amount"),
+            "driver_payout_amount": o.get("driver_payout_amount"),
+            "shipper_id": o.get("shipper_id"),
+            "driver_id": o.get("driver_id"),
+            "authorized_at": o.get("authorized_at"),
+        })
+    return {"items": items, "total": len(items)}
+
+
+@api_router.get("/admin/financials/withdrawals")
+async def admin_list_withdrawals(
+    status: Optional[str] = None, page: int = 1, limit: int = 25,
+    user: dict = Depends(get_admin_user),
+):
+    page = max(1, page)
+    limit = max(1, min(100, limit))
+    query: dict = {}
+    if status:
+        query["status"] = status
+    total = await db.withdrawal_requests.count_documents(query)
+    items = await db.withdrawal_requests.find(query, {"_id": 0}).sort("requested_at", -1) \
+        .skip((page - 1) * limit).limit(limit).to_list(limit)
+    return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+async def _process_withdrawal(withdrawal_id: str, new_status: str, admin_id: str,
+                              reference: Optional[str] = None, note: Optional[str] = None):
+    wr = await db.withdrawal_requests.find_one({"id": withdrawal_id}, {"_id": 0})
+    if not wr:
+        raise HTTPException(404, "Withdrawal request not found")
+    updates = {
+        "status": new_status,
+        "processed_at": datetime.now(timezone.utc).isoformat(),
+        "processed_by": admin_id,
+    }
+    if reference is not None:
+        updates["reference"] = reference
+    if note is not None:
+        updates["note"] = note
+    await db.withdrawal_requests.update_one({"id": withdrawal_id}, {"$set": updates})
+    wr.update(updates)
+
+    title = {"approved": "Cash-out approved", "paid": "Cash-out paid", "rejected": "Cash-out rejected"}.get(new_status, "Cash-out update")
+    msg = {
+        "approved": f"Your cash-out of €{wr['amount']:.2f} was approved and is being processed.",
+        "paid": f"Your cash-out of €{wr['amount']:.2f} has been paid." + (f" Ref: {reference}" if reference else ""),
+        "rejected": f"Your cash-out of €{wr['amount']:.2f} was rejected." + (f" {note}" if note else ""),
+    }.get(new_status, "Your cash-out status changed.")
+    await db.notifications.insert_one(Notification(
+        recipient_id=wr["driver_id"], recipient_type="driver", type="payment",
+        title=title, message=msg, data={"withdrawal_id": withdrawal_id},
+    ).model_dump())
+    return wr
+
+
+@api_router.post("/admin/financials/withdrawals/{withdrawal_id}/approve")
+async def admin_approve_withdrawal(withdrawal_id: str, user: dict = Depends(get_admin_user)):
+    return await _process_withdrawal(withdrawal_id, "approved", user["id"])
+
+
+@api_router.post("/admin/financials/withdrawals/{withdrawal_id}/pay")
+async def admin_pay_withdrawal(withdrawal_id: str, body: WithdrawalPayBody, user: dict = Depends(get_admin_user)):
+    return await _process_withdrawal(withdrawal_id, "paid", user["id"], reference=body.reference, note=body.note)
+
+
+@api_router.post("/admin/financials/withdrawals/{withdrawal_id}/reject")
+async def admin_reject_withdrawal(withdrawal_id: str, body: WithdrawalRejectBody, user: dict = Depends(get_admin_user)):
+    return await _process_withdrawal(withdrawal_id, "rejected", user["id"], note=body.reason)
 
 
 # ===================== Lifecycle =====================
