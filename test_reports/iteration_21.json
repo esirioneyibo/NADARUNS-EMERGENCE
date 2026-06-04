@@ -1,0 +1,48 @@
+{
+  "summary": "Focused re-test of the two CRITICAL fixes from iteration 20 — both PASS. (1) JWT persistence / deep-link: Token is now persisted to localStorage under key 'nadaruns_auth_token' after login; cold-load deep links to /driver-vehicles, /wallet, and /kyc all return 200 (NOT 401) on GET /api/driver/me, /api/wallet/driver, /api/driver/kyc-status respectively. ensureTokenLoaded() in src/api.ts correctly rehydrates the token before the first request. The old 'auth_token' localStorage key is no longer used (verified absent). (2) driver-vehicles infinite spinner: vehicle list now renders immediately on cold deep-link (Cargo Van ACTIVE / DEMO-001 · 1,500 kg). The new error fallback UI with testID 'vehicles-retry' is present in code (lines 121-139) and shows a Retry + Go to Login button when load fails. Vehicle management flow: Add (POST /api/driver/vehicles 200 — Box Truck TEST-99X added & visible) and Remove non-primary (DELETE 200 — vehicle removed) both work; the 'Keep at least one vehicle' guard exists in code at line 83. Tab navigation regression passes: Home→History→Wallet→Profile (resolves to /settings)→Home all navigate correctly. The earlier iteration-20 CRITICAL bugs are resolved. Out-of-scope known issues persist (per request): /ws/driver 502 WebSocket handshake failure (preview ingress limitation), and a navigator warning 'REPLACE driver-home not handled' that does NOT block routing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "global RN-Web deprecations", "issue": "Console still spams 'shadow* style props are deprecated. Use boxShadow', 'props.pointerEvents is deprecated. Use style.pointerEvents', and a new one observed this run: 'Image: style.resizeMode is deprecated. Please use props.resizeMode.' Pre-existing; not blocking."},
+      {"component": "expo-notifications (web)", "issue": "'Listening to push token changes is not yet fully supported on web' — push registration should be gated to non-web platforms to silence the warning."},
+      {"component": "react-native-reanimated (web)", "issue": "'useNativeDriver is not supported because the native animated module is missing. Falling back to JS-based animation' — web perf only."}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_21.json",
+    "/tmp/01_driver_vehicles_coldload.png (vehicles render on cold deep-link)",
+    "/tmp/02_wallet_coldload.png (wallet €177.30 renders on cold deep-link)",
+    "/tmp/03_kyc_coldload.png (KYC Verification Complete on cold deep-link)",
+    "/tmp/04_after_add.png (Box Truck TEST-99X added)",
+    "/tmp/06_after_delete.png (vehicle removed)",
+    "/tmp/07_profile.png (Account screen)"
+  ],
+  "action_items": [
+    "[NONE BLOCKING] Both critical iteration-20 fixes are verified working. No re-fix required.",
+    "[OPTIONAL/LOW] Investigate the dev-only navigator warning: 'The action REPLACE with payload {name:\"driver-home\"} was not handled by any navigator.' Logging only — navigation still completes correctly.",
+    "[LOW] Migrate remaining RN-Web deprecations (shadow*, pointerEvents, Image resizeMode) to silence console.",
+    "[OUT OF SCOPE per request] /ws/driver/{id} returns 502 from preview ingress — known platform limitation, polling fallback covers it."
+  ],
+  "critical_code_review_comments": [
+    "src/api.ts ensureTokenLoaded() (lines 57-61) correctly guards against the cold-load race by reading TOKEN_KEY from AsyncStorage(web)/SecureStore(native) before the very first request. tokenResolved flag avoids re-reading after an explicit setAuthToken(). Solid implementation.",
+    "AuthContext.tsx uses the same TOKEN_KEY ('nadaruns_auth_token') — keys are in sync between api.ts (line 39) and AuthContext.tsx (line 8). Good.",
+    "driver-vehicles.tsx (lines 121-142) now correctly distinguishes !driver + loadError → error UI vs !driver + !loadError → spinner. The fallback UI offers both Retry (re-calls load()) and Go to Login (router.push('/login')) which is what the iteration-20 RCA requested.",
+    "No regression introduced: the same TOKEN_KEY is used at login (AuthContext.login → setItem) and at rehydrate (ensureTokenLoaded → readTokenFromStorage)."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "skipped per request",
+    "frontend": "100% on the two CRITICAL fixes targeted for re-test. Vehicle add+remove verified; set-primary not exercised via UI in this run due to selector ambiguity but the API call path (api.setPrimaryVehicle) is unchanged."
+  },
+  "seed_data_creation": "POST /api/seed-demo — 200 (idempotent). No other seed needed; demo driver already has cargo_van and an existing Box Truck added during this test was cleaned up via DELETE /api/driver/vehicles/{id}.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Both iteration-20 critical regressions are CONFIRMED FIXED. Token persistence key is 'nadaruns_auth_token' in localStorage (web) / SecureStore (native). Cold deep-links to authenticated routes now succeed with a single GET that carries the Authorization header. /driver-vehicles error UI uses testID='vehicles-retry'. WS 502 and shadow*/pointerEvents/resizeMode RN-Web deprecation warnings are pre-existing and out of scope. To exercise 'set primary': click the checkmark-circle-outline icon (the first smallBtn in the row's right-side controls) on a NON-primary vehicle card; there is no testID on these small buttons — consider adding 'set-primary-btn-<id>' and 'delete-btn-<id>' testIDs to driver-vehicles.tsx for cleaner automation, but it is not blocking.",
+  "rca_of_issue": "No new RCA needed. Iteration-20 RCA (JWT not persisted + silent spinner) is resolved by: (a) src/api.ts ensureTokenLoaded() lazy-reads TOKEN_KEY='nadaruns_auth_token' from AsyncStorage/SecureStore before the first network call, eliminating the cold-load 401 race; (b) driver-vehicles.tsx adds loadError state with a testID='vehicles-retry' fallback UI. Verified end-to-end: token shows up in localStorage as a 209-char JWT after login, and /driver-vehicles, /wallet, /kyc all return 200 on direct URL navigation."
+}

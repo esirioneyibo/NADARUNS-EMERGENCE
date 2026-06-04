@@ -48,6 +48,7 @@ export default function DriverVehiclesScreen() {
   const styles = createStyles(theme);
 
   const [driver, setDriver] = useState<Driver | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [newType, setNewType] = useState("cargo_van");
@@ -58,7 +59,13 @@ export default function DriverVehiclesScreen() {
   const flash = (msg: string, ok = true) => { setBanner({ msg, ok }); setTimeout(() => setBanner(null), 2400); };
 
   const load = useCallback(async () => {
-    try { setDriver(await api.getDriver()); } catch (e) { console.warn("vehicles load failed", e); }
+    try {
+      setLoadError(false);
+      setDriver(await api.getDriver());
+    } catch (e) {
+      console.warn("vehicles load failed", e);
+      setLoadError(true);
+    }
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -112,7 +119,27 @@ export default function DriverVehiclesScreen() {
       )}
 
       {!driver ? (
-        <View style={styles.loading}><ActivityIndicator size="large" color={theme.primary} /></View>
+        loadError ? (
+          <View style={styles.loading}>
+            <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
+            <Text style={[styles.subtle, { textAlign: "center", marginTop: spacing.md }]}>
+              We couldn't load your vehicles. Your session may have expired.
+            </Text>
+            <TouchableOpacity
+              style={[styles.retryBtn, { backgroundColor: theme.primary }]}
+              onPress={() => load()}
+              testID="vehicles-retry"
+            >
+              <Ionicons name="refresh" size={18} color="#fff" />
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.loginLink} onPress={() => router.push("/login")}>
+              <Text style={[styles.subtle, { color: theme.primary }]}>Go to Login</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.loading}><ActivityIndicator size="large" color={theme.primary} /></View>
+        )
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + 60 }} showsVerticalScrollIndicator={false}>
           <Text style={styles.subtle}>The vehicle marked Active is used to match you with jobs.</Text>
@@ -200,7 +227,10 @@ export default function DriverVehiclesScreen() {
 
 const createStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  loading: { flex: 1, alignItems: "center", justifyContent: "center" },
+  loading: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
+  retryBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 12, borderRadius: radius.pill, marginTop: spacing.lg },
+  retryBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  loginLink: { marginTop: spacing.md, padding: spacing.sm },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
   iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.surface, alignItems: "center", justifyContent: "center" },
   heading: { fontSize: 20, fontWeight: "800", color: theme.textPrimary, letterSpacing: -0.3 },

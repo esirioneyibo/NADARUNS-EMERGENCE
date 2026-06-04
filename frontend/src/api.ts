@@ -1,4 +1,7 @@
 import Constants from "expo-constants";
+import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet, PaymentSummary, DriverWallet, WithdrawalItem } from "./types";
 
 // Get BASE URL from environment with multiple fallback options
@@ -27,11 +30,39 @@ const BASE = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
 // API prefix - your backend routes are at /api/*
 const API_PREFIX = "/api";
 
-// Token storage for authenticated requests
+// Token storage for authenticated requests.
+// The token also lives in SecureStore (native) / AsyncStorage (web). On a cold
+// app launch or a deep-link, a screen may fire a request BEFORE AuthProvider has
+// finished its async rehydration. To avoid a token race (401 on first load), the
+// request() helper lazily rehydrates the token from storage when it isn't yet in
+// memory. Keep this key in sync with AuthContext (TOKEN_KEY).
+const TOKEN_KEY = "nadaruns_auth_token";
 let authToken: string | null = null;
+let tokenResolved = false;
+
+async function readTokenFromStorage(): Promise<string | null> {
+  try {
+    if (Platform.OS === "web") {
+      return await AsyncStorage.getItem(TOKEN_KEY);
+    }
+    return await SecureStore.getItemAsync(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+// Ensure we have attempted to load the persisted token at least once before a
+// request goes out. After login/logout/AuthProvider hydration set it explicitly,
+// tokenResolved short-circuits this so we never re-read stale storage.
+async function ensureTokenLoaded(): Promise<void> {
+  if (authToken || tokenResolved) return;
+  authToken = await readTokenFromStorage();
+  tokenResolved = true;
+}
 
 export function setAuthToken(token: string | null) {
   authToken = token;
+  tokenResolved = true; // an explicit set (login/logout/hydrate) is authoritative
 }
 
 export function getAuthToken(): string | null {
@@ -39,6 +70,9 @@ export function getAuthToken(): string | null {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Rehydrate the persisted token if a request races AuthProvider on cold load.
+  await ensureTokenLoaded();
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
