@@ -1,0 +1,65 @@
+{
+  "summary": "NadaRuns launch-readiness FRONTEND pass on web preview (mobile viewport 390x844). Core flows mostly PASS: driver login, KYC approved screen, wallet balance display, shipper login + home, shipper-create wizard rendering, and the state-machine UI correctly advances exactly one step per tap (accepted -> enroute_pickup -> arrived_pickup via advance-button). At arrived_pickup the UI correctly gates pickup behind a swipe-to-confirm that opens an OTP modal (demo code shown in modal) and refuses to skip states. CRITICAL bug found: JWT is NOT persisted to localStorage/AsyncStorage on web — any cold deep-link to an authenticated screen (e.g. /driver-vehicles) calls /api/driver/me with no Authorization header, gets 401, and the screen stays stuck on its loading spinner forever (driver-vehicles never renders, only ActivityIndicator). Same risk applies to /wallet, /kyc, /order on a fresh tab/reload. Secondary: WebSocket /ws/driver/{id} returns 502 (handshake fails) — real-time updates dead on web preview. shipper-create has zero testIDs which hampers QA. Two seeded shipper accounts coexist: 'Demo Logistics Co' (35 shipments) and 'Demo Business' (0) — inconsistent. Numerous deprecated RN-Web prop warnings (shadow*, pointerEvents). State-machine, payment authorize-test endpoint, KYC simulate-approval, and order seeding all worked at the API layer.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/driver", "issue": "Returns 404 — only /api/driver/me exists. Mostly fine but easy to confuse with the older path."},
+      {"endpoint": "WS /ws/driver/{driver_id}", "issue": "WebSocket handshake fails with HTTP 502 from the ingress on the preview URL. Live driver tracking will silently degrade to polling on web."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "app/driver-vehicles.tsx", "issue": "Cold-load deep link to /driver-vehicles hangs forever on ActivityIndicator. Console shows: 'vehicles load failed Error: API /driver/me failed (401)'. localStorage.auth_token is null after reload. Root cause: getAuthToken() in src/api.ts returns the in-memory module variable; the bootstrap layout does not restore the JWT from AsyncStorage before useFocusEffect fires the request. Additionally, the load() catch swallows the error and never flips a 'failed' state, so the spinner never resolves. Fix: (a) persist+restore JWT via AsyncStorage on app start before route mount, (b) on getDriver() failure set an explicit error state so the UI surfaces 'session expired' instead of spinning. Reference: /app/frontend/app/driver-vehicles.tsx:60-63, /app/frontend/src/api.ts:179.", "testID": "n/a (no testID on screen root)", "priority": "CRITICAL"},
+      {"component": "auth bootstrap (likely app/_layout.tsx or src/api.ts)", "issue": "JWT is stored in module memory only — full-page reload or direct URL entry loses it. Same screens that polled OK in the in-app navigation flow (wallet, kyc) will fail on a refresh. Expectation: token should be persisted via AsyncStorage/SecureStore and rehydrated before any API call.", "testID": "n/a", "priority": "CRITICAL"},
+      {"component": "app/shipper-create.tsx", "issue": "Zero testID attributes across the entire 1727-line wizard (Pickup→Dropoff→Package→Price→When→Review). The Continue and Confirm & Create buttons have no testID. Blocks automated QA of the shipper creation flow.", "testID": "missing", "priority": "MEDIUM"},
+      {"component": "app/driver-vehicles.tsx", "issue": "Same as above: no testID on root, header, add-button, vehicle cards, plate input, confirm button. Cannot drive vehicle management with automation.", "testID": "missing", "priority": "MEDIUM"},
+      {"component": "shipper-home Demo Business vs Demo Logistics Co", "issue": "Two shipper accounts appear with the same demo credentials in different runs — 'Demo Logistics Co' (35 shipments, 7 active) and 'Demo Business' (0 shipments). Likely a duplicate seed or a separate registered shipper using the same email. Confusing for QA. Investigate /api/seed-demo + /api/auth/shipper-register idempotency.", "testID": "shipper-home", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "OTP gate at arrived_pickup", "issue": "Swipe-to-confirm-pickup opens an OTP modal whose demo code changes per arrival (saw 5933 then 6712 on next swipe). The demo code is displayed in the modal so a real driver could enter it, but the changing value should be documented for QA. Stage stayed at arrived_pickup until correct code entered (good — illegal skipping prevented).", "affected_testIDs": ["swipe-confirm-pickup", "stage-arrived_pickup"]},
+      {"flow": "Driver realtime updates", "issue": "wss://.../ws/driver/{id} returns 502 → WebSocket handshake failure in console. Driver location updates and incoming-job push will not arrive in real-time on web preview.", "affected_testIDs": ["incoming-order-card", "active-order-banner"]},
+      {"flow": "Authenticated deep links", "issue": "Direct navigation to /driver-vehicles (and likely /wallet, /kyc, /order, /shipper-tracking on a refresh) sends no Authorization header → 401. Auth state must be rehydrated from storage at app startup before route components mount.", "affected_testIDs": ["wallet-screen", "kyc-screen", "order-flow-screen"]}
+    ],
+    "design_issues": [
+      {"screen": "shipper-create step 1", "issues": ["Long-press to select address opens a map picker — fine — but the manual 'Or type address manually...' input duplicates the same field, which can be confusing. Consider showing one or the other."]}
+    ],
+    "react_native_issues": [
+      {"component": "global (multiple components)", "issue": "Console spam: '\"shadow*\" style props are deprecated. Use \"boxShadow\"' and 'props.pointerEvents is deprecated. Use style.pointerEvents'. RN-Web 0.19+ deprecations — migrate to boxShadow and style.pointerEvents to silence and ensure forward compatibility."},
+      {"component": "expo-notifications (web)", "issue": "'Listening to push token changes is not yet fully supported on web' — push notifications cannot be tested on web preview; not blocking but worth gating push registration to non-web platforms."},
+      {"component": "react-native-reanimated", "issue": "'useNativeDriver is not supported because the native animated module is missing. Falling back to JS-based animation.' — performance impact on web, not a bug per se."}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_20.json",
+    "/tmp/04_order_screen.png (order screen at accepted)",
+    "/tmp/05_after_advance.png (state advanced to arrived_pickup)",
+    "/tmp/20_otp.png (pickup OTP modal)",
+    "/tmp/40_vehicles_loaded.png (stuck spinner)"
+  ],
+  "action_items": [
+    "[CRITICAL] Persist JWT to AsyncStorage/SecureStore (and on web, localStorage) and rehydrate via getAuthToken before any /api call. Today getAuthToken() returns the in-memory module variable so every refresh / direct deep link gets 401. Add a bootstrap step in app/_layout.tsx that restores token before children mount.",
+    "[CRITICAL] In app/driver-vehicles.tsx, on api.getDriver() error set a hasError state so the UI shows 'Session expired — please sign in again' instead of an infinite spinner. Same defensive pattern needed in any screen that gates UI on `!data`.",
+    "[HIGH] Investigate why wss://.../ws/driver/{id} returns 502 on the preview ingress. If ingress doesn't proxy WS, document the limitation and ensure the client falls back to polling cleanly.",
+    "[MEDIUM] Add testID attributes throughout app/shipper-create.tsx (step inputs, Continue, Confirm & Create) and app/driver-vehicles.tsx (Add a vehicle, plate input, Confirm, vehicle card, delete) so automated QA can drive the create + vehicle-management flows.",
+    "[LOW] De-duplicate demo shipper accounts — pick one of 'Demo Logistics Co' / 'Demo Business' as the canonical seeded shipper to avoid confusion.",
+    "[LOW] Migrate deprecated shadow* style props to boxShadow and props.pointerEvents to style.pointerEvents across components to clean up console.",
+    "[INFO] OTP pickup code rotates per arrival — verify back-end intent; document for support team."
+  ],
+  "critical_code_review_comments": [
+    "app/driver-vehicles.tsx (lines 60-63): `load = async () => { try { setDriver(await api.getDriver()); } catch (e) { console.warn(...) } }` — failure path silently leaves driver === null which renders a permanent spinner (line 114-115). Always promote API failure to an explicit error state in the UI.",
+    "src/api.ts (line 179): /driver/me uses an in-memory token. Any cold load (deep-link, hard refresh, opening a new tab) starts with no Authorization header. JWT MUST be hydrated from persistent storage before the first request.",
+    "app/shipper-create.tsx is 1727 lines — exceeds the 700-line guideline. Recommend splitting into step components (PickupStep, DropoffStep, PackageStep, PriceStep, ScheduleStep, ReviewStep) for maintainability and test coverage.",
+    "Swipe-confirm components on order.tsx (swipe-confirm-pickup, swipe-confirm-delivery) cannot be triggered by a simple click — need a real drag. Consider exposing an underlying button/testID that performs the same action for accessibility and QA.",
+    "No KeyboardAvoidingView reference seen on web — KeyboardAwareScrollView (from react-native-keyboard-controller) is used in shipper-create; verify on iOS native that the bottom action bar isn't covered by the keyboard."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "skipped (per request — backend already PASS 28/28 in iteration_19)",
+    "frontend": "~70% — login, KYC, wallet, shipper-home, shipper-create render, and partial driver lifecycle (accepted→arrived_pickup) all PASS. Driver-vehicles, post-pickup OTP-gated states, full shipper cancel/track flow could not be fully verified due to JWT-not-persisted bug and lack of testIDs."
+  },
+  "seed_data_creation": "Called POST /api/seed-demo (already idempotent — created:{driver:null,shipper:null}). Called POST /api/orders/seed-new-pending (created order LD-38667). Called POST /api/driver/kyc/simulate-approval (driver-001 set to approved). Did NOT call /api/payments/orders/{id}/authorize-test on a new order because the UI shipment-create flow could not be driven without testIDs in this session.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Mobile viewport 390x844 is the right Expo web frame. login flow uses data-testid email-input/password-input/submit-button. Driver lifecycle controls have testIDs: advance-button, swipe-confirm-pickup, swipe-confirm-delivery, stage-<status>. The pickup/dropoff OTP modal does NOT have testIDs on its individual input boxes — query 'input[maxlength=\"1\"]' returns 4 inputs and the demo code is shown in the modal text 'Demo code: NNNN' (regex it before typing). Swipe gestures must be driven with page.mouse.down/move/up over the swipe-confirm-* element, not a click. The active demo order (already accepted by the demo driver) lives behind 'Resume' on driver-home (testID resume-order-button). To create a fresh pending order from the UI, the shipper-create.tsx wizard has no testIDs — either add them or POST /api/shipper/shipments via curl with the demo shipper token, then /api/payments/orders/{id}/authorize-test, then re-test driver acceptance.",
+  "rca_of_issue": "CRITICAL: JWT-not-persisted-on-web. Reproduction: 1) Open https://nadaruns-logistics.preview.emergentagent.com/login on mobile viewport, 2) sign in as demo.driver@nadaruns.com / demo1234, 3) wait for redirect to /driver-home, 4) navigate (or hard-refresh) to /driver-vehicles. Observed: My Vehicles header shows but the body is a permanent ActivityIndicator spinner. Network tab shows GET /api/driver/me → 401 with body {\"detail\":\"Authentication required. Please login first.\"}. Console shows the same. localStorage.getItem('auth_token') is null. Root cause: src/api.ts getAuthToken() reads an in-memory module-level variable that is repopulated only when the LoginScreen submits — full-page navigation (page.goto in Playwright, hard-refresh in browser, deep-link from email) wipes this memory. Mitigation: at app start (app/_layout.tsx top-level effect) read the persisted token from AsyncStorage (web: localStorage) and call setAuthToken() before children mount; secondarily, in any screen guarded on `!data` (driver-vehicles, possibly others) surface explicit error state so the user can see what went wrong instead of an infinite spinner."
+}
