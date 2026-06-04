@@ -1,0 +1,39 @@
+{
+  "summary": "Launch-readiness audit of NadaRuns: 28/28 backend tests PASSED across state machine, payments, wallet, admin financials, tracking, and auth/role protection. State machine enforces all legal transitions and rejects every illegal one tested (pending->delivered, accepted->picked_up skip, arrived_pickup->delivered, advancing from delivered terminal). Idempotency on /advance and double-accept race protection verified. Stripe TEST authorize -> capture flow works end-to-end, commission split (driver_payout + commission == gross within rounding) confirmed, auto-capture on delivery fires, cancel-authorization releases hold. Pricing formula matches services/pricing.py exactly (base+km*rate+weight)*urgency*special*1.08 with base+5 floor. Driver wallet shape correct, min-€10 and over-balance withdrawals rejected, valid withdrawals create pending requests. Admin financials kpis are internally consistent (commission+payouts==revenue). Toggle-online + driver location surfaces driver on /admin/dispatch/map; toggle-offline removes them. Auth protection on admin/payments/wallet endpoints all enforce 401 unauth and 403 wrong-role.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/shipper/shipments", "issue": "Response uses `order_id` field (not `id`) which is inconsistent with the Order model used elsewhere in the API (e.g. /api/orders/{id}/accept returns `id`). Test layer had to normalize. Consider returning `id` for consistency."},
+      {"endpoint": "POST /api/auth/* (push notifications)", "issue": "Background push triggers fail with 'EMERGENT_PUSH_KEY missing or invalid' on every shipment creation. Non-blocking but spams logs. Either configure EMERGENT_PUSH_KEY or short-circuit when key missing."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_launch_readiness.py",
+    "/app/test_reports/pytest/iter19_launch_readiness.xml"
+  ],
+  "action_items": [
+    "(Optional) Normalize POST /api/shipper/shipments response to expose `id` in addition to `order_id` so clients have a uniform key across all order endpoints.",
+    "(Optional) Configure EMERGENT_PUSH_KEY or silence the warning when unset to clean up backend.err.log noise.",
+    "No critical/blocking issues found. All three launch-critical systems (state machine, payments, tracking) are GO for launch from a backend correctness standpoint."
+  ],
+  "critical_code_review_comments": [
+    "services/order_state_machine.py is well-designed: pure functions, exhaustive transition table, explicit terminal-state handling. /accept uses a conditional update on status==pending which is correctly race-safe.",
+    "Auto-capture on delivery wraps the Stripe call in try/except so a payment failure cannot block delivery — good safety property.",
+    "Commission split: pricing engine computes driver share as 80% of base + 100% of offer; commission = gross - driver_payout. Both fields are persisted on the order at capture, matching the documented model.",
+    "Admin dispatch map only lists drivers with a non-null current_location even if they are online — acceptable (no marker to show otherwise) but undocumented; UI should communicate this."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_launch_readiness.py (new file)"
+  ],
+  "success_rate": {"backend": "100% (28/28)", "frontend": "n/a (skipped per request)"},
+  "seed_data_creation": "Used existing /api/seed-demo to ensure demo.driver, demo.shipper and pending orders exist. Test orders are tagged with 'TEST_LAUNCH_READINESS' cargo_description.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Test file /app/backend/tests/test_launch_readiness.py covers full lifecycle, payments authorize/capture/cancel, wallet, admin financials, tracking, and auth role protection. Re-run with: pytest /app/backend/tests/test_launch_readiness.py -v --junitxml=/app/test_reports/pytest/iter_NN_launch_readiness.xml. Note: shipment-creation response returns `order_id` not `id` — the test normalizes this."
+}
