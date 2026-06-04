@@ -81,10 +81,10 @@ export default function Footer() {
           {/* Legal */}
           <div>
             <h3 className="footer-title">Legal</h3>
-            <Link href="/contact" className="footer-link">Terms of Service</Link>
-            <Link href="/contact" className="footer-link">Privacy Policy</Link>
-            <Link href="/contact" className="footer-link">Cookie Policy</Link>
-            <Link href="/contact" className="footer-link">GDPR</Link>
+            <Link href="/terms" className="footer-link">Terms of Service</Link>
+            <Link href="/privacy" className="footer-link">Privacy Policy</Link>
+            <Link href="/cookies" className="footer-link">Cookie Policy</Link>
+            <Link href="/gdpr" className="footer-link">GDPR</Link>
           </div>
 
           {/* Contact */}
