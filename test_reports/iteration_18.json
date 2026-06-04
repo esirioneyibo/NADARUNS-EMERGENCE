@@ -1,0 +1,38 @@
+{
+  "summary": "i18n validation for shipper-home, history (driver), wallet (driver) in Finnish. Found and fixed 4 issues: (1) Syntax error in shipper-home.tsx lines 614-616 with garbage 'r\",' after styles block — Metro bundler was failing with 'Unterminated string constant'; (2) shipper-home.tsx had a hardcoded English 'Active' label that ignored t('shipperHome.active'); (3) wallet.tsx had a hardcoded English 'DELIVERY EARNINGS' section title ignoring t('wallet.deliveryEarnings'); (4) src/components/SlideToGoOnline.tsx used useTranslation() without importing it, throwing 'ReferenceError: useTranslation is not defined' on driver-home (red-screen on mobile viewport — DOM render still worked but a red error popup appeared). After fixes, all three screens display correct Finnish strings end-to-end, no raw translation keys leak, and switch back to English restores English everywhere. Cash-out modal could not be exercised at runtime because demo driver balance is €0.00 (<€10 minimum) so the button is correctly disabled; modal text bindings inspected in source use only i18n keys with correct FI translations present.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "shipper-home.tsx (line 300)", "issue": "Stat label 'Active' was hardcoded English instead of t('shipperHome.active'). FIXED by testing agent.", "testID": "shipper-home", "priority": "MEDIUM"},
+      {"component": "wallet.tsx (line 197)", "issue": "Section title 'DELIVERY EARNINGS' was hardcoded English instead of t('wallet.deliveryEarnings'). FIXED by testing agent.", "testID": "wallet-screen", "priority": "MEDIUM"},
+      {"component": "src/components/SlideToGoOnline.tsx", "issue": "useTranslation() referenced without import — causes ReferenceError on driver-home render (red overlay on web). FIXED by testing agent (added `import { useTranslation } from 'react-i18next'`).", "testID": "n/a", "priority": "HIGH"},
+      {"component": "shipper-home.tsx (lines 614-616)", "issue": "Stray characters 'r\",\\n  },\\n});' after the StyleSheet closing brace caused Metro 'Unterminated string constant' SyntaxError — entire app failed to bundle. FIXED by testing agent.", "testID": "shipper-home", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "wallet (shipper context)", "issue": "Hitting /wallet while logged in as a shipper renders raw English/technical message 'API /wallet/driver failed (403): {\"detail\":\"Driver access required\"}' instead of the localized loginPrompt. The error from api.ts is shown verbatim because catch block prefers e.message. Not blocking for this run (shippers aren't expected to land there), but worth gating wallet.tsx to driver role or mapping 403 → t('wallet.loginPrompt').", "affected_testIDs": ["wallet-screen"]}
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_18.json"],
+  "action_items": [
+    "Review the four fixes applied by testing agent (shipper-home syntax + Active i18n, wallet deliveryEarnings i18n, SlideToGoOnline import).",
+    "Consider scoping /wallet route to authenticated drivers only (or map 403 → localized wallet.loginPrompt) so a logged-in shipper sees a friendly Finnish message instead of the raw API error string.",
+    "Optional: extend driver demo seed to include some completed deliveries with paid earnings so the cash-out modal flow can be tested end-to-end (currently balance is €0 so the Nosta nyt button is permanently disabled in demo)."
+  ],
+  "critical_code_review_comments": [
+    "shipper-home.tsx had unreachable/garbage code after `});` — likely from a bad merge or partial edit. File is now 614 lines (was 616 with the broken trailing block). Recommend a lint/format pass.",
+    "SlideToGoOnline.tsx is missing the useTranslation import — surprising this wasn't caught earlier; suggests driver-home runtime path may not be covered by CI lint."
+  ],
+  "updated_files": [
+    "/app/frontend/app/shipper-home.tsx (removed garbage trailing block; localized 'Active' stat label)",
+    "/app/frontend/app/wallet.tsx (localized 'DELIVERY EARNINGS' section title)",
+    "/app/frontend/src/components/SlideToGoOnline.tsx (added missing useTranslation import)"
+  ],
+  "success_rate": {"backend": "skipped (frontend-only run)", "frontend": "100% on the three target screens (shipper-home FI, history FI, wallet FI)"},
+  "seed_data_creation": "None — used existing demo accounts and existing /api/seed-demo state. Demo driver had €0 wallet balance and 0 history deliveries, so empty-state strings were verified ('Ei vielä toimituksia', 'Ei vielä maksettuja toimituksia'). Item rows in history/wallet and the cash-out modal flow were not exercised at runtime; source-code review confirms they use the correct FI keys present in fi.json.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Metro is in CI mode (no hot-reload). After editing frontend code you MUST run `sudo supervisorctl restart expo` and wait ~30s before re-testing in the web preview, otherwise old bundle is served. Tab labels in driver app FI are Etusivu/Historia/Lompakko/Profiili; in shipper app FI they are Etusivu/Uusi/Profiili. Demo driver has zero balance + empty history, so the Nosta nyt button is disabled by design (available_balance < 10).",
+  "rca_of_issue": "1) shipper-home.tsx had a tail-of-file edit that left non-JS text ('r\",\\n  },\\n});') after the final `});`. Metro reported 'Unterminated string constant' at line 614 col 1 and the entire web bundle failed; user would never see the Finnish UI because nothing loaded. 2) Two hardcoded English strings ('Active', 'DELIVERY EARNINGS') escaped the i18n migration. 3) SlideToGoOnline imported nothing from react-i18next but called useTranslation(), causing a runtime ReferenceError on every driver-home mount (driver flow). All four fixes applied; FI strings verified visually on /shipper-home, /history, /wallet, and switching back to English on those screens restored English correctly."
+}

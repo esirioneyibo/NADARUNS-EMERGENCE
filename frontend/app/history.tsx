@@ -12,7 +12,9 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
 
+import i18n from "../src/i18n";
 import { api } from "../src/api";
 import type { Order } from "../src/types";
 import { radius, shadows, spacing, theme } from "../src/theme";
@@ -21,13 +23,15 @@ function formatDate(iso?: string | null) {
   if (!iso) return "";
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const locale = i18n.language === "fi" ? "fi-FI" : "en-US";
+    return d.toLocaleDateString(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   } catch { return ""; }
 }
 
 export default function HistoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [orders, setOrders] = useState<Order[] | null>(null);
 
   const load = useCallback(async () => {
@@ -57,18 +61,18 @@ export default function HistoryScreen() {
         >
           <Ionicons name="chevron-back" size={22} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.heading}>Delivery history</Text>
+        <Text style={styles.heading}>{t("history.title")}</Text>
         <View style={{ width: 44 }} />
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(120)} style={[styles.summaryCard, shadows.md]}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.summaryLabel}>Lifetime earnings</Text>
+          <Text style={styles.summaryLabel}>{t("history.lifetimeEarnings")}</Text>
           <Text style={styles.summaryAmount} testID="history-total">€{total.toFixed(2)}</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={{ flex: 1, alignItems: "flex-end" }}>
-          <Text style={styles.summaryLabel}>Deliveries</Text>
+          <Text style={styles.summaryLabel}>{t("history.deliveries")}</Text>
           <Text style={styles.summaryAmount}>{orders.length}</Text>
         </View>
       </Animated.View>
@@ -81,7 +85,7 @@ export default function HistoryScreen() {
         ListEmptyComponent={() => (
           <View style={styles.empty}>
             <Ionicons name="cube-outline" size={48} color={theme.textSecondary} />
-            <Text style={styles.emptyText}>No deliveries yet</Text>
+            <Text style={styles.emptyText}>{t("history.noDeliveriesYet")}</Text>
           </View>
         )}
         renderItem={({ item, index }) => (

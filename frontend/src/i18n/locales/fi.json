@@ -205,5 +205,64 @@
     "tapMarker": "Napauta merkkiä nähdäksesi työn tiedot",
     "searchingJobs": "Etsitään töitä lähistöltä...",
     "slideToGoOnline": "Liu'uta linjoille"
+  },
+  "shipperHome": {
+    "welcomeBack": "Tervetuloa takaisin,",
+    "business": "Yritys",
+    "totalShipments": "Lähetyksiä yhteensä",
+    "active": "Aktiiviset",
+    "completed": "Valmiit",
+    "createNewShipment": "Luo uusi lähetys",
+    "activeShipments": "Aktiiviset lähetykset",
+    "recentShipments": "Viimeisimmät lähetykset",
+    "noShipmentsYet": "Ei vielä lähetyksiä",
+    "createFirst": "Luo ensimmäinen lähetyksesi aloittaaksesi",
+    "status": {
+      "pending": "Odottaa kuljettajaa",
+      "accepted": "Kuljettaja määritetty",
+      "enroute_pickup": "Kuljettaja matkalla noutoon",
+      "arrived_pickup": "Kuljettaja noutopaikalla",
+      "picked_up": "Lasti noudettu",
+      "enroute_dropoff": "Kuljetuksessa",
+      "arrived_dropoff": "Saapunut määränpäähän",
+      "delivered": "Toimitettu",
+      "rejected": "Peruutettu"
+    }
+  },
+  "history": {
+    "title": "Toimitushistoria",
+    "lifetimeEarnings": "Kokonaisansiot",
+    "deliveries": "Toimitukset",
+    "noDeliveriesYet": "Ei vielä toimituksia"
+  },
+  "wallet": {
+    "title": "Lompakko",
+    "loginPrompt": "Kirjaudu sisään nähdäksesi lompakkosi",
+    "loadError": "Lompakon lataaminen epäonnistui",
+    "availableBalance": "Käytettävissä oleva saldo",
+    "pendingClears": "{{amount}} € odottaa · vapautuu toimituksen jälkeen",
+    "cashOutNow": "Nosta nyt",
+    "totalEarned": "Ansaittu yhteensä",
+    "withdrawn": "Nostettu",
+    "cashOutRequests": "NOSTOPYYNNÖT",
+    "deliveryEarnings": "TOIMITUSTEN ANSIOT",
+    "noPaidDeliveries": "Ei vielä maksettuja toimituksia",
+    "delivery": "Toimitus",
+    "feeLabel": "palkkio {{fee}} €",
+    "cashOut": "Nosta rahaa",
+    "availableMin": "Käytettävissä: {{available}} € · Vähintään 10,00 €",
+    "amountEur": "Summa (EUR)",
+    "bankIban": "Pankkitili / IBAN (valinnainen)",
+    "requestCashOut": "Pyydä nostoa",
+    "enterValidAmount": "Anna kelvollinen summa",
+    "maxAvailable": "Enimmäissumma on {{max}} €",
+    "cashOutRequested": "Nostopyyntö {{amount}} € lähetetty.",
+    "cashOutFailed": "Nosto epäonnistui",
+    "status": {
+      "pending": "Odottaa",
+      "approved": "Hyväksytty",
+      "paid": "Maksettu",
+      "rejected": "Hylätty"
+    }
   }
 }

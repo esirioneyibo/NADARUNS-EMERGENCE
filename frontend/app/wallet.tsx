@@ -15,7 +15,9 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
 
+import i18n from "../src/i18n";
 import { api } from "../src/api";
 import type { DriverWallet, WithdrawalItem } from "../src/types";
 import { radius, shadows, spacing, theme } from "../src/theme";
@@ -25,20 +27,22 @@ function formatDate(iso?: string | null) {
   if (!iso) return "";
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const locale = i18n.language === "fi" ? "fi-FI" : "en-US";
+    return d.toLocaleDateString(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   } catch { return ""; }
 }
 
 const STATUS_META: Record<WithdrawalItem["status"], { color: string; bg: string; label: string }> = {
-  pending: { color: "#b45309", bg: "#fef3c7", label: "Pending" },
-  approved: { color: "#1d4ed8", bg: "#dbeafe", label: "Approved" },
-  paid: { color: "#15803d", bg: "#dcfce7", label: "Paid" },
-  rejected: { color: "#b91c1c", bg: "#fee2e2", label: "Rejected" },
+  pending: { color: "#b45309", bg: "#fef3c7", label: "wallet.status.pending" },
+  approved: { color: "#1d4ed8", bg: "#dbeafe", label: "wallet.status.approved" },
+  paid: { color: "#15803d", bg: "#dcfce7", label: "wallet.status.paid" },
+  rejected: { color: "#b91c1c", bg: "#fee2e2", label: "wallet.status.rejected" },
 };
 
 export default function WalletScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [wallet, setWallet] = useState<DriverWallet | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +55,7 @@ export default function WalletScreen() {
 
   const load = useCallback(async () => {
     if (!isAuthenticated) {
-      setError("Please login to view your wallet");
+      setError(t("wallet.loginPrompt"));
       return;
     }
     try {
@@ -60,7 +64,7 @@ export default function WalletScreen() {
       setWallet(w);
     } catch (e: any) {
       console.warn("wallet load failed", e);
-      setError(e.message || "Failed to load wallet");
+      setError(e.message || t("wallet.loadError"));
     }
   }, [isAuthenticated]);
 
@@ -71,11 +75,11 @@ export default function WalletScreen() {
   const submitWithdraw = async () => {
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) {
-      setBanner({ kind: "error", text: "Enter a valid amount" });
+      setBanner({ kind: "error", text: t("wallet.enterValidAmount") });
       return;
     }
     if (wallet && amt > wallet.available_balance) {
-      setBanner({ kind: "error", text: `Max available is €${wallet.available_balance.toFixed(2)}` });
+      setBanner({ kind: "error", text: t("wallet.maxAvailable", { max: wallet.available_balance.toFixed(2) }) });
       return;
     }
     setSubmitting(true);
@@ -86,10 +90,10 @@ export default function WalletScreen() {
       setModalOpen(false);
       setAmount("");
       setAccount("");
-      setBanner({ kind: "success", text: `Cash-out of €${amt.toFixed(2)} requested.` });
+      setBanner({ kind: "success", text: t("wallet.cashOutRequested", { amount: amt.toFixed(2) }) });
       await load();
     } catch (e: any) {
-      setBanner({ kind: "error", text: e.message || "Cash-out failed" });
+      setBanner({ kind: "error", text: e.message || t("wallet.cashOutFailed") });
     } finally {
       setSubmitting(false);
     }
@@ -103,9 +107,9 @@ export default function WalletScreen() {
     return (
       <View style={[styles.loading, { paddingHorizontal: spacing.xl }]}>
         <Ionicons name="wallet-outline" size={64} color={theme.textSecondary} />
-        <Text style={styles.errorText}>{error || "Please login to view your wallet"}</Text>
+        <Text style={styles.errorText}>{error || t("wallet.loginPrompt")}</Text>
         <TouchableOpacity style={styles.loginBtn} onPress={() => router.push("/login")}>
-          <Text style={styles.loginBtnText}>Go to Login</Text>
+          <Text style={styles.loginBtnText}>{t("common.goToLogin")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -121,7 +125,7 @@ export default function WalletScreen() {
         <TouchableOpacity style={[styles.iconBtn, shadows.sm]} onPress={() => router.back()} testID="wallet-back-button">
           <Ionicons name="chevron-back" size={22} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.heading}>Wallet</Text>
+        <Text style={styles.heading}>{t("wallet.title")}</Text>
         <View style={{ width: 44 }} />
       </Animated.View>
 
@@ -139,11 +143,11 @@ export default function WalletScreen() {
         ListHeaderComponent={() => (
           <>
             <Animated.View entering={FadeInUp.delay(80)} style={[styles.balanceCard, shadows.lg]}>
-              <Text style={styles.balanceLabel}>Available balance</Text>
+              <Text style={styles.balanceLabel}>{t("wallet.availableBalance")}</Text>
               <Text style={styles.balanceAmount} testID="wallet-balance">€{wallet.available_balance.toFixed(2)}</Text>
               <View style={styles.pendingRow}>
                 <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.65)" />
-                <Text style={styles.pendingText}>€{wallet.pending_balance.toFixed(2)} pending · clears on delivery</Text>
+                <Text style={styles.pendingText}>{t("wallet.pendingClears", { amount: wallet.pending_balance.toFixed(2) })}</Text>
               </View>
               <TouchableOpacity
                 style={[styles.payoutBtn, wallet.available_balance < 10 && { opacity: 0.5 }]}
@@ -152,24 +156,24 @@ export default function WalletScreen() {
                 testID="cash-out-button"
               >
                 <Ionicons name="cash-outline" size={18} color={theme.primary} />
-                <Text style={styles.payoutBtnText}>Cash out now</Text>
+                <Text style={styles.payoutBtnText}>{t("wallet.cashOutNow")}</Text>
               </TouchableOpacity>
             </Animated.View>
 
             <View style={styles.statsRow}>
               <View style={[styles.statCard, shadows.sm]}>
                 <Text style={styles.statValue}>€{wallet.total_earned.toFixed(2)}</Text>
-                <Text style={styles.statLabel}>Total earned</Text>
+                <Text style={styles.statLabel}>{t("wallet.totalEarned")}</Text>
               </View>
               <View style={[styles.statCard, shadows.sm]}>
                 <Text style={styles.statValue}>€{wallet.total_withdrawn.toFixed(2)}</Text>
-                <Text style={styles.statLabel}>Withdrawn</Text>
+                <Text style={styles.statLabel}>{t("wallet.withdrawn")}</Text>
               </View>
             </View>
 
             {wallet.withdrawals.length > 0 && (
               <>
-                <Text style={styles.sectionTitle}>CASH-OUT REQUESTS</Text>
+                <Text style={styles.sectionTitle}>{t("wallet.cashOutRequests")}</Text>
                 {wallet.withdrawals.map((w) => {
                   const m = STATUS_META[w.status];
                   return (
@@ -182,7 +186,7 @@ export default function WalletScreen() {
                         <Text style={styles.txnTime}>{formatDate(w.requested_at)}{w.reference ? ` · ${w.reference}` : ""}</Text>
                       </View>
                       <View style={[styles.statusChip, { backgroundColor: m.bg }]}>
-                        <Text style={[styles.statusChipText, { color: m.color }]}>{m.label}</Text>
+                        <Text style={[styles.statusChipText, { color: m.color }]}>{t(m.label)}</Text>
                       </View>
                     </View>
                   );
@@ -190,14 +194,14 @@ export default function WalletScreen() {
               </>
             )}
 
-            <Text style={styles.sectionTitle}>DELIVERY EARNINGS</Text>
+            <Text style={styles.sectionTitle}>{t("wallet.deliveryEarnings")}</Text>
           </>
         )}
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         ListEmptyComponent={() => (
           <View style={styles.empty}>
             <Ionicons name="cube-outline" size={48} color={theme.textSecondary} />
-            <Text style={styles.emptyText}>No paid deliveries yet</Text>
+            <Text style={styles.emptyText}>{t("wallet.noPaidDeliveries")}</Text>
           </View>
         )}
         renderItem={({ item, index }) => (
@@ -206,8 +210,8 @@ export default function WalletScreen() {
               <Ionicons name="cube-outline" size={18} color={theme.primary} />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.txnDesc} numberOfLines={1}>{item.order_number || "Delivery"}</Text>
-              <Text style={styles.txnTime}>{formatDate(item.created_at)} · fee €{item.commission_amount.toFixed(2)}</Text>
+              <Text style={styles.txnDesc} numberOfLines={1}>{item.order_number || t("wallet.delivery")}</Text>
+              <Text style={styles.txnTime}>{formatDate(item.created_at)} · {t("wallet.feeLabel", { fee: item.commission_amount.toFixed(2) })}</Text>
             </View>
             <Text style={styles.txnAmount}>+€{item.amount.toFixed(2)}</Text>
           </Animated.View>
@@ -218,10 +222,10 @@ export default function WalletScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalRoot}>
           <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Cash out</Text>
-            <Text style={styles.sheetSub}>Available: €{wallet.available_balance.toFixed(2)} · Min €10.00</Text>
+            <Text style={styles.sheetTitle}>{t("wallet.cashOut")}</Text>
+            <Text style={styles.sheetSub}>{t("wallet.availableMin", { available: wallet.available_balance.toFixed(2) })}</Text>
 
-            <Text style={styles.inputLabel}>Amount (EUR)</Text>
+            <Text style={styles.inputLabel}>{t("wallet.amountEur")}</Text>
             <TextInput
               style={styles.input}
               value={amount}
@@ -231,7 +235,7 @@ export default function WalletScreen() {
               placeholderTextColor={theme.textSecondary}
               testID="withdraw-amount-input"
             />
-            <Text style={styles.inputLabel}>Bank account / IBAN (optional)</Text>
+            <Text style={styles.inputLabel}>{t("wallet.bankIban")}</Text>
             <TextInput
               style={styles.input}
               value={account}
@@ -248,10 +252,10 @@ export default function WalletScreen() {
               disabled={submitting}
               testID="withdraw-confirm-button"
             >
-              {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmBtnText}>Request cash-out</Text>}
+              {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmBtnText}>{t("wallet.requestCashOut")}</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalOpen(false)} disabled={submitting}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
+              <Text style={styles.cancelBtnText}>{t("common.cancel")}</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

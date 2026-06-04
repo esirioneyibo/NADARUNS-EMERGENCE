@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 
 import { getAuthToken } from "../src/api";
 import { useAuth } from "../src/contexts/AuthContext";
@@ -53,15 +54,15 @@ interface ShipperProfile {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-  pending: { label: "Waiting for driver", color: "#F59E0B", icon: "time-outline" },
-  accepted: { label: "Driver assigned", color: "#6366F1", icon: "person-outline" },
-  enroute_pickup: { label: "Driver en route to pickup", color: "#3B82F6", icon: "navigate-outline" },
-  arrived_pickup: { label: "Driver at pickup", color: "#8B5CF6", icon: "location-outline" },
-  picked_up: { label: "Cargo picked up", color: "#10B981", icon: "cube-outline" },
-  enroute_dropoff: { label: "In transit", color: "#3B82F6", icon: "car-outline" },
-  arrived_dropoff: { label: "Arrived at destination", color: "#8B5CF6", icon: "flag-outline" },
-  delivered: { label: "Delivered", color: "#10B981", icon: "checkmark-circle-outline" },
-  rejected: { label: "Cancelled", color: "#EF4444", icon: "close-circle-outline" },
+  pending: { label: "shipperHome.status.pending", color: "#F59E0B", icon: "time-outline" },
+  accepted: { label: "shipperHome.status.accepted", color: "#6366F1", icon: "person-outline" },
+  enroute_pickup: { label: "shipperHome.status.enroute_pickup", color: "#3B82F6", icon: "navigate-outline" },
+  arrived_pickup: { label: "shipperHome.status.arrived_pickup", color: "#8B5CF6", icon: "location-outline" },
+  picked_up: { label: "shipperHome.status.picked_up", color: "#10B981", icon: "cube-outline" },
+  enroute_dropoff: { label: "shipperHome.status.enroute_dropoff", color: "#3B82F6", icon: "car-outline" },
+  arrived_dropoff: { label: "shipperHome.status.arrived_dropoff", color: "#8B5CF6", icon: "flag-outline" },
+  delivered: { label: "shipperHome.status.delivered", color: "#10B981", icon: "checkmark-circle-outline" },
+  rejected: { label: "shipperHome.status.rejected", color: "#EF4444", icon: "close-circle-outline" },
 };
 
 const VEHICLE_ICONS: Record<string, string> = {
@@ -83,6 +84,7 @@ export default function ShipperHomeScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
   
   const [profile, setProfile] = useState<ShipperProfile | null>(null);
   const [shipments, setShipments] = useState<Shipment[]>([]);
@@ -156,12 +158,12 @@ export default function ShipperHomeScreen() {
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out?",
+      t("settings.signOutTitle"),
+      t("settings.signOutConfirm"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Sign Out",
+          text: t("settings.signOutTitle"),
           style: "destructive",
           onPress: async () => {
             await logout();
@@ -203,7 +205,7 @@ export default function ShipperHomeScreen() {
           <View style={[styles.statusBadge, { backgroundColor: statusConfig.color + "20" }]}>
             <Ionicons name={statusConfig.icon as any} size={14} color={statusConfig.color} />
             <Text style={[styles.statusText, { color: statusConfig.color }]}>
-              {statusConfig.label}
+              {t(statusConfig.label)}
             </Text>
           </View>
         </View>
@@ -257,8 +259,8 @@ export default function ShipperHomeScreen() {
             style={styles.companyAvatar} 
           />
           <View>
-            <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.companyName}>{profile?.company_name || "Business"}</Text>
+            <Text style={styles.welcomeText}>{t("shipperHome.welcomeBack")}</Text>
+            <Text style={styles.companyName}>{profile?.company_name || t("shipperHome.business")}</Text>
           </View>
         </View>
         <View style={{ flexDirection: "row", gap: 8 }}>
@@ -288,21 +290,21 @@ export default function ShipperHomeScreen() {
               <Ionicons name="cube-outline" size={22} color="#6366F1" />
             </View>
             <Text style={styles.statValue}>{profile?.total_shipments || 0}</Text>
-            <Text style={styles.statLabel}>Total Shipments</Text>
+            <Text style={styles.statLabel}>{t("shipperHome.totalShipments")}</Text>
           </View>
           <View style={[styles.statCard, shadows.sm]}>
             <View style={[styles.statIconWrap, { backgroundColor: "#F59E0B20" }]}>
               <Ionicons name="time-outline" size={22} color="#F59E0B" />
             </View>
             <Text style={styles.statValue}>{activeShipments.length}</Text>
-            <Text style={styles.statLabel}>Active</Text>
+            <Text style={styles.statLabel}>{t("shipperHome.active")}</Text>
           </View>
           <View style={[styles.statCard, shadows.sm]}>
             <View style={[styles.statIconWrap, { backgroundColor: "#10B98120" }]}>
               <Ionicons name="checkmark-circle-outline" size={22} color="#10B981" />
             </View>
             <Text style={styles.statValue}>{completedShipments.length}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
+            <Text style={styles.statLabel}>{t("shipperHome.completed")}</Text>
           </View>
         </Animated.View>
 
@@ -316,14 +318,14 @@ export default function ShipperHomeScreen() {
             }}
           >
             <Ionicons name="add-circle" size={24} color="#fff" />
-            <Text style={styles.createBtnText}>Create New Shipment</Text>
+            <Text style={styles.createBtnText}>{t("shipperHome.createNewShipment")}</Text>
           </TouchableOpacity>
         </Animated.View>
 
         {/* Active Shipments */}
         {activeShipments.length > 0 && (
           <Animated.View entering={FadeInUp.delay(300)} style={styles.section}>
-            <Text style={styles.sectionTitle}>Active Shipments</Text>
+            <Text style={styles.sectionTitle}>{t("shipperHome.activeShipments")}</Text>
             {activeShipments.map((item) => (
               <View key={item.id}>
                 {renderShipmentCard({ item })}
@@ -335,7 +337,7 @@ export default function ShipperHomeScreen() {
         {/* Recent Shipments */}
         {completedShipments.length > 0 && (
           <Animated.View entering={FadeInUp.delay(400)} style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Shipments</Text>
+            <Text style={styles.sectionTitle}>{t("shipperHome.recentShipments")}</Text>
             {completedShipments.slice(0, 5).map((item) => (
               <View key={item.id}>
                 {renderShipmentCard({ item })}
@@ -347,9 +349,9 @@ export default function ShipperHomeScreen() {
         {shipments.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="cube-outline" size={64} color={theme.textSecondary} />
-            <Text style={styles.emptyTitle}>No shipments yet</Text>
+            <Text style={styles.emptyTitle}>{t("shipperHome.noShipmentsYet")}</Text>
             <Text style={styles.emptyText}>
-              Create your first shipment to get started
+              {t("shipperHome.createFirst")}
             </Text>
           </View>
         )}

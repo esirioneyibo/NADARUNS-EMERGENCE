@@ -205,5 +205,64 @@
     "tapMarker": "Tap a marker to view job details",
     "searchingJobs": "Searching for nearby jobs...",
     "slideToGoOnline": "Slide to go online"
+  },
+  "shipperHome": {
+    "welcomeBack": "Welcome back,",
+    "business": "Business",
+    "totalShipments": "Total Shipments",
+    "active": "Active",
+    "completed": "Completed",
+    "createNewShipment": "Create New Shipment",
+    "activeShipments": "Active Shipments",
+    "recentShipments": "Recent Shipments",
+    "noShipmentsYet": "No shipments yet",
+    "createFirst": "Create your first shipment to get started",
+    "status": {
+      "pending": "Waiting for driver",
+      "accepted": "Driver assigned",
+      "enroute_pickup": "Driver en route to pickup",
+      "arrived_pickup": "Driver at pickup",
+      "picked_up": "Cargo picked up",
+      "enroute_dropoff": "In transit",
+      "arrived_dropoff": "Arrived at destination",
+      "delivered": "Delivered",
+      "rejected": "Cancelled"
+    }
+  },
+  "history": {
+    "title": "Delivery history",
+    "lifetimeEarnings": "Lifetime earnings",
+    "deliveries": "Deliveries",
+    "noDeliveriesYet": "No deliveries yet"
+  },
+  "wallet": {
+    "title": "Wallet",
+    "loginPrompt": "Please login to view your wallet",
+    "loadError": "Failed to load wallet",
+    "availableBalance": "Available balance",
+    "pendingClears": "€{{amount}} pending · clears on delivery",
+    "cashOutNow": "Cash out now",
+    "totalEarned": "Total earned",
+    "withdrawn": "Withdrawn",
+    "cashOutRequests": "CASH-OUT REQUESTS",
+    "deliveryEarnings": "DELIVERY EARNINGS",
+    "noPaidDeliveries": "No paid deliveries yet",
+    "delivery": "Delivery",
+    "feeLabel": "fee €{{fee}}",
+    "cashOut": "Cash out",
+    "availableMin": "Available: €{{available}} · Min €10.00",
+    "amountEur": "Amount (EUR)",
+    "bankIban": "Bank account / IBAN (optional)",
+    "requestCashOut": "Request cash-out",
+    "enterValidAmount": "Enter a valid amount",
+    "maxAvailable": "Max available is €{{max}}",
+    "cashOutRequested": "Cash-out of €{{amount}} requested.",
+    "cashOutFailed": "Cash-out failed",
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "paid": "Paid",
+      "rejected": "Rejected"
+    }
   }
 }

@@ -118,7 +118,10 @@ frontend:
           comment: "Set up i18next + react-i18next with expo-localization device auto-detection and AsyncStorage persistence (key @nadaruns_language, fallback en). Added LanguageProvider wrapping the app, reusable LanguageSelector component, and Language sections in both Driver (settings.tsx) and Business (shipper-settings.tsx) profile screens. Localized: tab bar labels, welcome/role-selection screen, full Driver settings, full Business settings, login screen, shared vehicle names + categories."
         - working: true
           agent: "testing"
-          comment: "Iteration 16: VALIDATED. Welcome + login render localized. Driver & Business settings show Language toggle; switching to Suomi instantly localizes screen + tab bar; localStorage @nadaruns_language persists across reload (both directions). No missing-key crashes. Found 1 bug: Business card on welcome screen had hardcoded strings (keys existed) - FIXED by main agent."
+          comment: "Iteration 16/17: VALIDATED welcome, login, Driver/Business settings, driver-home in EN+FI with switch+persistence. SlideToGoOnline label fixed."
+        - working: "NA"
+          agent: "main"
+          comment: "Batch A2 added (needs testing): shipper-home (welcome, stats, shipment status labels, create button, empty state, sign-out), history (title, lifetime earnings, deliveries, empty, FI date locale), wallet (balance, cash-out modal, withdrawal status chips, earnings, banners, FI date locale). Namespaces shipperHome/history/wallet added to en.json+fi.json; both parse OK; no leftover hardcoded strings."
 
 backend:
   - task: "Stripe Payment Module - authorize (checkout) + auth/capture lifecycle"
