@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   Image,
@@ -24,6 +25,7 @@ import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { useNotify } from "../src/contexts/NotificationContext";
 import MapView from "../src/components/MapView";
+import StarRating from "../src/components/StarRating";
 import { useOrderTracking } from "../src/hooks/useWebSocket";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -53,6 +55,8 @@ interface ShipmentDetails {
   created_at: string;
   pickup_code?: string;
   dropoff_code?: string;
+  driver_rating?: number | null;
+  driver_review?: string | null;
   driver?: {
     id: string;
     name: string;
@@ -118,6 +122,11 @@ export default function ShipperTrackingScreen() {
     off_route: boolean;
     target: string | null;
   } | null>(null);
+  const [rateStars, setRateStars] = useState(0);
+  const [rateReview, setRateReview] = useState("");
+  const [rateSubmitting, setRateSubmitting] = useState(false);
+  const [rateDone, setRateDone] = useState(false);
+  const [rateBanner, setRateBanner] = useState<string | null>(null);
 
   const styles = createStyles(theme);
 
@@ -269,6 +278,24 @@ export default function ShipperTrackingScreen() {
   const handleCall = (phone: string) => {
     Linking.openURL(`tel:${phone}`);
   };
+
+  const submitDriverRating = useCallback(async () => {
+    if (!id || rateStars < 1) return;
+    setRateSubmitting(true);
+    setRateBanner(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      await api.rateDriver(id, rateStars, rateReview || undefined);
+      setRateDone(true);
+      setRateBanner("Thanks! Your rating has been submitted.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      loadShipment();
+    } catch (e: any) {
+      setRateBanner(e?.message || "Could not submit rating. Please try again.");
+    } finally {
+      setRateSubmitting(false);
+    }
+  }, [id, rateStars, rateReview, loadShipment]);
 
   const handleCancel = () => {
     Alert.alert(
@@ -502,6 +529,77 @@ export default function ShipperTrackingScreen() {
                 <Ionicons name="call" size={22} color="#6366F1" />
               </TouchableOpacity>
             </View>
+          </Animated.View>
+        )}
+
+        {/* Rate the driver (after delivery, one-time) */}
+        {shipment.status === "delivered" && shipment.driver && (
+          <Animated.View entering={FadeInUp.delay(220)} style={[styles.card, shadows.sm]}>
+            {(shipment.driver_rating || rateDone) ? (
+              <View style={{ alignItems: "center" }}>
+                <Text style={styles.cardTitle}>You rated {shipment.driver.name.split(" ")[0]}</Text>
+                <View style={{ marginTop: 8 }}>
+                  <StarRating
+                    value={shipment.driver_rating || rateStars}
+                    readonly
+                    size={28}
+                    testIDPrefix="driver-rated-star"
+                  />
+                </View>
+                {shipment.driver_review ? (
+                  <Text style={[styles.codeNote, { marginTop: 8, fontStyle: "italic" }]}>
+                    “{shipment.driver_review}”
+                  </Text>
+                ) : null}
+                <Text style={[styles.codeNote, { marginTop: 6 }]}>Thanks for your feedback!</Text>
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.cardTitle}>Rate your driver</Text>
+                <Text style={[styles.codeNote, { textAlign: "center", marginTop: 2, marginBottom: 12 }]}>
+                  How was your delivery with {shipment.driver.name.split(" ")[0]}?
+                </Text>
+                <View style={{ alignItems: "center", marginBottom: 12 }}>
+                  <StarRating
+                    value={rateStars}
+                    onChange={setRateStars}
+                    size={40}
+                    testIDPrefix="rate-driver-star"
+                  />
+                </View>
+                {rateStars > 0 && (
+                  <TextInput
+                    value={rateReview}
+                    onChangeText={setRateReview}
+                    placeholder="Add a comment (optional)"
+                    placeholderTextColor={theme.textSecondary}
+                    style={styles.reviewInput}
+                    multiline
+                    testID="driver-review-input"
+                  />
+                )}
+                {rateBanner ? (
+                  <Text style={[styles.codeNote, { textAlign: "center", marginTop: 8, color: theme.error }]}>
+                    {rateBanner}
+                  </Text>
+                ) : null}
+                <TouchableOpacity
+                  style={[
+                    styles.rateSubmitBtn,
+                    (rateStars < 1 || rateSubmitting) && { opacity: 0.5 },
+                  ]}
+                  onPress={submitDriverRating}
+                  disabled={rateStars < 1 || rateSubmitting}
+                  testID="submit-driver-rating"
+                >
+                  {rateSubmitting ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.rateSubmitText}>Submit rating</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </Animated.View>
         )}
 
@@ -788,6 +886,25 @@ const createStyles = (theme: any) => StyleSheet.create({
     backgroundColor: "#6366F1", paddingVertical: 15, borderRadius: radius.lg, marginTop: spacing.lg,
   },
   payBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  reviewInput: {
+    backgroundColor: theme.surfaceMuted,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: 14,
+    color: theme.textPrimary,
+    minHeight: 56,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  rateSubmitBtn: {
+    height: 50,
+    backgroundColor: "#6366F1",
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rateSubmitText: { color: "#fff", fontWeight: "800", fontSize: 15 },
   
   driverRow: {
     flexDirection: "row",

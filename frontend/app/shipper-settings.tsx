@@ -78,6 +78,7 @@ interface ShipperProfile {
   total_shipments: number;
   avatar?: string;
   preferred_vehicle_type?: string;
+  rating?: number;
 }
 
 export default function ShipperSettingsScreen() {
@@ -252,6 +253,12 @@ export default function ShipperSettingsScreen() {
           <View style={styles.profileBadge}>
             <Ionicons name="cube" size={14} color="#fff" />
             <Text style={styles.badgeText}>{t("shipperSettings.shipments", { count: profile?.total_shipments || 0 })}</Text>
+          </View>
+          <View style={[styles.profileBadge, { backgroundColor: "rgba(245,158,11,0.25)" }]}>
+            <Ionicons name="star" size={14} color="#FBBF24" />
+            <Text style={styles.badgeText}>
+              {typeof profile?.rating === "number" ? profile.rating.toFixed(2) : "5.00"}
+            </Text>
           </View>
         </Animated.View>
 

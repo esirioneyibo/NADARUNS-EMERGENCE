@@ -54,6 +54,12 @@ export interface Order {
   completed_at?: string | null;
   rating_given?: number | null;
   feedback?: string | null;
+  // Two-way star ratings (1-5)
+  driver_rating?: number | null;
+  driver_review?: string | null;
+  shipper_rating?: number | null;
+  shipper_review?: string | null;
+  shipper_id?: string | null;
   // Logistics / cargo
   vehicle_type?: string | null;
   cargo_weight_kg?: number | null;

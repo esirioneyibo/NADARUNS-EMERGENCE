@@ -256,6 +256,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ rating, feedback }),
     }),
+  // Shipper rates the driver (1-5 stars, one-time)
+  rateDriver: (id: string, rating: number, review?: string) =>
+    request<{ success: boolean; driver_rating: number; driver_average_rating: number | null }>(
+      `/shipper/shipments/${id}/rate-driver`,
+      { method: "POST", body: JSON.stringify({ rating, review }) },
+    ),
+  // Driver rates the shipper (1-5 stars, one-time)
+  rateShipper: (id: string, rating: number, review?: string) =>
+    request<{ success: boolean; shipper_rating: number; shipper_average_rating: number | null }>(
+      `/orders/${id}/rate-shipper`,
+      { method: "POST", body: JSON.stringify({ rating, review }) },
+    ),
   seedNewPending: () => request<Order>(`/orders/seed-new-pending`, { method: "POST" }),
   getRoute: (orderId: string) => request<DirectionsResponse>(`/orders/${orderId}/route`),
   verifyOtp: (orderId: string, otp: string, kind: "pickup" | "dropoff") =>

@@ -27,15 +27,17 @@ import * as Haptics from "expo-haptics";
 import { api } from "../src/api";
 import type { Order } from "../src/types";
 import { radius, shadows, spacing, theme } from "../src/theme";
+import StarRating from "../src/components/StarRating";
 
 export default function SummaryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
-  const [rating, setRating] = useState<1 | -1 | 0>(0);
-  const [feedback, setFeedback] = useState("");
+  const [stars, setStars] = useState(0);
+  const [review, setReview] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const animated = useSharedValue(0);
   const animatedAmount = useRef("");
 
@@ -56,11 +58,21 @@ export default function SummaryScreen() {
 
   const animatedNumStyle = useAnimatedStyle(() => ({ opacity: 0.4 + animated.value * 0.6 }));
 
-  const submit = async (rate?: 1 | -1) => {
+  const alreadyRated = !!(order?.shipper_rating || submitted);
+
+  const submit = async () => {
     if (!order) return;
     setSubmitting(true);
     try {
-      if (rate) await api.rate(order.id, rate, feedback || undefined);
+      if (stars > 0 && !order.shipper_rating) {
+        try {
+          await api.rateShipper(order.id, stars, review || undefined);
+          setSubmitted(true);
+        } catch (e) {
+          // Non-blocking: a failed rating must never trap the driver here.
+          console.warn("rate shipper failed", e);
+        }
+      }
       router.replace("/driver-home");
     } finally {
       setSubmitting(false);
@@ -155,34 +167,28 @@ export default function SummaryScreen() {
         ) : null}
 
         <Animated.View entering={FadeInUp.delay(320)} style={styles.ratingCard}>
-          <Text style={styles.ratingTitle}>How was the customer?</Text>
-          <View style={styles.thumbsRow}>
-            <TouchableOpacity
-              style={[styles.thumbBtn, rating === -1 && styles.thumbBtnSelected]}
-              onPress={() => { setRating(-1); Haptics.selectionAsync().catch(() => {}); }}
-              testID="rate-down-button"
-            >
-              <Ionicons name="thumbs-down" size={28} color={rating === -1 ? theme.error : theme.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.thumbBtn, rating === 1 && styles.thumbBtnPos]}
-              onPress={() => { setRating(1); Haptics.selectionAsync().catch(() => {}); }}
-              testID="rate-up-button"
-            >
-              <Ionicons name="thumbs-up" size={28} color={rating === 1 ? theme.success : theme.textSecondary} />
-            </TouchableOpacity>
+          <Text style={styles.ratingTitle}>
+            {alreadyRated ? "Thanks for rating the shipper!" : "How was the shipper?"}
+          </Text>
+          <View style={{ marginTop: spacing.md, alignItems: "center" }}>
+            <StarRating
+              value={alreadyRated ? (order.shipper_rating || stars) : stars}
+              onChange={setStars}
+              readonly={alreadyRated}
+              testIDPrefix="rate-shipper-star"
+            />
           </View>
 
-          {rating !== 0 ? (
+          {!alreadyRated && stars > 0 ? (
             <Animated.View entering={FadeInUp.duration(220)}>
               <TextInput
-                value={feedback}
-                onChangeText={setFeedback}
+                value={review}
+                onChangeText={setReview}
                 placeholder="Add a note (optional)"
                 placeholderTextColor={theme.textSecondary}
                 style={styles.input}
                 multiline
-                testID="feedback-input"
+                testID="review-input"
               />
             </Animated.View>
           ) : null}
@@ -192,11 +198,13 @@ export default function SummaryScreen() {
         <Animated.View entering={FadeInUp.delay(380)} style={styles.actionsContainer}>
           <TouchableOpacity
             style={[styles.primaryBtn, submitting && { opacity: 0.7 }]}
-            onPress={() => submit(rating === 0 ? undefined : (rating as 1 | -1))}
+            onPress={submit}
             disabled={submitting}
             testID="summary-done-button"
           >
-            <Text style={styles.primaryBtnText}>{rating === 0 ? "Skip & continue" : "Submit & continue"}</Text>
+            <Text style={styles.primaryBtnText}>
+              {alreadyRated ? "Continue" : stars === 0 ? "Skip & continue" : "Submit & continue"}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.replace("/history")} testID="view-history-link">
             <Text style={styles.linkText}>View delivery history →</Text>

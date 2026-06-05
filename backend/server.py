@@ -238,6 +238,13 @@ class Order(BaseModel):
     completed_at: Optional[str] = None
     rating_given: Optional[int] = None  # thumbs up/down: 1 or -1
     feedback: Optional[str] = None
+    # ---- Two-way star ratings (1-5), one-time each ----
+    driver_rating: Optional[int] = None       # shipper -> driver
+    driver_review: Optional[str] = None
+    driver_rated_at: Optional[str] = None
+    shipper_rating: Optional[int] = None      # driver -> shipper
+    shipper_review: Optional[str] = None
+    shipper_rated_at: Optional[str] = None
     # Logistics fields
     shipper_id: Optional[str] = None  # FK to shipper who created the order
     driver_id: Optional[str] = None  # FK to assigned driver
@@ -572,6 +579,11 @@ class AdvanceRequest(BaseModel):
 class RateRequest(BaseModel):
     rating: int  # 1 or -1
     feedback: Optional[str] = None
+
+
+class StarRatingRequest(BaseModel):
+    rating: int  # 1-5 stars
+    review: Optional[str] = None
 
 
 # ===================== KYC Models =====================
@@ -1721,6 +1733,126 @@ async def rate_order(order_id: str, body: RateRequest):
     order["rating_given"] = body.rating
     order["feedback"] = body.feedback
     return Order(**order)
+
+
+async def _recompute_driver_rating(driver_id: str) -> Optional[float]:
+    """Average all star ratings a driver has received and persist on profile."""
+    ratings: List[int] = []
+    async for o in db.orders.find(
+        {"driver_id": driver_id, "driver_rating": {"$ne": None}},
+        {"_id": 0, "driver_rating": 1},
+    ):
+        try:
+            ratings.append(int(o["driver_rating"]))
+        except (TypeError, ValueError):
+            continue
+    if not ratings:
+        return None
+    avg = round(sum(ratings) / len(ratings), 2)
+    await db.drivers.update_one({"id": driver_id}, {"$set": {"rating": avg}})
+    return avg
+
+
+async def _recompute_shipper_rating(shipper_id: str) -> Optional[float]:
+    """Average all star ratings a shipper has received and persist on profile."""
+    ratings: List[int] = []
+    async for o in db.orders.find(
+        {"shipper_id": shipper_id, "shipper_rating": {"$ne": None}},
+        {"_id": 0, "shipper_rating": 1},
+    ):
+        try:
+            ratings.append(int(o["shipper_rating"]))
+        except (TypeError, ValueError):
+            continue
+    if not ratings:
+        return None
+    avg = round(sum(ratings) / len(ratings), 2)
+    await db.shippers.update_one({"id": shipper_id}, {"$set": {"rating": avg}})
+    return avg
+
+
+@api_router.post("/shipper/shipments/{order_id}/rate-driver")
+async def rate_driver(
+    order_id: str,
+    body: StarRatingRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """Shipper rates their driver (1-5 stars, one-time) after a delivered job.
+    Recomputes and persists the driver's average rating on their profile."""
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "shipper":
+        raise HTTPException(403, "Shipper access required")
+    shipper_id = payload["sub"]
+
+    if not (1 <= int(body.rating) <= 5):
+        raise HTTPException(400, "Rating must be between 1 and 5 stars")
+
+    order = await db.orders.find_one({"id": order_id, "shipper_id": shipper_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Shipment not found")
+    if order.get("status") != "delivered":
+        raise HTTPException(400, "You can only rate the driver once the job is delivered")
+    if not order.get("driver_id"):
+        raise HTTPException(400, "No driver was assigned to this shipment")
+    if order.get("driver_rating") is not None:
+        raise HTTPException(400, "You have already rated this driver")
+
+    now = datetime.now(timezone.utc).isoformat()
+    review = (body.review or "").strip() or None
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"driver_rating": int(body.rating), "driver_review": review, "driver_rated_at": now}},
+    )
+    new_avg = await _recompute_driver_rating(order["driver_id"])
+    return {
+        "success": True,
+        "driver_rating": int(body.rating),
+        "driver_review": review,
+        "driver_average_rating": new_avg,
+    }
+
+
+@api_router.post("/orders/{order_id}/rate-shipper")
+async def rate_shipper(
+    order_id: str,
+    body: StarRatingRequest,
+    request: Request,
+):
+    """Driver rates the shipper (1-5 stars, one-time) after a delivered job.
+    Recomputes and persists the shipper's average rating on their profile."""
+    driver_id = await get_current_driver_id(request)
+
+    if not (1 <= int(body.rating) <= 5):
+        raise HTTPException(400, "Rating must be between 1 and 5 stars")
+
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    # Only the assigned driver may rate (legacy/demo orders with no driver bound are allowed).
+    if order.get("driver_id") and order.get("driver_id") != driver_id:
+        raise HTTPException(403, "You can only rate shipments you delivered")
+    if order.get("status") != "delivered":
+        raise HTTPException(400, "You can only rate the shipper once the job is delivered")
+    if not order.get("shipper_id"):
+        raise HTTPException(400, "This order has no shipper to rate")
+    if order.get("shipper_rating") is not None:
+        raise HTTPException(400, "You have already rated this shipper")
+
+    now = datetime.now(timezone.utc).isoformat()
+    review = (body.review or "").strip() or None
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"shipper_rating": int(body.rating), "shipper_review": review, "shipper_rated_at": now}},
+    )
+    new_avg = await _recompute_shipper_rating(order["shipper_id"])
+    return {
+        "success": True,
+        "shipper_rating": int(body.rating),
+        "shipper_review": review,
+        "shipper_average_rating": new_avg,
+    }
 
 
 @api_router.post("/orders/{order_id}/verify-otp", response_model=Order)

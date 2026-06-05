@@ -124,6 +124,18 @@ frontend:
           comment: "Batch A2 added (needs testing): shipper-home (welcome, stats, shipment status labels, create button, empty state, sign-out), history (title, lifetime earnings, deliveries, empty, FI date locale), wallet (balance, cash-out modal, withdrawal status chips, earnings, banners, FI date locale). Namespaces shipperHome/history/wallet added to en.json+fi.json; both parse OK; no leftover hardcoded strings."
 
 backend:
+  - task: "Two-way star ratings: shipper rates driver + driver rates shipper (auto-updates profiles)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Added Order fields driver_rating/driver_review/driver_rated_at + shipper_rating/shipper_review/shipper_rated_at. New endpoints: POST /api/shipper/shipments/{id}/rate-driver (shipper JWT) and POST /api/orders/{id}/rate-shipper (driver JWT). Both: 1-5 validation (400 on out-of-range), order must be 'delivered' (400 otherwise), one-time (400 if already rated), 404 unknown order, 403 wrong role. On success recomputes the average across all star ratings and persists to drivers.rating / shippers.rating. VERIFIED end-to-end via API: shipper 4* -> driver.rating=4.0; driver 5* -> shipper.rating=5.0; re-rate blocked 400; guards (400/404/403) all correct."
+
   - task: "Stripe Payment Module - authorize (checkout) + auth/capture lifecycle"
     implemented: true
     working: true
