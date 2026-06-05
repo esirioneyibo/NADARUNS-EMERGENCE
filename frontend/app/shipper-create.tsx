@@ -17,6 +17,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 import { getAuthToken } from "../src/api";
+import { calculatePrice, haversineKm } from "../src/utils/pricing";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { storage } from "../src/utils/storage";
@@ -296,14 +297,35 @@ export default function ShipperCreateScreen() {
     await storage.removeItem(DRAFT_KEY);
   };
 
-  // ---------- Pricing (server-controlled, immutable) ----------
+  // ---------- Pricing (instant client estimate + server reconcile) ----------
+  // The price is pure math (distance x rate + fees), so we compute it INSTANTLY
+  // on-device first — no spinner, works even if the backend is slow/unreachable.
+  // Then we reconcile with the authoritative server quote (with a hard timeout)
+  // so the two never diverge. The server always recomputes the real price at
+  // creation time, so this estimate is safe to show immediately.
   const fetchQuote = useCallback(async () => {
     const weight = parseFloat(cargoWeight) || 0;
     const fallback = { latitude: 60.1699, longitude: 24.9384 };
     const p = pickupCoords || fallback;
     const d = dropoffCoords || fallback;
-    setQuoteLoading(true);
+    const special = specialReqs.length > 0 || cargoType === "oversized";
+
+    // 1) Instant local estimate — display right away.
+    const distanceKm = haversineKm(p.latitude, p.longitude, d.latitude, d.longitude);
+    const local = calculatePrice({
+      vehicleType,
+      distanceKm,
+      weightKg: weight,
+      urgency,
+      specialHandling: special,
+    });
+    setQuote(local);
+    setQuoteLoading(false);
+
+    // 2) Reconcile with the authoritative server quote (best-effort, 7s timeout).
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
       const token = getAuthToken();
       const res = await fetch(`${BASE}/api/shipper/quote`, {
         method: "POST",
@@ -316,9 +338,11 @@ export default function ShipperCreateScreen() {
           vehicle_type: vehicleType,
           cargo_weight_kg: weight,
           urgency,
-          special_handling: specialReqs.length > 0 || cargoType === "oversized",
+          special_handling: special,
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timer);
       if (res.ok) {
         const data = await res.json();
         setQuote({
@@ -334,14 +358,10 @@ export default function ShipperCreateScreen() {
           estimate_low: data.estimate_low,
           estimate_high: data.estimate_high,
         });
-      } else {
-        setQuote(null);
       }
     } catch (e) {
-      console.warn("Quote error:", e);
-      setQuote(null);
-    } finally {
-      setQuoteLoading(false);
+      // Network slow/unreachable — keep the instant local estimate. No spinner.
+      console.warn("Quote reconcile skipped:", e);
     }
   }, [BASE, pickupCoords, dropoffCoords, vehicleType, cargoWeight, urgency, specialReqs, cargoType]);
 
