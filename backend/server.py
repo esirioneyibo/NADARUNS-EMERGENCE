@@ -217,6 +217,14 @@ class Order(BaseModel):
     customer: Customer
     items: List[OrderItem]
     distance_km: float
+    # ---- Distance sources ----
+    # road_distance_km (Google Directions, driving) is the SOURCE OF TRUTH for
+    # pricing/earnings/ETA. straight_distance_km (Haversine) is kept for
+    # reference/geofencing ONLY and must NEVER drive money calculations.
+    straight_distance_km: Optional[float] = None
+    road_distance_km: Optional[float] = None
+    duration_minutes: Optional[float] = None
+    route_polyline: Optional[str] = None
     eta_minutes: int
     earnings: float
     tip: float = 0.0
@@ -440,7 +448,10 @@ class PriceQuoteRequest(BaseModel):
 
 
 class PriceQuoteResponse(BaseModel):
-    distance_km: float
+    distance_km: float                 # == road_distance_km (used for pricing)
+    straight_distance_km: float = 0.0  # Haversine (reference only)
+    road_distance_km: float = 0.0      # Google Directions driving distance
+    route_source: str = "google"
     estimated_duration_minutes: int
     base_price: float
     weight_surcharge: float
@@ -1002,6 +1013,7 @@ def build_logistics_order(status: OrderStatus = "pending", completed_offset_hour
         cargo_weight_kg=cargo["weight_kg"],
         cargo_type=cargo["type"],
         special_requirements=random.sample(SPECIAL_REQUIREMENTS, k=random.randint(0, 2)) if random.random() > 0.5 else None,
+        payment_status="authorized",  # seeded demo jobs are pre-paid so they stay visible in the marketplace
     ).model_dump()
     return order
 
@@ -1360,7 +1372,11 @@ async def broadcast_driver_status(driver_id: str, is_online: bool):
 
 @api_router.get("/orders/pending", response_model=Optional[Order])
 async def get_pending():
-    order = await db.orders.find_one({"status": "pending"}, {"_id": 0})
+    # Only paid orders (payment authorized/captured) are published to drivers.
+    order = await db.orders.find_one(
+        {"status": "pending", "payment_status": {"$in": ["authorized", "captured"]}},
+        {"_id": 0},
+    )
     if not order:
         return None
     return Order(**order)
@@ -1385,6 +1401,9 @@ async def get_available_orders(
       the driver, sorted nearest-first (so the "jobs nearby" count is accurate)
     """
     query = {"status": "pending"}
+    # Gate: only orders the shipper has PAID for (authorization held) are
+    # visible/biddable in the driver marketplace.
+    query["payment_status"] = {"$in": ["authorized", "captured"]}
     
     # Filter by vehicle type if specified
     if vehicle_type:
@@ -2968,33 +2987,46 @@ async def get_vehicle_types():
 
 @api_router.post("/shipper/quote", response_model=PriceQuoteResponse)
 async def get_price_quote(request: PriceQuoteRequest):
-    """Get a price quote for a shipment."""
-    # Calculate distance
-    distance_km = _haversine_km(
-        request.pickup_lat, request.pickup_lng,
-        request.dropoff_lat, request.dropoff_lng
-    )
-    
-    # Get vehicle rate
+    """Get a price quote for a shipment.
+
+    Pricing uses REAL-WORLD road distance from Google Directions (driving). If
+    the route cannot be computed we hard-fail (NO Haversine fallback for money).
+    """
+    # Validate vehicle type first (cheap check before hitting Google).
     vehicle = VEHICLE_TYPES.get(request.vehicle_type)
     if not vehicle:
         raise HTTPException(400, f"Invalid vehicle type: {request.vehicle_type}")
 
-    # NadaRuns pricing engine
+    # Haversine kept ONLY as a reference value (not used for pricing).
+    straight_km = _haversine_km(
+        request.pickup_lat, request.pickup_lng,
+        request.dropoff_lat, request.dropoff_lng,
+    )
+
+    # SOURCE OF TRUTH: Google Directions road distance + duration.
+    route = await fetch_road_route(
+        request.pickup_lat, request.pickup_lng,
+        request.dropoff_lat, request.dropoff_lng,
+    )
+    road_km = route["road_distance_km"]
+
+    # NadaRuns pricing engine (driven by ROAD distance)
     breakdown = pricing.calculate_price(
         vehicle_type=request.vehicle_type,
-        distance_km=distance_km,
+        distance_km=road_km,
         weight_kg=request.cargo_weight_kg,
         urgency=request.urgency,
         special_handling=request.special_handling,
     )
 
-    # Estimate duration (average 60 km/h for trucks)
-    estimated_duration = int(distance_km / 60 * 60)  # minutes
+    estimated_duration = max(1, int(round(route["duration_minutes"])))
 
     return PriceQuoteResponse(
-        distance_km=round(distance_km, 2),
-        estimated_duration_minutes=max(30, estimated_duration),
+        distance_km=road_km,
+        straight_distance_km=round(straight_km, 2),
+        road_distance_km=road_km,
+        route_source=route["source"],
+        estimated_duration_minutes=estimated_duration,
         base_price=round(breakdown["base_fee"] + breakdown["distance_fee"], 2),
         weight_surcharge=breakdown["weight_fee"],
         total_price=breakdown["total_price"],
@@ -3055,20 +3087,30 @@ async def create_shipment(
     if request.cargo_weight_kg > vehicle["max_weight_kg"]:
         raise HTTPException(400, f"Cargo weight exceeds vehicle capacity ({vehicle['max_weight_kg']} kg)")
     
-    # Calculate distance and price
-    distance_km = _haversine_km(
+    # Haversine kept ONLY as a reference value (geofencing) - NOT for pricing.
+    straight_km = _haversine_km(
         request.pickup_lat, request.pickup_lng,
         request.dropoff_lat, request.dropoff_lng
     )
-    
-    # NadaRuns pricing engine (immutable base price)
+
+    # SOURCE OF TRUTH for pricing/earnings/ETA: Google Directions road distance.
+    # Hard-fail BEFORE creating the order so we never publish/charge a job whose
+    # price was computed from straight-line distance.
+    route = await fetch_road_route(
+        request.pickup_lat, request.pickup_lng,
+        request.dropoff_lat, request.dropoff_lng,
+    )
+    road_km = route["road_distance_km"]
+    duration_minutes = route["duration_minutes"]
+
+    # NadaRuns pricing engine (immutable base price, driven by ROAD distance)
     special_handling = bool(
         (request.special_requirements and len(request.special_requirements) > 0)
         or request.cargo_type == "oversized"
     )
     breakdown = pricing.calculate_price(
         vehicle_type=request.vehicle_type,
-        distance_km=distance_km,
+        distance_km=road_km,
         weight_kg=request.cargo_weight_kg,
         urgency=request.urgency,
         special_handling=special_handling,
@@ -3113,8 +3155,12 @@ async def create_shipment(
             notes=request.dropoff_notes,
         ),
         items=[OrderItem(name=request.cargo_description, quantity=1)],
-        distance_km=round(distance_km, 2),
-        eta_minutes=max(30, int(distance_km / 60 * 60)),
+        distance_km=round(road_km, 2),
+        straight_distance_km=round(straight_km, 2),
+        road_distance_km=round(road_km, 2),
+        duration_minutes=duration_minutes,
+        route_polyline=route["polyline"],
+        eta_minutes=max(1, int(round(duration_minutes))),
         earnings=round(driver_earnings, 2),
         tip=round(offer, 2),
         pickup_otp=pickup_otp,
@@ -3148,16 +3194,9 @@ async def create_shipment(
         metadata={"vehicle_type": request.vehicle_type, "price": round(total_price, 2)},
     )
 
-    # Send push notification to online drivers with matching vehicle type
-    asyncio.create_task(notify_available_drivers(
-        order_id=order_id,
-        order_number=order_number,
-        vehicle_type=request.vehicle_type,
-        pickup_address=request.pickup_address,
-        earnings=driver_earnings,
-    ))
-    # Background (Emergent relay) push to online drivers about the new job.
-    asyncio.create_task(push_new_job_to_online_drivers(new_order.model_dump()))
+    # NOTE: drivers are NOT notified here. The order is only published to the
+    # marketplace once the shipper's payment is AUTHORIZED (see
+    # _apply_intent_to_order), enforcing pay-at-creation.
     
     response = {
         "order_id": order_id,
@@ -3169,7 +3208,11 @@ async def create_shipment(
         "base_price": base_total,
         "offer": round(offer, 2),
         "breakdown": breakdown,
-        "distance_km": round(distance_km, 2),
+        "distance_km": round(road_km, 2),
+        "straight_distance_km": round(straight_km, 2),
+        "road_distance_km": round(road_km, 2),
+        "duration_minutes": duration_minutes,
+        "polyline": route["polyline"],
         "estimated_duration_minutes": new_order.eta_minutes,
         "message": "Shipment created successfully! Waiting for driver assignment."
     }
@@ -3256,37 +3299,142 @@ async def get_shipment_details(
     }
 
 
+# Cancellation policy defaults (admin-overridable via db.settings key="policy").
+DEFAULT_FREE_CANCEL_MINUTES = 60
+DEFAULT_CANCEL_FEE_PCT = 0.15
+
+
+async def get_cancellation_policy() -> dict:
+    """Free-cancel window (minutes) + cancellation fee (% of price) after it."""
+    try:
+        doc = await db.settings.find_one({"key": "policy"}, {"_id": 0}) or {}
+    except Exception:
+        doc = {}
+    try:
+        free_minutes = int(doc.get("free_cancel_minutes", DEFAULT_FREE_CANCEL_MINUTES))
+    except Exception:
+        free_minutes = DEFAULT_FREE_CANCEL_MINUTES
+    try:
+        fee_pct = float(doc.get("cancel_fee_pct", DEFAULT_CANCEL_FEE_PCT))
+    except Exception:
+        fee_pct = DEFAULT_CANCEL_FEE_PCT
+    return {"free_cancel_minutes": free_minutes, "cancel_fee_pct": max(0.0, min(1.0, fee_pct))}
+
+
 @api_router.post("/shipper/shipments/{order_id}/cancel")
 async def cancel_shipment(
     order_id: str,
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Cancel a shipment (only if not yet picked up)."""
+    """Cancel a shipment before pickup.
+
+    Cancellation policy:
+      * Within the free window (default 60 min of creation) -> the payment
+        authorization is released; the shipper is charged nothing.
+      * After the free window -> a cancellation fee (default 15% of the price)
+        is captured and the remaining hold is released.
+    """
     if not credentials:
         raise HTTPException(401, "Authentication required")
-    
+
     payload = decode_token(credentials.credentials)
     if payload.get("type") != "shipper":
         raise HTTPException(403, "Shipper access required")
-    
+
     shipper_id = payload["sub"]
-    
+
     order = await db.orders.find_one({"id": order_id, "shipper_id": shipper_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Shipment not found")
-    
+
     # Can only cancel if not yet picked up
     if order["status"] in ["picked_up", "enroute_dropoff", "arrived_dropoff", "delivered"]:
         raise HTTPException(400, "Cannot cancel shipment after pickup")
-    
+    if order["status"] in ["rejected", "cancelled"]:
+        raise HTTPException(400, "Shipment is already cancelled")
+
+    policy = await get_cancellation_policy()
+    free_minutes = policy["free_cancel_minutes"]
+    fee_pct = policy["cancel_fee_pct"]
+
+    # Minutes elapsed since the order was created.
+    minutes_since = 0.0
+    created_raw = order.get("created_at")
+    if created_raw:
+        try:
+            created_dt = datetime.fromisoformat(str(created_raw).replace("Z", "+00:00"))
+            if created_dt.tzinfo is None:
+                created_dt = created_dt.replace(tzinfo=timezone.utc)
+            minutes_since = (datetime.now(timezone.utc) - created_dt).total_seconds() / 60.0
+        except Exception:
+            minutes_since = 0.0
+
+    within_free = minutes_since <= free_minutes
+    cancellation_fee = 0.0
+    refund_note = "No payment was charged."
+    intent_id = order.get("stripe_payment_intent_id")
+    pay_status = order.get("payment_status")
+    amount = float(order.get("payment_amount") or order.get("price_quote") or 0)
+    new_pay_status = pay_status or "unpaid"
+
+    if intent_id and pay_status == "authorized":
+        try:
+            if within_free or fee_pct <= 0 or amount <= 0:
+                payments.cancel_payment_intent(intent_id)
+                new_pay_status = "canceled"
+                refund_note = "Authorization released — you were not charged."
+            else:
+                fee_cents = max(1, payments.to_cents(round(amount * fee_pct, 2)))
+                payments.capture_payment_intent(intent_id, amount_cents=fee_cents)
+                cancellation_fee = payments.from_cents(fee_cents)
+                new_pay_status = "captured"
+                refund_note = (
+                    f"Cancellation fee of €{cancellation_fee:.2f} charged; "
+                    f"the remaining hold was released."
+                )
+        except Exception as exc:
+            logger.error(f"Cancel payment handling failed for {order_id}: {exc}")
+            raise HTTPException(502, f"Could not process cancellation payment: {exc}")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
     await db.orders.update_one(
         {"id": order_id},
-        {"$set": {"status": "rejected", "completed_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {
+            "status": "rejected",
+            "completed_at": now_iso,
+            "cancelled_at": now_iso,
+            "payment_status": new_pay_status,
+            "cancellation_fee": round(cancellation_fee, 2),
+        }},
     )
-    
-    logger.info(f"Shipper {shipper_id} cancelled shipment {order_id}")
-    
-    return {"message": "Shipment cancelled successfully"}
+
+    try:
+        await audit.record_event(
+            db, order_id, "order_cancelled",
+            from_status=order["status"], to_status="rejected",
+            actor_id=shipper_id, actor_type="shipper",
+            metadata={
+                "minutes_since_create": round(minutes_since, 1),
+                "within_free": within_free,
+                "cancellation_fee": round(cancellation_fee, 2),
+            },
+        )
+    except Exception:
+        pass
+
+    logger.info(
+        f"Shipper {shipper_id} cancelled shipment {order_id} "
+        f"(fee €{cancellation_fee:.2f}, within_free={within_free})"
+    )
+
+    return {
+        "message": "Shipment cancelled",
+        "cancellation_fee": round(cancellation_fee, 2),
+        "within_free_window": within_free,
+        "free_cancel_minutes": free_minutes,
+        "cancel_fee_pct": fee_pct,
+        "refund_note": refund_note,
+    }
 
 
 @api_router.get("/shipper/shipments/{order_id}/tracking")
@@ -3558,6 +3706,106 @@ def _haversine_km(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> flo
     return 2 * R * math.asin(math.sqrt(h))
 
 
+# ===================== Google Directions (source of truth for money) =====================
+# IMPORTANT: fetch_road_route() is the ONLY distance source allowed for pricing,
+# driver earnings, ETA, and Stripe billing. It HARD-FAILS on any non-OK Google
+# status and NEVER falls back to Haversine / straight-line distance. Haversine
+# remains allowed ONLY for nearby-driver search and geofencing.
+
+_DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json"
+
+
+async def fetch_road_route(
+    origin_lat: float, origin_lng: float,
+    dest_lat: float, dest_lng: float,
+) -> dict:
+    """Compute real-world DRIVING route via Google Directions API.
+
+    Returns: {road_distance_km, duration_minutes, polyline,
+              distance_meters, duration_seconds, source}
+
+    Raises HTTPException on ANY failure (timeout, HTTP error, or non-OK Google
+    status). Pricing/earnings/billing MUST never silently fall back to
+    straight-line distance, so callers should let this propagate.
+    """
+    if not GOOGLE_DIRECTIONS_API_KEY:
+        raise HTTPException(503, "Pricing unavailable - routing service not configured")
+
+    # Cache per normalised (origin, dest) pair to save quota. Driving routes are
+    # static enough for pricing (no live-traffic component requested).
+    cache_key = f"drive|{origin_lat:.5f},{origin_lng:.5f}|{dest_lat:.5f},{dest_lng:.5f}"
+    cached = await db.route_pricing_cache.find_one({"key": cache_key}, {"_id": 0})
+    if cached and cached.get("data"):
+        return cached["data"]
+
+    params = {
+        "origin": f"{origin_lat},{origin_lng}",
+        "destination": f"{dest_lat},{dest_lng}",
+        "mode": "driving",
+        "units": "metric",
+        "key": GOOGLE_DIRECTIONS_API_KEY,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0)) as client_http:
+            resp = await client_http.get(_DIRECTIONS_URL, params=params)
+    except httpx.TimeoutException as exc:
+        logger.error("Directions pricing timeout: %s", exc)
+        raise HTTPException(503, "Pricing unavailable - route calculation timed out")
+    except httpx.HTTPError as exc:
+        logger.error("Directions pricing HTTP error: %s", exc)
+        raise HTTPException(502, "Pricing unavailable - route service error")
+
+    if resp.status_code != 200:
+        logger.error("Directions pricing bad HTTP status: %s", resp.status_code)
+        raise HTTPException(502, "Pricing unavailable - route service error")
+
+    data = resp.json()
+    status = data.get("status")
+    if status != "OK":
+        err = data.get("error_message", "")
+        logger.error("Directions pricing non-OK status=%s %s", status, err)
+        if status == "ZERO_RESULTS":
+            raise HTTPException(422, "No drivable route between pickup and drop-off")
+        if status == "OVER_QUERY_LIMIT":
+            raise HTTPException(503, "Pricing temporarily unavailable - please retry shortly")
+        if status == "REQUEST_DENIED":
+            raise HTTPException(500, "Pricing unavailable - routing configuration error")
+        raise HTTPException(502, f"Pricing unavailable - routing error ({status})")
+
+    routes = data.get("routes") or []
+    if not routes or not routes[0].get("legs"):
+        raise HTTPException(502, "Pricing unavailable - empty route from routing service")
+
+    leg = routes[0]["legs"][0]
+    try:
+        distance_meters = int(leg["distance"]["value"])
+        duration_seconds = int(leg["duration"]["value"])
+        polyline = str(routes[0]["overview_polyline"]["points"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(502, "Pricing unavailable - malformed route from routing service")
+
+    result = {
+        "road_distance_km": round(distance_meters / 1000.0, 2),
+        "duration_minutes": round(duration_seconds / 60.0, 1),
+        "polyline": polyline,
+        "distance_meters": distance_meters,
+        "duration_seconds": duration_seconds,
+        "source": "google",
+    }
+
+    try:
+        await db.route_pricing_cache.update_one(
+            {"key": cache_key},
+            {"$set": {"key": cache_key, "data": result, "cached_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True,
+        )
+    except Exception as exc:
+        logger.warning("route_pricing_cache write failed: %s", exc)
+
+    return result
+
+
 # Average urban driving speed (km/h) used to estimate live ETA.
 _AVG_SPEED_KMH = 32.0
 # Distance (km) the driver may stray from the pickup->dropoff corridor before
@@ -3650,7 +3898,8 @@ async def get_route(order_id: str):
                     params={
                         "origin": f"{origin['lat']},{origin['lng']}",
                         "destination": f"{dest['lat']},{dest['lng']}",
-                        "mode": "bicycling",
+                        "mode": "driving",
+                        "units": "metric",
                         "key": GOOGLE_DIRECTIONS_API_KEY,
                     },
                 )
@@ -4905,7 +5154,7 @@ class ChatManager:
             "timestamp": timestamp,
             "read": False,
         }
-        await db.chat_messages.insert_one(msg_doc)
+        await db.chat_messages.insert_one(dict(msg_doc))
         
         # Broadcast to all participants
         if order_id in self.chat_rooms:
@@ -5145,6 +5394,16 @@ async def _apply_intent_to_order(order: dict, intent) -> dict:
     if new_status == "authorized" and not order.get("authorized_at"):
         updates["authorized_at"] = now
         await _record_ledger(order, intent, "authorization", "pending", split)
+        # Order is now PAID — publish it to the driver marketplace.
+        if order.get("status") == "pending":
+            asyncio.create_task(notify_available_drivers(
+                order_id=order_id,
+                order_number=order.get("order_number", order_id),
+                vehicle_type=order.get("vehicle_type"),
+                pickup_address=(order.get("pickup") or {}).get("address", ""),
+                earnings=float(order.get("earnings") or 0),
+            ))
+            asyncio.create_task(push_new_job_to_online_drivers({**order, **updates}))
 
     if new_status == "captured":
         captured_gross = payments.from_cents(
