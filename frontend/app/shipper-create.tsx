@@ -15,8 +15,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
 
-import { getAuthToken } from "../src/api";
+import { api, getAuthToken } from "../src/api";
 import { calculatePrice, haversineKm } from "../src/utils/pricing";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
@@ -513,16 +514,54 @@ export default function ShipperCreateScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         await clearDraft();
         idempotencyKey.current = genId(); // fresh key for next shipment
-        showBanner(`Shipment ${data.order_number} created! Authorize payment to confirm your booking…`, "success", false);
-        setTimeout(() => {
-          resetForm(); // clear the wizard so a new shipment starts blank
-          // Send the shipper straight to the payment step (tracking screen has the Authorize card).
-          if (data.order_id) {
-            router.replace(`/shipper-tracking?id=${data.order_id}&pay=1`);
+        resetForm(); // clear the wizard so a new shipment starts blank
+
+        const orderId: string | undefined = data.order_id;
+        const orderNum: string | undefined = data.order_number;
+
+        if (!orderId) {
+          showBanner(`Shipment ${orderNum || ""} created!`, "success", false);
+          setTimeout(() => router.replace("/shipper-home"), 900);
+          return;
+        }
+
+        // Prompt for payment IMMEDIATELY — the booking is only confirmed once paid.
+        showBanner("Order created — opening secure payment…", "success", false);
+        try {
+          const { url } = await api.createPaymentCheckout(orderId);
+          if (Platform.OS === "web") {
+            if (typeof window !== "undefined") window.open(url, "_blank");
           } else {
-            router.back();
+            await WebBrowser.openBrowserAsync(url);
           }
-        }, 1200);
+
+          // Poll for the authorization/capture to land after the checkout closes.
+          let paid = false;
+          for (let i = 0; i < 8; i++) {
+            await new Promise((r) => setTimeout(r, 2000));
+            try {
+              const s = await api.getPaymentStatus(orderId);
+              if (s.payment_status === "authorized" || s.payment_status === "captured") {
+                paid = true;
+                break;
+              }
+            } catch {
+              /* keep polling */
+            }
+          }
+
+          if (paid) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            router.replace(`/shipper-home?paid=1&order=${encodeURIComponent(orderNum || "")}`);
+          } else {
+            // Not completed — let them retry from tracking without losing the job.
+            showBanner("Payment not completed. You can pay from the tracking screen.", "error", false);
+            setTimeout(() => router.replace(`/shipper-tracking?id=${orderId}&pay=1`), 1300);
+          }
+        } catch (payErr: any) {
+          showBanner(payErr?.message || "Could not start payment. Pay from the tracking screen.", "error", false);
+          setTimeout(() => router.replace(`/shipper-tracking?id=${orderId}&pay=1`), 1300);
+        }
       } else {
         const err = await res.json().catch(() => ({}));
         showBanner(err.detail || "Failed to create shipment", "error");
@@ -1095,7 +1134,7 @@ export default function ShipperCreateScreen() {
         ) : (
           <View style={{ paddingVertical: 24, alignItems: "center" }}>
             <Ionicons name="cloud-offline-outline" size={28} color={theme.textSecondary} />
-            <Text style={[styles.quoteNote, { marginTop: 8 }]}>Couldn't load price.</Text>
+            <Text style={[styles.quoteNote, { marginTop: 8 }]}>Couldn&apos;t load price.</Text>
             <TouchableOpacity style={styles.retryBtn} onPress={fetchQuote}>
               <Ionicons name="refresh" size={15} color={ACCENT} />
               <Text style={styles.retryBtnText}>Retry</Text>

@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
@@ -91,6 +91,8 @@ export default function ShipperHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
+  const params = useLocalSearchParams<{ paid?: string; order?: string }>();
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const styles = createStyles(theme);
 
@@ -149,6 +151,18 @@ export default function ShipperHomeScreen() {
     const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  // Surface the "job created & paid" notification when redirected from checkout.
+  useEffect(() => {
+    if (params?.paid === "1") {
+      const ord = params.order ? ` ${params.order}` : "";
+      setSuccessMsg(`Job${ord} created & payment successful!`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      router.setParams({ paid: "", order: "" });
+      const tmr = setTimeout(() => setSuccessMsg(null), 5000);
+      return () => clearTimeout(tmr);
+    }
+  }, [params?.paid, params?.order, router]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -276,6 +290,13 @@ export default function ShipperHomeScreen() {
         </View>
       </Animated.View>
 
+      {successMsg ? (
+        <Animated.View entering={FadeInDown.duration(250)} style={styles.successBanner} testID="job-success-banner">
+          <Ionicons name="checkmark-circle" size={20} color="#fff" />
+          <Text style={styles.successBannerText}>{successMsg}</Text>
+        </Animated.View>
+      ) : null}
+
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
@@ -370,6 +391,23 @@ const createStyles = (theme: any) => StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.lg,
+  },
+  successBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#10B981",
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: radius.lg,
+  },
+  successBannerText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+    flex: 1,
   },
   headerLeft: {
     flexDirection: "row",
