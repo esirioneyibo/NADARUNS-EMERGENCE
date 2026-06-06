@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from "react";
-import { LayoutDashboard, Truck, Users, Package, Car, ShieldCheck, LogOut, BadgeEuro, Settings as SettingsIcon, MapPinned } from "lucide-react";
+import { LayoutDashboard, Truck, Users, Package, Car, ShieldCheck, LogOut, BadgeEuro, Settings as SettingsIcon, MapPinned, Home } from "lucide-react";
 import { adminApi, setToken, clearToken, hasToken } from "@/lib/adminApi";
 import Overview from "@/components/admin/Overview";
 import Drivers from "@/components/admin/Drivers";
@@ -70,6 +70,7 @@ export default function AdminPage() {
             ))}
           </nav>
           <div className="adm-side-foot">
+            <a className="adm-navbtn" data-testid="admin-back-to-site" href="/"><Home size={18} /> Back to main site</a>
             <button className="adm-navbtn" data-testid="admin-logout" onClick={logout}><LogOut size={18} /> Sign out</button>
           </div>
         </aside>

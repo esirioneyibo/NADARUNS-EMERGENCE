@@ -1,12 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
 export default function Navbar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsAdmin(!!localStorage.getItem("admin_token"));
+    } catch {
+      /* ignore */
+    }
+  }, [pathname]);
 
   if (pathname?.startsWith("/admin")) return null;
 
@@ -44,6 +54,11 @@ export default function Navbar() {
 
         {/* CTA Buttons */}
         <div className="nav-cta">
+          {isAdmin && (
+            <Link href="/admin" className="btn-outline" data-testid="nav-admin-link" style={{ padding: '10px 20px', fontSize: '14px', borderColor: '#6366F1', color: '#6366F1' }}>
+              Admin Dashboard
+            </Link>
+          )}
           <Link href="/drivers" className="btn-outline" style={{ padding: '10px 20px', fontSize: '14px' }}>
             Drive with us
           </Link>
@@ -81,6 +96,9 @@ export default function Navbar() {
           <Link href="/download" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>Download</Link>
           <Link href="/contact" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>Contact</Link>
           <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {isAdmin && (
+              <Link href="/admin" className="btn-outline" style={{ justifyContent: 'center', borderColor: '#6366F1', color: '#6366F1' }} onClick={() => setIsOpen(false)}>Admin Dashboard</Link>
+            )}
             <Link href="/drivers" className="btn-outline" style={{ justifyContent: 'center' }} onClick={() => setIsOpen(false)}>Drive with us</Link>
             <Link href="/download" className="btn-primary" style={{ justifyContent: 'center' }} onClick={() => setIsOpen(false)}>Get the app</Link>
           </div>
