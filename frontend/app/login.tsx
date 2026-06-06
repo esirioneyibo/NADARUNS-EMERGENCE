@@ -42,20 +42,6 @@ const ROLE_OPTIONS: RoleOption[] = [
     description: "Deliver orders and earn money",
     color: "#10B981",
   },
-  {
-    id: "shipper",
-    label: "Business",
-    icon: "storefront",
-    description: "Ship your products",
-    color: "#6366F1",
-  },
-  {
-    id: "admin",
-    label: "Admin",
-    icon: "shield-checkmark",
-    description: "Manage the platform",
-    color: "#F59E0B",
-  },
 ];
 
 export default function LoginScreen() {
@@ -84,117 +70,37 @@ export default function LoginScreen() {
     }
   }, [isAuthenticated]);
 
-  const handleDemoMode = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    // Demo mode goes to the appropriate home based on selected role
-    if (selectedRole === "shipper") {
-      router.replace("/shipper-home");
-    } else if (selectedRole === "admin") {
-      Alert.alert(t("login.adminAccessTitle"), t("login.adminAccessMsg"));
-    } else {
-      router.replace("/driver-home");
-    }
-  };
-
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert(t("common.error"), t("login.errorEmailPassword"));
       return;
     }
-    
+
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    
+
     try {
-      let response;
-      
-      if (selectedRole === "admin") {
-        response = await api.adminLogin(email.trim(), password);
-        setAuthToken(response.token);
-        await login(response.token, {
-          id: "admin",
-          name: "Administrator",
-          email: email.trim(),
-          type: "admin",
-        });
-        router.replace("/admin");
-      } else if (selectedRole === "shipper") {
-        response = await api.shipperLogin(email.trim(), password);
-        setAuthToken(response.token);
-        await login(response.token, {
-          id: response.shipper_id,
-          name: response.business_name,
-          email: email.trim(),
-          type: "shipper",
-        });
-        router.replace("/shipper-home");
-      } else {
-        response = await api.login(email.trim(), password);
-        setAuthToken(response.token);
-        await login(response.token, {
-          id: response.driver_id,
-          name: response.name,
-          email: email.trim(),
-          type: "driver",
-        });
-        router.replace("/driver-home");
-      }
-      
+      const response = await api.login(email.trim(), password);
+      setAuthToken(response.token);
+      await login(response.token, {
+        id: response.driver_id,
+        name: response.name,
+        email: email.trim(),
+        type: "driver",
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      router.replace("/driver-home");
     } catch (error: any) {
-      const message = error?.message || t("login.loginFailedMsg");
-      Alert.alert(t("login.loginFailedTitle"), message);
+      Alert.alert(t("login.loginFailedTitle"), error?.message || t("login.loginFailedMsg"));
     } finally {
       setLoading(false);
     }
   };
 
   const handleRegister = async () => {
-    // For drivers, redirect to the full onboarding flow
-    if (selectedRole === "driver") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      router.push("/onboarding");
-      return;
-    }
-    
-    if (!email.trim() || !password.trim() || !name.trim()) {
-      Alert.alert(t("common.error"), t("login.fillRequired"));
-      return;
-    }
-    
-    if (password.length < 6) {
-      Alert.alert(t("common.error"), t("login.passwordMin"));
-      return;
-    }
-    
-    setLoading(true);
+    // Driver sign-up goes through the full onboarding/KYC flow.
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    
-    try {
-      // Shipper registration stays on this screen
-      const response = await api.shipperRegister({
-        business_name: name.trim(),
-        email: email.trim(),
-        password: password,
-        phone: phone.trim(),
-      });
-      setAuthToken(response.token);
-      await login(response.token, {
-        id: response.shipper_id,
-        name: response.business_name,
-        email: email.trim(),
-        type: "shipper",
-      });
-      router.replace("/shipper-home");
-      
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert(t("login.welcomeTitle"), t("login.shipperCreated"));
-    } catch (error: any) {
-      const message = error?.message || t("login.registrationFailedMsg");
-      Alert.alert(t("login.registrationFailedTitle"), message);
-    } finally {
-      setLoading(false);
-    }
+    router.push("/onboarding");
   };
 
   const selectedRoleData = ROLE_OPTIONS.find(r => r.id === selectedRole)!;
@@ -221,38 +127,6 @@ export default function LoginScreen() {
           <Text style={styles.subtitle}>
             {isRegister ? t("login.createAccount") : t("login.signInToContinue")}
           </Text>
-        </Animated.View>
-
-        {/* Role Selector */}
-        <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.roleSection}>
-          <Text style={styles.roleSectionTitle}>{t("login.iAmA")}</Text>
-          <View style={styles.roleGrid}>
-            {ROLE_OPTIONS.filter(r => isRegister ? r.id !== "admin" : true).map((role) => {
-              const isSelected = selectedRole === role.id;
-              const labelKey = role.id === "driver" ? "login.roleDriver" : role.id === "shipper" ? "login.roleBusiness" : "login.roleAdmin";
-              const descKey = role.id === "driver" ? "login.roleDriverDesc" : role.id === "shipper" ? "login.roleBusinessDesc" : "login.roleAdminDesc";
-              return (
-                <TouchableOpacity
-                  key={role.id}
-                  style={[
-                    styles.roleCard,
-                    isSelected && { borderColor: role.color, backgroundColor: `${role.color}10` },
-                  ]}
-                  onPress={() => {
-                    setSelectedRole(role.id);
-                    Haptics.selectionAsync().catch(() => {});
-                  }}
-                  testID={`role-${role.id}`}
-                >
-                  <View style={[styles.roleIconWrap, { backgroundColor: isSelected ? role.color : theme.surfaceMuted }]}>
-                    <Ionicons name={role.icon} size={24} color={isSelected ? "#fff" : theme.textSecondary} />
-                  </View>
-                  <Text style={[styles.roleLabel, isSelected && { color: role.color }]}>{t(labelKey)}</Text>
-                  <Text style={styles.roleDesc}>{t(descKey)}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
         </Animated.View>
 
         {/* Form */}
@@ -393,27 +267,6 @@ export default function LoginScreen() {
               </Text>
             </Text>
           </TouchableOpacity>
-        </Animated.View>
-
-        {/* Demo Mode */}
-        <Animated.View entering={FadeIn.delay(400).duration(400)} style={styles.demoSection}>
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>{t("login.or")}</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity
-            style={styles.demoBtn}
-            onPress={handleDemoMode}
-            testID="demo-mode-button"
-          >
-            <Ionicons name="play-circle-outline" size={22} color={theme.primary} />
-            <Text style={styles.demoBtnText}>{t("login.continueDemoMode")}</Text>
-          </TouchableOpacity>
-          <Text style={styles.demoNote}>
-            {t("login.demoNote")}
-          </Text>
         </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>

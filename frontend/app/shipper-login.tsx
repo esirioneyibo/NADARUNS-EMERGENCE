@@ -17,7 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
-import { setAuthToken } from "../src/api";
+import { friendlyError, setAuthToken } from "../src/api";
 import { useAuth } from "../src/contexts/AuthContext";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
@@ -58,8 +58,8 @@ export default function ShipperLoginScreen() {
       });
       
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Login failed");
+        const txt = await res.text();
+        throw new Error(friendlyError(res.status, txt));
       }
       
       const data = await res.json();
@@ -75,7 +75,11 @@ export default function ShipperLoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.replace("/shipper-home");
     } catch (error: any) {
-      Alert.alert("Login Failed", error.message || "Please check your credentials.");
+      const msg =
+        error?.message === "Network request failed" || error?.name === "TypeError"
+          ? "Couldn't reach the server. Please check your connection and try again."
+          : error?.message || "Please check your credentials and try again.";
+      Alert.alert("Login Failed", msg);
     } finally {
       setLoading(false);
     }
@@ -109,8 +113,8 @@ export default function ShipperLoginScreen() {
       });
       
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Registration failed");
+        const txt = await res.text();
+        throw new Error(friendlyError(res.status, txt));
       }
       
       const data = await res.json();
@@ -128,7 +132,11 @@ export default function ShipperLoginScreen() {
         { text: "Continue", onPress: () => router.replace("/shipper-home") }
       ]);
     } catch (error: any) {
-      Alert.alert("Registration Failed", error.message || "Please try again.");
+      const msg =
+        error?.message === "Network request failed" || error?.name === "TypeError"
+          ? "Couldn't reach the server. Please check your connection and try again."
+          : error?.message || "Please try again.";
+      Alert.alert("Registration Failed", msg);
     } finally {
       setLoading(false);
     }
@@ -291,15 +299,6 @@ export default function ShipperLoginScreen() {
             </Text>
           </TouchableOpacity>
         </Animated.View>
-
-        {/* Driver link */}
-        <TouchableOpacity 
-          style={styles.driverLink} 
-          onPress={() => router.push("/login")}
-        >
-          <Ionicons name="car-outline" size={16} color={theme.primary} />
-          <Text style={styles.driverLinkText}>I'm a driver</Text>
-        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );

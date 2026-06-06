@@ -40,24 +40,18 @@ export default function WelcomeScreen() {
     );
   }
   if (isAuthenticated && user) {
-    const home =
-      user.type === "shipper" ? "/shipper-home" : user.type === "admin" ? "/admin" : "/driver-home";
+    const home = user.type === "shipper" ? "/shipper-home" : "/driver-home";
     return <Redirect href={home} />;
   }
 
   const handleDriverPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    router.push("/driver-home");
+    router.push("/login");
   };
 
   const handleShipperPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    router.push("/shipper-home");
-  };
-
-  const handleLoginPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    router.push("/login");
+    router.push("/shipper-login");
   };
 
   return (
@@ -151,9 +145,6 @@ export default function WelcomeScreen() {
       {/* Footer */}
       <Animated.View entering={FadeIn.delay(400).duration(500)} style={styles.footer}>
         <Text style={styles.footerText}>{t("welcome.alreadyHaveAccount")}</Text>
-        <TouchableOpacity onPress={handleLoginPress} testID="login-button">
-          <Text style={styles.loginLink}>{t("common.signIn")}</Text>
-        </TouchableOpacity>
       </Animated.View>
     </View>
   );

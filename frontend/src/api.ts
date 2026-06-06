@@ -69,6 +69,49 @@ export function getAuthToken(): string | null {
   return authToken;
 }
 
+/**
+ * Convert any failed HTTP response into a clean, human-friendly message.
+ * Never leaks raw HTML gateway pages (502/nginx), URLs, or stack traces.
+ */
+export function friendlyError(status: number, rawText: string): string {
+  // Prefer a clean JSON detail from our backend, if present and not HTML.
+  try {
+    const parsed = JSON.parse(rawText);
+    const detail = parsed?.detail ?? parsed?.message;
+    if (typeof detail === "string" && detail.trim() && !/<[a-z!/]/i.test(detail)) {
+      return detail;
+    }
+    if (Array.isArray(detail) && detail[0]?.msg) {
+      return String(detail[0].msg);
+    }
+  } catch {
+    /* Not JSON (e.g. an HTML 502/nginx page) — fall through to status mapping. */
+  }
+  switch (true) {
+    case status === 400:
+      return "Something in your request wasn't right. Please review and try again.";
+    case status === 401:
+    case status === 403:
+      return "Your email or password is incorrect.";
+    case status === 404:
+      return "We couldn't find what you were looking for.";
+    case status === 408:
+      return "The request timed out. Please try again.";
+    case status === 409:
+      return "That conflicts with existing data. Please try again.";
+    case status === 422:
+      return "Some details look invalid. Please review and try again.";
+    case status === 429:
+      return "Too many attempts. Please wait a moment and try again.";
+    case status === 502 || status === 503 || status === 504:
+      return "The server is temporarily unavailable. Please try again in a moment.";
+    case status >= 500:
+      return "Something went wrong on our end. Please try again shortly.";
+    default:
+      return "Something went wrong. Please try again.";
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Rehydrate the persisted token if a request races AuthProvider on cold load.
   await ensureTokenLoaded();
@@ -92,22 +135,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     
     if (!res.ok) {
       const txt = await res.text();
-      // Parse error message from JSON if possible
-      try {
-        const err = JSON.parse(txt);
-        throw new Error(err.detail || err.message || `API ${path} failed (${res.status})`);
-      } catch {
-        throw new Error(`API ${path} failed (${res.status}): ${txt}`);
-      }
+      throw new Error(friendlyError(res.status, txt));
     }
     
     const text = await res.text();
     return (text ? JSON.parse(text) : null) as T;
   } catch (error: any) {
-    // Better error handling for network issues
-    if (error.message === "Network request failed" || error.name === "TypeError") {
-      console.error(`Network error calling ${url}:`, error);
-      throw new Error(`Network request failed. Please check your internet connection and try again. (URL: ${url})`);
+    // Network/connection failures never expose internal URLs to the user.
+    if (
+      error?.message === "Network request failed" ||
+      error?.name === "TypeError" ||
+      error?.message === "Failed to fetch"
+    ) {
+      throw new Error("Couldn't reach the server. Please check your connection and try again.");
     }
     throw error;
   }

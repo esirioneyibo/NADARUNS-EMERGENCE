@@ -9,7 +9,7 @@ import {
   View,
   RefreshControl,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp, FadeIn } from "react-native-reanimated";
@@ -58,6 +58,11 @@ interface Shipper {
 }
 
 export default function AdminScreen() {
+  // Admin dashboard is disabled in the mobile app for now — send users home.
+  return <Redirect href="/" />;
+}
+
+function AdminScreenDisabled() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
