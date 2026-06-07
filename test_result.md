@@ -363,11 +363,14 @@ frontend:
     file: "frontend/app/shipper-create.tsx, backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
-          comment: "Scheduling step now has a 'Pick a date & time' custom slot. Selecting it reveals a horizontal day chooser (dayOptions) + a time grid (timeOptions). BUG FIXED: the submit body previously sent scheduled_pickup: slot?.iso || null which dropped the user's custom selection. Now sends the computed scheduledIso (custom date + time combined into an ISO string, or the preset slot iso, or null for ASAP). NEEDS TESTING (frontend): login shipper (demo.shipper@nadaruns.com/demo1234), open Create wizard, on the When step select 'Pick a date & time', choose a day + time, verify the 'Scheduled for ...' confirmation renders and Review step shows the chosen day/time. NEEDS TESTING (backend): POST /api/shipper/shipments with a scheduled_pickup ISO string persists it on the order (GET /api/shipper/shipments reflects scheduled_pickup)."
+          comment: "Scheduling step now has a 'Pick a date & time' custom slot. Selecting it reveals a horizontal day chooser (dayOptions) + a time grid (timeOptions). BUG FIXED: the submit body previously sent scheduled_pickup: slot?.iso || null which dropped the user's custom selection. Now sends the computed scheduledIso (custom date + time combined into an ISO string, or the preset slot iso, or null for ASAP)."
+        - working: true
+          agent: "testing"
+          comment: "Iteration 23: PASS. Frontend (Expo web): 'Pick a date & time' reveals day chips + time grid; selecting day+time shows 'Scheduled for <day> at <time>'; Review step reflects the choice; no crash. Backend 6/6: scheduled_pickup ISO persists on create + GET; ASAP null still works."
 
   - task: "Stripe payment auto-close via deep-link (/api/payments/return)"
     implemented: true
