@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 
 import { api, getAuthToken } from "../src/api";
 import { calculatePrice, haversineKm } from "../src/utils/pricing";
@@ -130,7 +131,34 @@ const buildScheduleSlots = () => {
   }
   slots.push({ id: "tmrw_am", label: "Tomorrow morning", sub: "09:00", iso: at(tomorrowAt(9)) });
   slots.push({ id: "tmrw_pm", label: "Tomorrow afternoon", sub: "14:00", iso: at(tomorrowAt(14)) });
+  slots.push({ id: "custom", label: "Pick a date & time", sub: "Choose an exact day and time", iso: null });
   return slots;
+};
+
+// Next 14 selectable days for the custom scheduler.
+const buildDayOptions = () => {
+  const days: { id: string; label: string; date: Date }[] = [];
+  const now = new Date();
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    d.setHours(0, 0, 0, 0);
+    const label =
+      i === 0 ? "Today" : i === 1 ? "Tomorrow" : d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+    days.push({ id: d.toISOString().slice(0, 10), label, date: d });
+  }
+  return days;
+};
+
+// 06:00 → 21:30 in 30-minute steps.
+const buildTimeOptions = () => {
+  const times: string[] = [];
+  for (let h = 6; h <= 21; h++) {
+    for (const m of [0, 30]) {
+      times.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    }
+  }
+  return times;
 };
 
 type Coords = { latitude: number; longitude: number } | null;
@@ -197,6 +225,10 @@ export default function ShipperCreateScreen() {
   // Scheduling
   const scheduleSlots = useRef(buildScheduleSlots()).current;
   const [scheduleSlotId, setScheduleSlotId] = useState("asap");
+  const dayOptions = useRef(buildDayOptions()).current;
+  const timeOptions = useRef(buildTimeOptions()).current;
+  const [customDate, setCustomDate] = useState<Date | null>(null);
+  const [customTime, setCustomTime] = useState<string | null>(null);
 
   // Saved addresses
   const [savedAddresses, setSavedAddresses] = useState<{ address: string; coords: Coords }[]>([]);
@@ -473,6 +505,13 @@ export default function ShipperCreateScreen() {
       const fp = pickupCoords || fallback;
       const fd = dropoffCoords || fallback;
       const slot = scheduleSlots.find((sl) => sl.id === scheduleSlotId);
+      let scheduledIso: string | null = slot?.iso || null;
+      if (scheduleSlotId === "custom" && customDate && customTime) {
+        const [hh, mm] = customTime.split(":").map(Number);
+        const cd = new Date(customDate);
+        cd.setHours(hh, mm, 0, 0);
+        scheduledIso = cd.toISOString();
+      }
       const dims = dimL && dimW && dimH ? `${dimL}x${dimW}x${dimH}` : null;
       const reqs = [...specialReqs];
       if (priority && !reqs.includes("priority")) reqs.push("priority");
@@ -503,7 +542,7 @@ export default function ShipperCreateScreen() {
           cargo_type: cargoType,
           cargo_description: cargoDescription || "General cargo",
           special_requirements: reqs.length ? reqs : null,
-          scheduled_pickup: slot?.iso || null,
+          scheduled_pickup: scheduledIso,
           urgency,
           shipper_offer: parseFloat(shipperOffer) || 0,
         }),
@@ -548,13 +587,21 @@ export default function ShipperCreateScreen() {
           return;
         }
 
-        // Native: open the hosted checkout, then reconcile once it closes.
+        // Native: open the hosted checkout in an auth session that AUTO-CLOSES
+        // when Stripe returns to our app deep link — no manual "Done" tap.
         try {
-          const { url } = await api.createPaymentCheckout(orderId);
-          await WebBrowser.openBrowserAsync(url);
+          const returnUrl = Linking.createURL("payment-complete");
+          const successUrl = `${BASE}/api/payments/return?status=success&order_id=${orderId}&redirect=${encodeURIComponent(returnUrl)}`;
+          const cancelUrl = `${BASE}/api/payments/return?status=cancel&order_id=${orderId}&redirect=${encodeURIComponent(returnUrl)}`;
+          const { url } = await api.createPaymentCheckout(orderId, {
+            success_url: successUrl,
+            cancel_url: cancelUrl,
+          });
+          await WebBrowser.openAuthSessionAsync(url, returnUrl);
 
+          // The browser has closed automatically — reconcile with Stripe.
           let paid = false;
-          for (let i = 0; i < 10; i++) {
+          for (let i = 0; i < 8; i++) {
             try {
               const s = await api.getPaymentStatus(orderId);
               if (s.payment_status === "authorized" || s.payment_status === "captured") {
@@ -571,7 +618,6 @@ export default function ShipperCreateScreen() {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
             router.replace(`/shipper-home?paid=1&order=${encodeURIComponent(orderNum || "")}`);
           } else {
-            // Not completed — let them retry from tracking without losing the job.
             showBanner("Payment not completed. You can pay from the tracking screen.", "error", false);
             setTimeout(() => router.replace(`/shipper-tracking?id=${orderId}&pay=1`), 1300);
           }
@@ -1177,6 +1223,10 @@ export default function ShipperCreateScreen() {
               style={[styles.slotCard, on && styles.slotCardSelected]}
               onPress={() => {
                 setScheduleSlotId(slot.id);
+                if (slot.id === "custom") {
+                  setCustomDate((prev) => prev || dayOptions[0].date);
+                  setCustomTime((prev) => prev || "09:00");
+                }
                 Haptics.selectionAsync().catch(() => {});
               }}
             >
@@ -1196,6 +1246,50 @@ export default function ShipperCreateScreen() {
           );
         })}
       </View>
+
+      {scheduleSlotId === "custom" && (
+        <View style={{ marginTop: spacing.lg }}>
+          <Text style={styles.inputLabel}>Select a day</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+            {dayOptions.map((d) => {
+              const on = customDate?.toDateString() === d.date.toDateString();
+              return (
+                <TouchableOpacity
+                  key={d.id}
+                  style={[styles.dayChip, on && styles.dayChipActive]}
+                  onPress={() => { setCustomDate(d.date); Haptics.selectionAsync().catch(() => {}); }}
+                >
+                  <Text style={[styles.dayChipText, on && styles.dayChipTextActive]}>{d.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <Text style={[styles.inputLabel, { marginTop: spacing.md }]}>Select a time</Text>
+          <View style={styles.timeWrap}>
+            {timeOptions.map((tm) => {
+              const on = customTime === tm;
+              return (
+                <TouchableOpacity
+                  key={tm}
+                  style={[styles.timeChip, on && styles.timeChipActive]}
+                  onPress={() => { setCustomTime(tm); Haptics.selectionAsync().catch(() => {}); }}
+                >
+                  <Text style={[styles.timeChipText, on && styles.timeChipTextActive]}>{tm}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {customDate && customTime ? (
+            <Text style={[styles.slotSub, { marginTop: spacing.md }]}>
+              Scheduled for {customDate.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })} at {customTime}
+            </Text>
+          ) : (
+            <Text style={[styles.slotSub, { marginTop: spacing.md, color: "#dc2626" }]}>Please choose a day and time</Text>
+          )}
+        </View>
+      )}
     </Animated.View>
   );
 
@@ -1278,8 +1372,14 @@ export default function ShipperCreateScreen() {
         </SummarySection>
 
         <SummarySection icon="time" color="#F59E0B" title="Schedule" editStep={5}>
-          <Text style={styles.summaryMain}>{slot?.label}</Text>
-          {slot?.sub ? <Text style={styles.summarySub}>{slot.sub}</Text> : null}
+          <Text style={styles.summaryMain}>
+            {scheduleSlotId === "custom" && customDate
+              ? customDate.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })
+              : slot?.label}
+          </Text>
+          {scheduleSlotId === "custom"
+            ? (customTime ? <Text style={styles.summarySub}>at {customTime}</Text> : null)
+            : (slot?.sub ? <Text style={styles.summarySub}>{slot.sub}</Text> : null)}
         </SummarySection>
 
         {/* Price (immutable) */}

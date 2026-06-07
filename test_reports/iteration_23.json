@@ -1,0 +1,34 @@
+{
+  "summary": "Tested both newly fixed features end-to-end. BACKEND (pytest, 6/6 passed): POST /api/shipper/shipments with scheduled_pickup='2026-06-20T09:00:00.000Z' persists correctly, and the GET /api/shipper/shipments + GET /api/shipper/shipments/{id} both echo the same value back. ASAP (scheduled_pickup=null) still creates a shipment and persists null. GET /api/payments/return returns 200 HTML in all 4 tested shapes: (a) status=success+redirect=nadaruns://payment-complete returns HTML containing the deep link, status, order_id, AND auto-redirect markers (meta http-equiv refresh + window.location.replace); (b) status=cancel+redirect returns the same redirect HTML with 'Payment cancelled'; (c) no redirect returns plain 'Payment authorized' status page (no deep link); (d) no params at all does not crash (defaults to success). FRONTEND (mobile viewport 390x844): Pre-seeded auth (nadaruns_auth_token + nadaruns_user) and a valid shipper_create_draft_v1 draft in localStorage, then navigated to /shipper-create and stepped Continue x4 to reach step 5 (When). The first frontend run did NOT find the new 'Pick a date & time' slot because Metro was running in CI mode and the bundle was stale; after `sudo supervisorctl restart expo` the new slot rendered. Verified: tapping 'Pick a date & time' reveals 'Select a day' (horizontal chip row: Today, Tomorrow, Tue/Jun 9, Wed/Jun 10, Thu/Jun 11, ...) and 'Select a time' grid (06:00-21:30 in 30-min steps). Defaults (today + 09:00) auto-applied so 'Scheduled for Sunday, June 7 at 09:00' confirmation appeared immediately. Tapping the unique '11:30' chip updated the confirmation to 'Scheduled for Sunday, June 7 at 11:30'. Continue advanced to Step 6 Review which shows 'SCHEDULE: Sunday, June 7 / at 11:30'. No red error screen, no PAGEERROR, no console errors during the flow (only the standard expo-notifications and shadow*/pointerEvents deprecation warnings).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "shipper-create step 5 (When)", "issues": ["No testID attributes on any wizard element (slot cards, day chips, time chips, Continue button). Tests had to use text-based selectors which collide between preset slot subtitles (e.g. 'Tomorrow afternoon' has subtitle '14:00') and custom time chips. Adding testIDs like slot-card-{id}, day-chip-{id}, time-chip-{hhmm}, and wizard-continue-button would make this screen robustly testable and avoid ambiguous taps."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scheduled_pickup_and_payment_return.py",
+    "/app/test_reports/pytest/iter23_results.xml",
+    "/app/test_reports/iteration_23.json"
+  ],
+  "action_items": [
+    "Optional: add testID props to the wizard (slot cards, day chips, time chips, Continue/Confirm buttons in shipper-create.tsx) so future regression tests can target picker elements without text-collision workarounds.",
+    "Note for next agents: if the dev preview does not pick up new shipper-create code, run `sudo supervisorctl restart expo` to rebuild the Metro bundle (it runs in CI mode with watch disabled)."
+  ],
+  "critical_code_review_comments": [
+    "shipper-create.tsx handleSubmit (lines 505-545) correctly computes scheduledIso from customDate + customTime (or slot.iso, or null for ASAP) and sends it as scheduled_pickup — the bug E1 fixed is verified.",
+    "/api/payments/return (server.py 5833-5870) emits both a <meta http-equiv='refresh'> tag and a setTimeout window.location.replace for double-belt redirect, plus a manual 'Tap here' anchor link as fallback — robust auto-close behaviour.",
+    "Backend correctly persists scheduled_pickup as a plain string (no parsing/conversion) which round-trips losslessly via GET. Order model includes scheduled_pickup field (server.py:256, 440).",
+    "shipper-create.tsx is 1900+ lines — exceeds the 700-line guideline. Consider splitting into step components (Step1Pickup, Step2Dropoff, etc.) for maintainability. Not blocking."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Backend tests created 2 TEST_ shipments (one scheduled for 2026-06-20T09:00:00.000Z, one ASAP). They live under demo_shipper and can be cleared via DELETE /api/seed-demo if needed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "scheduled_pickup persistence and /api/payments/return deep-link HTML are fully working. The custom date/time picker UI renders correctly after `sudo supervisorctl restart expo`. To test the wizard, you can short-cut steps 1-3 by pre-seeding the localStorage key 'shipper_create_draft_v1' with a JSON.stringify(JSON.stringify({...})) double-encoded draft (because storage.setItem JSON-stringifies again). Auth keys are 'nadaruns_auth_token' (raw token string) and 'nadaruns_user' (JSON.stringify(user)) — these are written directly via AsyncStorage.setItem (not double-encoded).",
+  "rca_of_issue": "First frontend run failed because the new 'Pick a date & time' custom slot was not in the Metro bundle (the same staleness pattern observed in iter22). Metro is started with `expo start --tunnel --port 3000` and reports 'Metro is running in CI mode, reloads are disabled' — so file changes are NOT picked up automatically. Mitigation: `sudo supervisorctl restart expo` rebuilds the bundle. After restart, all wizard UI assertions passed."
+}

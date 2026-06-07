@@ -5831,18 +5831,39 @@ async def cancel_authorization(
 
 
 @api_router.get("/payments/return", response_class=HTMLResponse)
-async def payment_return(status: str = "success", order_id: str = "", session_id: str = ""):
+async def payment_return(status: str = "success", order_id: str = "", session_id: str = "", redirect: str = ""):
     """Lightweight landing page Stripe redirects to after hosted Checkout."""
     ok = status == "success"
     title = "Payment authorized" if ok else "Payment cancelled"
     color = "#16a34a" if ok else "#dc2626"
+    emoji = "✅" if ok else "⚠️"
     msg = ("Your payment has been authorized. You can return to the NadaRuns app."
            if ok else "The payment was not completed. You can return to the app and try again.")
+
+    # If the native app supplied a deep link, bounce straight back to it so the
+    # in-app browser auto-closes (no manual "Done" tap needed).
+    if redirect:
+        sep = "&" if "?" in redirect else "?"
+        target = f"{redirect}{sep}status={status}&order_id={order_id}"
+        js_target = json.dumps(target)
+        html = f"""<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'>
+<meta http-equiv='refresh' content='0;url={target}'>
+<title>{title}</title>
+<script>setTimeout(function(){{window.location.replace({js_target});}},60);</script></head>
+<body style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1220;color:#e5e7eb;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0'>
+<div style='text-align:center;padding:24px;max-width:420px'>
+<div style='font-size:56px'>{emoji}</div>
+<h2 style='color:{color}'>{title}</h2>
+<p style='color:#9ca3af'>Returning to the app…</p>
+<p><a href='{target}' style='color:#60a5fa'>Tap here if not redirected</a></p>
+</div></body></html>"""
+        return HTMLResponse(content=html)
+
     html = f"""<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'>
 <title>{title}</title></head>
 <body style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1220;color:#e5e7eb;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0'>
 <div style='text-align:center;padding:24px;max-width:420px'>
-<div style='font-size:56px'>{'✅' if ok else '⚠️'}</div>
+<div style='font-size:56px'>{emoji}</div>
 <h2 style='color:{color}'>{title}</h2>
 <p style='color:#9ca3af;line-height:1.5'>{msg}</p>
 </div></body></html>"""

@@ -357,6 +357,30 @@ backend:
           comment: "Added Emergent push relay (SuprSend): POST /api/register-push {user_id, platform, device_token} relays to the Emergent push service via EMERGENT_PUSH_KEY. send_push() helper triggers pushes (chunks 100 recipients). Background triggers added (all wrapped in try/except + asyncio.create_task so push failure NEVER blocks the primary op): (1) create_shipment -> push_new_job_to_online_drivers (online drivers matching vehicle type), (2) accept_order -> push_status_to_shipper(accepted), (3) advance_order -> push_status_to_shipper(arrived_pickup/arrived_dropoff/delivered). NOTE: In this env EMERGENT_PUSH_KEY=placeholder, so the upstream relay returns 401 and /api/register-push will return 500 (EXPECTED until deploy replaces the key) - this is fine. CRITICAL TEST FOCUS: the ORDER LIFECYCLE must be UNAFFECTED - POST /api/shipper/shipments (201/200 + order created), POST /api/orders/{id}/accept (driver JWT, binds driver, 200), POST /api/orders/{id}/advance through the full flow to delivered must ALL still return success despite push relay failing in the background. Also verify /api/register-push exists and returns 422 on missing fields."
 
 frontend:
+  - task: "Custom delivery date/time picker + scheduled_pickup persistence (shipper-create wizard)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/shipper-create.tsx, backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Scheduling step now has a 'Pick a date & time' custom slot. Selecting it reveals a horizontal day chooser (dayOptions) + a time grid (timeOptions). BUG FIXED: the submit body previously sent scheduled_pickup: slot?.iso || null which dropped the user's custom selection. Now sends the computed scheduledIso (custom date + time combined into an ISO string, or the preset slot iso, or null for ASAP). NEEDS TESTING (frontend): login shipper (demo.shipper@nadaruns.com/demo1234), open Create wizard, on the When step select 'Pick a date & time', choose a day + time, verify the 'Scheduled for ...' confirmation renders and Review step shows the chosen day/time. NEEDS TESTING (backend): POST /api/shipper/shipments with a scheduled_pickup ISO string persists it on the order (GET /api/shipper/shipments reflects scheduled_pickup)."
+
+  - task: "Stripe payment auto-close via deep-link (/api/payments/return)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py, frontend/app/shipper-create.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "GET /api/payments/return?status=&order_id=&redirect= returns an HTML page that auto-redirects (meta refresh + window.location.replace) to the supplied deep link (e.g. nadaruns://payment-complete) so the native in-app browser (WebBrowser.openAuthSessionAsync) auto-closes after Stripe checkout. NEEDS TESTING (backend): GET /api/payments/return?status=success&order_id=X&redirect=nadaruns%3A%2F%2Fpayment-complete returns 200 HTML containing the redirect target; status=cancel path also returns HTML; without redirect param returns a plain status page. Web flow uses window.location.href to Stripe (no deep link). Native flow uses openAuthSessionAsync."
+
   - task: "Shipper 6-step Order-Creation Wizard (rebuild)"
     implemented: true
     working: true
