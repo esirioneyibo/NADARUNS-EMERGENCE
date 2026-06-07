@@ -5764,7 +5764,9 @@ async def get_payment_status(
     if utype == "driver" and order.get("driver_id") != uid:
         raise HTTPException(403, "Not your order")
 
-    if order.get("payment_status") in ("pending", "authorized") and order.get("stripe_payment_intent_id"):
+    if order.get("payment_status") in ("pending", "authorized") and (
+        order.get("stripe_payment_intent_id") or order.get("stripe_checkout_session_id")
+    ):
         await _sync_order_payment(order)
         order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     return _payment_summary(order)

@@ -18,7 +18,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useTranslation } from "react-i18next";
 
-import { getAuthToken } from "../src/api";
+import { api, getAuthToken } from "../src/api";
 import { useAuth } from "../src/contexts/AuthContext";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
@@ -158,11 +158,16 @@ export default function ShipperHomeScreen() {
       const ord = params.order ? ` ${params.order}` : "";
       setSuccessMsg(`Job${ord} created & payment successful!`);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      router.setParams({ paid: "", order: "" });
+      // Reconcile with Stripe so the paid job is published to drivers, then refresh.
+      const oid = typeof params.oid === "string" ? params.oid : undefined;
+      if (oid) {
+        api.getPaymentStatus(oid).catch(() => {}).finally(() => loadData());
+      }
+      router.setParams({ paid: "", order: "", oid: "" });
       const tmr = setTimeout(() => setSuccessMsg(null), 5000);
       return () => clearTimeout(tmr);
     }
-  }, [params?.paid, params?.order, router]);
+  }, [params?.paid, params?.order, params?.oid, router, loadData]);
 
   const handleRefresh = () => {
     setRefreshing(true);

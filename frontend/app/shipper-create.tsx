@@ -527,18 +527,34 @@ export default function ShipperCreateScreen() {
 
         // Prompt for payment IMMEDIATELY — the booking is only confirmed once paid.
         showBanner("Order created — opening secure payment…", "success", false);
+
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          // Web: redirect THIS tab to Stripe Checkout and let Stripe bring the
+          // shipper straight back to the home screen after paying. No popups,
+          // no spinner hang. The `oid` lets home reconcile the payment status.
+          try {
+            const origin = window.location.origin;
+            const successUrl = `${origin}/shipper-home?paid=1&order=${encodeURIComponent(orderNum || "")}&oid=${orderId}`;
+            const cancelUrl = `${origin}/shipper-tracking?id=${orderId}&pay=1`;
+            const { url } = await api.createPaymentCheckout(orderId, {
+              success_url: successUrl,
+              cancel_url: cancelUrl,
+            });
+            window.location.href = url;
+          } catch (payErr: any) {
+            showBanner(payErr?.message || "Could not start payment. Pay from the tracking screen.", "error", false);
+            setTimeout(() => router.replace(`/shipper-tracking?id=${orderId}&pay=1`), 1300);
+          }
+          return;
+        }
+
+        // Native: open the hosted checkout, then reconcile once it closes.
         try {
           const { url } = await api.createPaymentCheckout(orderId);
-          if (Platform.OS === "web") {
-            if (typeof window !== "undefined") window.open(url, "_blank");
-          } else {
-            await WebBrowser.openBrowserAsync(url);
-          }
+          await WebBrowser.openBrowserAsync(url);
 
-          // Poll for the authorization/capture to land after the checkout closes.
           let paid = false;
-          for (let i = 0; i < 8; i++) {
-            await new Promise((r) => setTimeout(r, 2000));
+          for (let i = 0; i < 10; i++) {
             try {
               const s = await api.getPaymentStatus(orderId);
               if (s.payment_status === "authorized" || s.payment_status === "captured") {
@@ -548,6 +564,7 @@ export default function ShipperCreateScreen() {
             } catch {
               /* keep polling */
             }
+            await new Promise((r) => setTimeout(r, 1500));
           }
 
           if (paid) {
