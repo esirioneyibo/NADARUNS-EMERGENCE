@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 
 import { friendlyError, setAuthToken } from "../src/api";
 import { useAuth } from "../src/contexts/AuthContext";
@@ -29,6 +30,7 @@ export default function ShipperLoginScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { login } = useAuth();
+  const { t } = useTranslation();
   
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -43,7 +45,7 @@ export default function ShipperLoginScreen() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Error", "Please enter both email and password");
+      Alert.alert(t("shipperLogin.errorTitle"), t("shipperLogin.errorEmailPassword"));
       return;
     }
     
@@ -77,9 +79,9 @@ export default function ShipperLoginScreen() {
     } catch (error: any) {
       const msg =
         error?.message === "Network request failed" || error?.name === "TypeError"
-          ? "Couldn't reach the server. Please check your connection and try again."
-          : error?.message || "Please check your credentials and try again.";
-      Alert.alert("Login Failed", msg);
+          ? t("shipperLogin.networkError")
+          : error?.message || t("shipperLogin.loginFailedMsg");
+      Alert.alert(t("shipperLogin.loginFailedTitle"), msg);
     } finally {
       setLoading(false);
     }
@@ -87,12 +89,12 @@ export default function ShipperLoginScreen() {
 
   const handleRegister = async () => {
     if (!companyName.trim() || !contactName.trim() || !email.trim() || !phone.trim() || !password.trim()) {
-      Alert.alert("Error", "Please fill in all fields");
+      Alert.alert(t("shipperLogin.errorTitle"), t("shipperLogin.errorAllFields"));
       return;
     }
     
     if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
+      Alert.alert(t("shipperLogin.errorTitle"), t("shipperLogin.errorPasswordMin"));
       return;
     }
     
@@ -128,15 +130,15 @@ export default function ShipperLoginScreen() {
       });
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert("Success!", "Your business account has been created.", [
-        { text: "Continue", onPress: () => router.replace("/shipper-home") }
+      Alert.alert(t("shipperLogin.successTitle"), t("shipperLogin.accountCreated"), [
+        { text: t("shipperLogin.continue"), onPress: () => router.replace("/shipper-home") }
       ]);
     } catch (error: any) {
       const msg =
         error?.message === "Network request failed" || error?.name === "TypeError"
-          ? "Couldn't reach the server. Please check your connection and try again."
-          : error?.message || "Please try again.";
-      Alert.alert("Registration Failed", msg);
+          ? t("shipperLogin.networkError")
+          : error?.message || t("shipperLogin.registrationFailedMsg");
+      Alert.alert(t("shipperLogin.registrationFailedTitle"), msg);
     } finally {
       setLoading(false);
     }
@@ -169,12 +171,12 @@ export default function ShipperLoginScreen() {
             </View>
           </View>
           <Text style={styles.title}>
-            {isLogin ? "Business Login" : "Register Business"}
+            {isLogin ? t("shipperLogin.businessLogin") : t("shipperLogin.registerBusiness")}
           </Text>
           <Text style={styles.subtitle}>
             {isLogin 
-              ? "Sign in to manage your shipments" 
-              : "Create an account to start shipping"
+              ? t("shipperLogin.signInSubtitle")
+              : t("shipperLogin.registerSubtitle")
             }
           </Text>
         </Animated.View>
@@ -184,14 +186,14 @@ export default function ShipperLoginScreen() {
           {!isLogin && (
             <>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Company Name</Text>
+                <Text style={styles.inputLabel}>{t("shipperLogin.companyName")}</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons name="business-outline" size={20} color={theme.textSecondary} />
                   <TextInput
                     style={styles.input}
                     value={companyName}
                     onChangeText={setCompanyName}
-                    placeholder="Your company name"
+                    placeholder={t("shipperLogin.companyNamePlaceholder")}
                     placeholderTextColor={theme.textSecondary}
                     autoCapitalize="words"
                   />
@@ -199,14 +201,14 @@ export default function ShipperLoginScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Contact Name</Text>
+                <Text style={styles.inputLabel}>{t("shipperLogin.contactName")}</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons name="person-outline" size={20} color={theme.textSecondary} />
                   <TextInput
                     style={styles.input}
                     value={contactName}
                     onChangeText={setContactName}
-                    placeholder="Your name"
+                    placeholder={t("shipperLogin.contactNamePlaceholder")}
                     placeholderTextColor={theme.textSecondary}
                     autoCapitalize="words"
                   />
@@ -214,7 +216,7 @@ export default function ShipperLoginScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Phone</Text>
+                <Text style={styles.inputLabel}>{t("shipperLogin.phone")}</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons name="call-outline" size={20} color={theme.textSecondary} />
                   <TextInput
@@ -231,14 +233,14 @@ export default function ShipperLoginScreen() {
           )}
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Email</Text>
+            <Text style={styles.inputLabel}>{t("shipperLogin.email")}</Text>
             <View style={styles.inputContainer}>
               <Ionicons name="mail-outline" size={20} color={theme.textSecondary} />
               <TextInput
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="business@example.com"
+                placeholder={t("shipperLogin.emailPlaceholder")}
                 placeholderTextColor={theme.textSecondary}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -248,14 +250,14 @@ export default function ShipperLoginScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password</Text>
+            <Text style={styles.inputLabel}>{t("shipperLogin.password")}</Text>
             <View style={styles.inputContainer}>
               <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} />
               <TextInput
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}
-                placeholder={isLogin ? "Enter password" : "Min. 6 characters"}
+                placeholder={isLogin ? t("shipperLogin.passwordPlaceholderLogin") : t("shipperLogin.passwordPlaceholderRegister")}
                 placeholderTextColor={theme.textSecondary}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -280,7 +282,7 @@ export default function ShipperLoginScreen() {
             ) : (
               <>
                 <Text style={styles.submitBtnText}>
-                  {isLogin ? "Sign In" : "Create Account"}
+                  {isLogin ? t("shipperLogin.signIn") : t("shipperLogin.createAccount")}
                 </Text>
                 <Ionicons name="arrow-forward" size={20} color="#fff" />
               </>
@@ -291,11 +293,11 @@ export default function ShipperLoginScreen() {
         {/* Toggle */}
         <Animated.View entering={FadeInUp.delay(400).duration(400)} style={styles.footer}>
           <Text style={styles.footerText}>
-            {isLogin ? "Don't have an account?" : "Already have an account?"}
+            {isLogin ? t("shipperLogin.noAccount") : t("shipperLogin.haveAccount")}
           </Text>
           <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
             <Text style={styles.toggleLink}>
-              {isLogin ? "Register" : "Sign In"}
+              {isLogin ? t("shipperLogin.register") : t("shipperLogin.signIn")}
             </Text>
           </TouchableOpacity>
         </Animated.View>

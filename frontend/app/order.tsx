@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInUp, SlideInDown, Easing, withTiming } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 
 import { api } from "../src/api";
 import type { Order, OrderStatus, RoutePoint } from "../src/types";
@@ -23,20 +24,9 @@ import OtpModal from "../src/components/OtpModal";
 import PhotoCapture from "../src/components/PhotoCapture";
 import NavigateButton from "../src/components/NavigateButton";
 
-const STAGE_TITLES: Record<OrderStatus, { title: string; subtitle: string; primary: string }> = {
-  pending: { title: "New request", subtitle: "Reviewing order details", primary: "Continue" },
-  accepted: { title: "Order accepted", subtitle: "Head to the pickup location", primary: "Start navigation" },
-  enroute_pickup: { title: "Navigating to pickup", subtitle: "Drive safely to the restaurant", primary: "I've arrived" },
-  arrived_pickup: { title: "Arrived at pickup", subtitle: "Verify and pick up the order", primary: "View pickup details" },
-  picked_up: { title: "Order picked up", subtitle: "Head to the customer", primary: "Start delivery" },
-  enroute_dropoff: { title: "Navigating to customer", subtitle: "On your way to the customer", primary: "I've arrived" },
-  arrived_dropoff: { title: "Arrived at dropoff", subtitle: "Hand the order to the customer", primary: "Confirm delivery" },
-  delivered: { title: "Delivered", subtitle: "Great work!", primary: "Done" },
-  rejected: { title: "Rejected", subtitle: "", primary: "Back" },
-};
-
 export default function OrderFlowScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -130,9 +120,9 @@ export default function OrderFlowScreen() {
   if (!order) {
     return (
       <View style={[styles.loading, { paddingTop: insets.top }]}>
-        <Text style={styles.empty}>No active delivery</Text>
+        <Text style={styles.empty}>{t("order.noActiveDelivery")}</Text>
         <TouchableOpacity onPress={() => router.replace("/driver-home")} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>Back to dashboard</Text>
+          <Text style={styles.backBtnText}>{t("order.backToDashboard")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -172,7 +162,7 @@ export default function OrderFlowScreen() {
         <View style={[styles.etaPill, shadows.md]}>
           <Ionicons name={isNavStage ? "navigate" : "time-outline"} size={14} color={theme.primary} />
           <Text style={styles.etaText}>
-            {targetIsPickup ? "Pickup" : "Dropoff"} · {order.eta_minutes} min · {order.distance_km.toFixed(1)} km
+            {targetIsPickup ? t("order.pickup") : t("order.dropoff")} · {order.eta_minutes} {t("order.min")} · {order.distance_km.toFixed(1)} {t("common.km")}
           </Text>
         </View>
 
@@ -203,7 +193,7 @@ export default function OrderFlowScreen() {
             <Text style={styles.sheetSubtitle}>{stage.subtitle}</Text>
           </View>
           <View style={styles.earnChip}>
-            <Text style={styles.earnChipLabel}>EARNING</Text>
+            <Text style={styles.earnChipLabel}>{t("order.earning")}</Text>
             <Text style={styles.earnChipValue}>€{(order.earnings + order.tip).toFixed(2)}</Text>
           </View>
         </View>
@@ -213,7 +203,7 @@ export default function OrderFlowScreen() {
           <View style={styles.addressRow}>
             <View style={[styles.dot, { backgroundColor: targetIsPickup ? theme.primary : "#CBD5E1" }]} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.addressLabel}>Pickup</Text>
+              <Text style={styles.addressLabel}>{t("order.pickup")}</Text>
               <Text style={styles.addressPrimary} numberOfLines={1}>{order.pickup.name}</Text>
               <Text style={styles.addressSecondary} numberOfLines={1}>{order.pickup.address}</Text>
             </View>
@@ -225,7 +215,7 @@ export default function OrderFlowScreen() {
           <View style={styles.addressRow}>
             <View style={[styles.dot, { backgroundColor: !targetIsPickup ? theme.secondary : "#CBD5E1" }]} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.addressLabel}>Dropoff</Text>
+              <Text style={styles.addressLabel}>{t("order.dropoff")}</Text>
               <Text style={styles.addressPrimary} numberOfLines={1}>{order.customer.name}</Text>
               <Text style={styles.addressSecondary} numberOfLines={1}>
                 {order.dropoff.address}{order.customer.apartment ? ` · ${order.customer.apartment}` : ""}
@@ -238,7 +228,7 @@ export default function OrderFlowScreen() {
         {/* Items list visible when arrived at pickup */}
         {isArrivedStage && order.status === "arrived_pickup" ? (
           <Animated.View entering={FadeInUp.duration(280)} style={styles.itemsBlock}>
-            <Text style={styles.itemsTitle}>Order {order.order_number}</Text>
+            <Text style={styles.itemsTitle}>{t("order.orderLabel")} {order.order_number}</Text>
             <ScrollView style={{ maxHeight: 140 }} showsVerticalScrollIndicator={false}>
               {order.items.map((it, i) => (
                 <View key={i} style={styles.itemRow}>
@@ -250,7 +240,7 @@ export default function OrderFlowScreen() {
             {order.customer.notes ? (
               <View style={styles.notesBlock}>
                 <Ionicons name="chatbubble-ellipses-outline" size={14} color={theme.warning} />
-                <Text style={styles.notesText}>Customer note: {order.customer.notes}</Text>
+                <Text style={styles.notesText}>{t("order.customerNote")}: {order.customer.notes}</Text>
               </View>
             ) : null}
           </Animated.View>
@@ -262,8 +252,8 @@ export default function OrderFlowScreen() {
             photo={order.pickup_photo}
             busy={photoUploading}
             onCapture={uploadPickupPhoto}
-            title="Pickup proof"
-            subtitle="Photo of items received from merchant"
+            title={t("order.pickupProof")}
+            subtitle={t("order.pickupProofSub")}
             testID="pickup-photo-capture"
           />
         ) : null}
@@ -278,7 +268,7 @@ export default function OrderFlowScreen() {
                 address: targetIsPickup ? order.pickup.address : order.dropoff.address,
                 name: targetIsPickup ? order.pickup.name : order.customer.name,
               }}
-              label={targetIsPickup ? "Navigate to pickup" : "Navigate to customer"}
+              label={targetIsPickup ? t("order.navigateToPickup") : t("order.navigateToCustomer")}
               testID="navigate-button"
             />
           </Animated.View>
@@ -289,12 +279,12 @@ export default function OrderFlowScreen() {
           <Animated.View entering={FadeInUp.duration(280)} style={styles.itemsBlock}>
             <View style={styles.itemRow}>
               <Ionicons name="business-outline" size={16} color={theme.textSecondary} />
-              <Text style={styles.itemName}>{order.customer.apartment || "Main entrance"}</Text>
+              <Text style={styles.itemName}>{order.customer.apartment || t("order.mainEntrance")}</Text>
             </View>
             {order.customer.gate_code ? (
               <View style={styles.itemRow}>
                 <Ionicons name="keypad-outline" size={16} color={theme.textSecondary} />
-                <Text style={styles.itemName}>Gate code: {order.customer.gate_code}</Text>
+                <Text style={styles.itemName}>{t("order.gateCode")}: {order.customer.gate_code}</Text>
               </View>
             ) : null}
             {order.customer.notes ? (
@@ -318,7 +308,7 @@ export default function OrderFlowScreen() {
         {/* Action */}
         {(order.status === "arrived_pickup" || order.status === "arrived_dropoff") ? (
           <SwipeToConfirm
-            label={order.status === "arrived_pickup" ? "Swipe to confirm pickup" : "Swipe to complete delivery"}
+            label={order.status === "arrived_pickup" ? t("order.swipeConfirmPickup") : t("order.swipeCompleteDelivery")}
             onComplete={() => {
               if (order.status === "arrived_pickup" && !order.pickup_otp_verified) {
                 setOtpError(null);
@@ -351,15 +341,15 @@ export default function OrderFlowScreen() {
         <View style={styles.contactRow}>
           <TouchableOpacity style={styles.contactBtn} testID="call-customer-button">
             <Ionicons name="call-outline" size={18} color={theme.textPrimary} />
-            <Text style={styles.contactText}>Call</Text>
+            <Text style={styles.contactText}>{t("order.call")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.contactBtn} testID="message-customer-button">
             <Ionicons name="chatbubble-outline" size={18} color={theme.textPrimary} />
-            <Text style={styles.contactText}>Message</Text>
+            <Text style={styles.contactText}>{t("order.message")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.contactBtn} testID="support-button">
             <Ionicons name="help-circle-outline" size={20} color={theme.textPrimary} />
-            <Text style={styles.contactText}>Support</Text>
+            <Text style={styles.contactText}>{t("order.support")}</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -380,7 +370,7 @@ export default function OrderFlowScreen() {
             // After successful OTP verify, automatically advance to next stage
             await advance();
           } catch (e: any) {
-            setOtpError("Incorrect code. Please try again.");
+            setOtpError(t("order.incorrectCode"));
             throw e;
           }
         }}

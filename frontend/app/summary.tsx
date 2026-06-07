@@ -23,6 +23,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 
 import { api } from "../src/api";
 import type { Order } from "../src/types";
@@ -31,6 +32,7 @@ import StarRating from "../src/components/StarRating";
 
 export default function SummaryScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
@@ -111,33 +113,33 @@ export default function SummaryScreen() {
         </Animated.View>
 
         <Animated.Text entering={FadeInUp.delay(120)} style={styles.title}>
-          Delivery complete
+          {t("summary.deliveryComplete")}
         </Animated.Text>
         <Animated.Text entering={FadeInUp.delay(180)} style={styles.subtitle}>
-          Great work, {order.customer.name.split(" ")[0]}'s order was delivered safely
+          {t("summary.greatWork", { name: order.customer.name.split(" ")[0] })}
         </Animated.Text>
 
         <Animated.View entering={FadeInUp.delay(240)} style={[styles.earnCard, shadows.lg]}>
-          <Text style={styles.earnLabel}>You earned</Text>
+          <Text style={styles.earnLabel}>{t("summary.youEarned")}</Text>
           <Animated.Text style={[styles.earnAmount, animatedNumStyle]} testID="earned-amount">
             €{total.toFixed(2)}
           </Animated.Text>
           <View style={styles.breakdownRow}>
             <View style={styles.breakdownItem}>
-              <Text style={styles.breakdownLabel}>Base pay</Text>
+              <Text style={styles.breakdownLabel}>{t("summary.basePay")}</Text>
               <Text style={styles.breakdownValue}>€{order.earnings.toFixed(2)}</Text>
             </View>
             <View style={styles.vDivider} />
             <View style={styles.breakdownItem}>
-              <Text style={styles.breakdownLabel}>Tip</Text>
+              <Text style={styles.breakdownLabel}>{t("summary.tip")}</Text>
               <Text style={[styles.breakdownValue, { color: theme.success }]}>
                 €{order.tip.toFixed(2)}
               </Text>
             </View>
             <View style={styles.vDivider} />
             <View style={styles.breakdownItem}>
-              <Text style={styles.breakdownLabel}>Distance</Text>
-              <Text style={styles.breakdownValue}>{order.distance_km.toFixed(1)} km</Text>
+              <Text style={styles.breakdownLabel}>{t("summary.distance")}</Text>
+              <Text style={styles.breakdownValue}>{order.distance_km.toFixed(1)} {t("common.km")}</Text>
             </View>
           </View>
         </Animated.View>
@@ -159,8 +161,8 @@ export default function SummaryScreen() {
           <Animated.View entering={FadeInUp.delay(280)} style={styles.proofCard} testID="summary-proof-card">
             <Image source={{ uri: order.delivery_photo }} style={styles.proofThumb} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.proofTitle}>Delivery proof captured</Text>
-              <Text style={styles.proofSub}>Saved with this order</Text>
+              <Text style={styles.proofTitle}>{t("summary.deliveryProofCaptured")}</Text>
+              <Text style={styles.proofSub}>{t("summary.savedWithOrder")}</Text>
             </View>
             <Ionicons name="shield-checkmark" size={22} color={theme.success} />
           </Animated.View>
@@ -168,7 +170,7 @@ export default function SummaryScreen() {
 
         <Animated.View entering={FadeInUp.delay(320)} style={styles.ratingCard}>
           <Text style={styles.ratingTitle}>
-            {alreadyRated ? "Thanks for rating the shipper!" : "How was the shipper?"}
+            {alreadyRated ? t("summary.thanksForRating") : t("summary.howWasShipper")}
           </Text>
           <View style={{ marginTop: spacing.md, alignItems: "center" }}>
             <StarRating
@@ -184,7 +186,7 @@ export default function SummaryScreen() {
               <TextInput
                 value={review}
                 onChangeText={setReview}
-                placeholder="Add a note (optional)"
+                placeholder={t("summary.addNote")}
                 placeholderTextColor={theme.textSecondary}
                 style={styles.input}
                 multiline
@@ -203,11 +205,11 @@ export default function SummaryScreen() {
             testID="summary-done-button"
           >
             <Text style={styles.primaryBtnText}>
-              {alreadyRated ? "Continue" : stars === 0 ? "Skip & continue" : "Submit & continue"}
+              {alreadyRated ? t("summary.continue") : stars === 0 ? t("summary.skipContinue") : t("summary.submitContinue")}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.replace("/history")} testID="view-history-link">
-            <Text style={styles.linkText}>View delivery history →</Text>
+            <Text style={styles.linkText}>{t("summary.viewHistory")}</Text>
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
