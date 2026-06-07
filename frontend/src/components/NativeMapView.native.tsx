@@ -2,7 +2,71 @@ import React, { useEffect, useRef, useState, ReactNode } from "react";
 import { ActivityIndicator, Alert, Platform, StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Location from "expo-location";
+import { Ionicons } from "@expo/vector-icons";
 import { theme } from "../theme";
+
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+/**
+ * Elevated teardrop pin: a colored head (with icon) that floats above a soft
+ * ground shadow, giving a 3D "lifted" feel instead of a flat dot.
+ */
+function PinMarker({
+  color,
+  icon,
+  size = 36,
+}: {
+  color: string;
+  icon: IoniconName;
+  size?: number;
+}) {
+  return (
+    <View style={pinStyles.wrap}>
+      <View
+        style={[
+          pinStyles.head,
+          { width: size, height: size, borderRadius: size / 2, backgroundColor: color },
+        ]}
+      >
+        <Ionicons name={icon} size={size * 0.5} color="#fff" />
+      </View>
+      <View style={[pinStyles.tip, { borderTopColor: color }]} />
+      <View style={pinStyles.shadow} />
+    </View>
+  );
+}
+
+const pinStyles = StyleSheet.create({
+  wrap: { alignItems: "center", justifyContent: "center" },
+  head: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 3,
+    borderColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.32,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  tip: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderTopWidth: 11,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    marginTop: -4,
+  },
+  shadow: {
+    width: 12,
+    height: 4,
+    borderRadius: 6,
+    backgroundColor: "rgba(0,0,0,0.22)",
+    marginTop: 1,
+  },
+});
 
 interface Point {
   lat: number;
@@ -221,34 +285,24 @@ export default function NativeMapView({
           </>
         ) : null}
 
-        {/* Pickup marker */}
+        {/* Pickup marker — elevated pin */}
         {pickupLL ? (
-          <Marker coordinate={pickupLL} anchor={{ x: 0.5, y: 0.5 }} identifier="pickup">
-            <View style={[styles.markerRing, { backgroundColor: "rgba(12,74,66,0.18)" }]}>
-              <View style={[styles.markerDot, { backgroundColor: theme.primary }]}>
-                <View style={styles.markerInner} />
-              </View>
-            </View>
+          <Marker coordinate={pickupLL} anchor={{ x: 0.5, y: 1 }} identifier="pickup">
+            <PinMarker color={theme.primary} icon="cube" />
           </Marker>
         ) : null}
 
-        {/* Dropoff marker */}
+        {/* Dropoff marker — elevated pin */}
         {dropoffLL ? (
-          <Marker coordinate={dropoffLL} anchor={{ x: 0.5, y: 0.5 }} identifier="dropoff">
-            <View style={[styles.markerRing, { backgroundColor: "rgba(15,23,42,0.18)" }]}>
-              <View style={[styles.markerDot, { backgroundColor: theme.secondary }]}>
-                <View style={styles.markerInner} />
-              </View>
-            </View>
+          <Marker coordinate={dropoffLL} anchor={{ x: 0.5, y: 1 }} identifier="dropoff">
+            <PinMarker color={theme.secondary} icon="flag" />
           </Marker>
         ) : null}
 
-        {/* Driver marker - using real location when available */}
+        {/* Driver marker — elevated pin (only when device location unavailable) */}
         {driverLL && !locationPermission ? (
-          <Marker coordinate={driverLL} anchor={{ x: 0.5, y: 0.5 }} identifier="driver">
-            <View style={[styles.markerRing, { backgroundColor: "rgba(20,123,109,0.22)", width: 32, height: 32 }]}>
-              <View style={[styles.markerDot, { backgroundColor: theme.primaryActive, width: 18, height: 18, borderRadius: 9 }]} />
-            </View>
+          <Marker coordinate={driverLL} anchor={{ x: 0.5, y: 1 }} identifier="driver">
+            <PinMarker color={theme.primaryActive} icon="navigate" size={38} />
           </Marker>
         ) : null}
 

@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { View, StyleSheet } from "react-native";
-import Svg, { Path, Circle, Defs, Pattern, Rect, G, Line } from "react-native-svg";
+import Svg, { Path, Circle, Defs, Pattern, Rect, G, Line, Ellipse } from "react-native-svg";
 import { theme } from "../theme";
 
 interface Point {
@@ -76,6 +76,29 @@ export default function SvgMapView({
     return `M ${pickupXY.x} ${pickupXY.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${dropoffXY.x} ${dropoffXY.y}`;
   }, [pickupXY, dropoffXY, routePoints, projection]);
 
+  // Elevated teardrop pin: ground shadow + lifted colored head with white core.
+  // Tip sits exactly on the projected coordinate (anchor at bottom).
+  const renderPin = (
+    xy: { x: number; y: number },
+    color: string,
+    key: string,
+  ) => (
+    <G key={key}>
+      {/* soft ground shadow under the pin tip */}
+      <Ellipse cx={xy.x} cy={xy.y + 0.6} rx={3} ry={1.05} fill="#0b1220" opacity={0.18} />
+      <G transform={`translate(${xy.x} ${xy.y}) scale(0.6)`}>
+        <Path
+          d="M 0 0 C -2.6 -4 -6 -6.6 -6 -11 A 6 6 0 1 1 6 -11 C 6 -6.6 2.6 -4 0 0 Z"
+          fill={color}
+          stroke="#fff"
+          strokeWidth={1.3}
+          strokeLinejoin="round"
+        />
+        <Circle cx={0} cy={-11} r={2.6} fill="#fff" />
+      </G>
+    </G>
+  );
+
   return (
     <View style={[styles.container, { height }]} testID="map-view">
       <Svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
@@ -109,24 +132,10 @@ export default function SvgMapView({
           </>
         ) : null}
 
-        {pickupXY ? (
-          <G>
-            <Circle cx={pickupXY.x} cy={pickupXY.y} r="4.2" fill={theme.primary} />
-            <Circle cx={pickupXY.x} cy={pickupXY.y} r="1.6" fill="#fff" />
-          </G>
-        ) : null}
-        {dropoffXY ? (
-          <G>
-            <Circle cx={dropoffXY.x} cy={dropoffXY.y} r="4.2" fill={theme.secondary} />
-            <Circle cx={dropoffXY.x} cy={dropoffXY.y} r="1.6" fill="#fff" />
-          </G>
-        ) : null}
-        {driverXY ? (
-          <G>
-            <Circle cx={driverXY.x} cy={driverXY.y} r="6.5" fill="rgba(20, 123, 109, 0.18)" />
-            <Circle cx={driverXY.x} cy={driverXY.y} r="3.2" fill={theme.primaryActive} stroke="#fff" strokeWidth="1.1" />
-          </G>
-        ) : null}
+        {/* Elevated teardrop pins (ground shadow + lifted head) */}
+        {pickupXY ? renderPin(pickupXY, theme.primary, "pin-pickup") : null}
+        {dropoffXY ? renderPin(dropoffXY, theme.secondary, "pin-dropoff") : null}
+        {driverXY ? renderPin(driverXY, theme.primaryActive, "pin-driver") : null}
       </Svg>
     </View>
   );
