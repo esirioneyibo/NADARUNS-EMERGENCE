@@ -1384,9 +1384,10 @@ async def broadcast_driver_status(driver_id: str, is_online: bool):
 
 @api_router.get("/orders/pending", response_model=Optional[Order])
 async def get_pending():
-    # Only paid orders (payment authorized/captured) are published to drivers.
+    # Jobs are published to drivers as soon as they are created (1a); payment
+    # is handled separately and does not gate marketplace visibility.
     order = await db.orders.find_one(
-        {"status": "pending", "payment_status": {"$in": ["authorized", "captured"]}},
+        {"status": "pending"},
         {"_id": 0},
     )
     if not order:
@@ -1413,9 +1414,8 @@ async def get_available_orders(
       the driver, sorted nearest-first (so the "jobs nearby" count is accurate)
     """
     query = {"status": "pending"}
-    # Gate: only orders the shipper has PAID for (authorization held) are
-    # visible/biddable in the driver marketplace.
-    query["payment_status"] = {"$in": ["authorized", "captured"]}
+    # Jobs are visible to drivers as soon as the shipper creates them (1a).
+    # Payment is handled separately and no longer gates marketplace visibility.
     
     # Filter by vehicle type if specified
     if vehicle_type:

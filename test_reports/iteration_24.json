@@ -1,0 +1,31 @@
+{
+  "summary": "Backend-only verification of the payment-gate removal in the driver marketplace endpoints. Wrote 7 pytest cases in /app/backend/tests/test_marketplace_visibility.py; all 7 PASSED. /api/orders/available now returns 34 pending orders (29 'unpaid' + 5 'pending' payment_status), 8 of which are shipper-created. /api/orders/pending returns a real order object (id=55897bfd... payment_status=unpaid) instead of null. /api/orders/available/matched returns 10 matched pending jobs for the demo driver and still enforces auth (401/403 without token). Fix is working as expected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_marketplace_visibility.py",
+    "/app/test_reports/pytest/iter24_marketplace.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~6400 lines — should be split into modules (orders, drivers, shippers, payments, admin) per the 700-line guideline.",
+    "/api/orders/pending has no driver auth and returns the first pending order found in collection order; OK for current consumers but consider documenting that it is unauthenticated and not driver-scoped."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_marketplace_visibility.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "skipped"},
+  "seed_data_creation": "No new seed created; existing demo driver (demo.driver@nadaruns.com) and 34 pending orders were already in DB. Fixture falls back to POST /api/seed-demo if login fails.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Marketplace visibility fix is verified at the API level. 34 pending orders are visible to drivers, all with payment_status unpaid/pending — confirms the gate is removed. If a frontend retest is requested later, sign in as demo.driver@nadaruns.com / demo1234 and confirm the driver map shows pending jobs.",
+  "rca_of_issue": "Previous code on get_available_orders and get_pending added a filter payment_status: {$in: [authorized, captured]}. Since shipper-created jobs default to payment_status='unpaid' until Stripe authorization, the marketplace was empty/short. Removing those two filter clauses (per user option 1a) restores immediate visibility. Verified live: 34 orders returned post-fix, all with unpaid/pending payment_status."
+}

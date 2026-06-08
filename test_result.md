@@ -104,6 +104,19 @@
 
 user_problem_statement: "Continue iterating on the NadaRuns Driver MVP. Started with feature (a) Photo proof at delivery."
 
+backend:
+  - task: "Driver marketplace shows shipper-created jobs regardless of payment (1a)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "REGRESSION FIX: shipper-created jobs stopped appearing on the driver map because GET /api/orders/available and GET /api/orders/pending gated on payment_status in [authorized, captured]. All 34 pending jobs in DB were unpaid/pending, so the driver map showed none. Per user decision (1a), removed the payment gate from both endpoints so jobs are visible to drivers as soon as the shipper creates them (status=pending). GET /api/orders/available/matched already had no gate. NEEDS TESTING (backend): As a driver (creds in test_credentials.md), GET /api/orders/available now returns pending shipper jobs that have payment_status unpaid/pending; GET /api/orders/pending returns a pending order; verify count > 0."
+
 frontend:
   - task: "i18n (English/Finnish) foundation + language switching"
     implemented: true
