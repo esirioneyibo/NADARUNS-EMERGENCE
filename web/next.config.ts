@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Enable static export for easier deployment
-  output: 'standalone',
-  
+  // Standard Next.js server build. Deploy with `yarn build` then `yarn start`.
+  // (No `output: 'standalone'` — Next serves CSS/static assets automatically,
+  //  so there is no manual asset-copy step and no missing-CSS trap.)
+
   // Environment variables
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
