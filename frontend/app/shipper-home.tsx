@@ -91,7 +91,7 @@ export default function ShipperHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
-  const params = useLocalSearchParams<{ paid?: string; order?: string }>();
+  const params = useLocalSearchParams<{ paid?: string; created?: string; order?: string; oid?: string }>();
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const styles = createStyles(theme);
@@ -168,6 +168,19 @@ export default function ShipperHomeScreen() {
       return () => clearTimeout(tmr);
     }
   }, [params?.paid, params?.order, params?.oid, router, loadData]);
+
+  // "Instant create, pay later": surface the live-for-drivers confirmation.
+  useEffect(() => {
+    if (params?.created === "1") {
+      const ord = params.order ? ` ${params.order}` : "";
+      setSuccessMsg(`Job${ord} is live for drivers! Pay anytime from the tracking screen.`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      loadData();
+      router.setParams({ created: "", order: "" });
+      const tmr = setTimeout(() => setSuccessMsg(null), 6000);
+      return () => clearTimeout(tmr);
+    }
+  }, [params?.created, params?.order, router, loadData]);
 
   const handleRefresh = () => {
     setRefreshing(true);

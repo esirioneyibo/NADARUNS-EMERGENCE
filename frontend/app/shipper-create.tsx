@@ -558,73 +558,20 @@ export default function ShipperCreateScreen() {
         const orderId: string | undefined = data.order_id;
         const orderNum: string | undefined = data.order_number;
 
-        if (!orderId) {
-          showBanner(`Shipment ${orderNum || ""} created!`, "success", false);
-          setTimeout(() => router.replace("/shipper-home"), 900);
-          return;
+        // Instant create, pay later: the job goes live to drivers the moment it
+        // is created. We do NOT block the shipper on Stripe here — they can pay
+        // anytime from the tracking screen via the "Pay now" button.
+        showBanner(
+          `Shipment ${orderNum || ""} created — it's now live for drivers!`,
+          "success",
+          false,
+        );
+        if (orderId) {
+          setTimeout(() => router.replace(`/shipper-home?created=1&order=${encodeURIComponent(orderNum || "")}`), 700);
+        } else {
+          setTimeout(() => router.replace("/shipper-home"), 700);
         }
-
-        // Prompt for payment IMMEDIATELY — the booking is only confirmed once paid.
-        showBanner("Order created — opening secure payment…", "success", false);
-
-        if (Platform.OS === "web" && typeof window !== "undefined") {
-          // Web: redirect THIS tab to Stripe Checkout and let Stripe bring the
-          // shipper straight back to the home screen after paying. No popups,
-          // no spinner hang. The `oid` lets home reconcile the payment status.
-          try {
-            const origin = window.location.origin;
-            const successUrl = `${origin}/shipper-home?paid=1&order=${encodeURIComponent(orderNum || "")}&oid=${orderId}`;
-            const cancelUrl = `${origin}/shipper-tracking?id=${orderId}&pay=1`;
-            const { url } = await api.createPaymentCheckout(orderId, {
-              success_url: successUrl,
-              cancel_url: cancelUrl,
-            });
-            window.location.href = url;
-          } catch (payErr: any) {
-            showBanner(payErr?.message || "Could not start payment. Pay from the tracking screen.", "error", false);
-            setTimeout(() => router.replace(`/shipper-tracking?id=${orderId}&pay=1`), 1300);
-          }
-          return;
-        }
-
-        // Native: open the hosted checkout in an auth session that AUTO-CLOSES
-        // when Stripe returns to our app deep link — no manual "Done" tap.
-        try {
-          const returnUrl = Linking.createURL("payment-complete");
-          const successUrl = `${BASE}/api/payments/return?status=success&order_id=${orderId}&redirect=${encodeURIComponent(returnUrl)}`;
-          const cancelUrl = `${BASE}/api/payments/return?status=cancel&order_id=${orderId}&redirect=${encodeURIComponent(returnUrl)}`;
-          const { url } = await api.createPaymentCheckout(orderId, {
-            success_url: successUrl,
-            cancel_url: cancelUrl,
-          });
-          await WebBrowser.openAuthSessionAsync(url, returnUrl);
-
-          // The browser has closed automatically — reconcile with Stripe.
-          let paid = false;
-          for (let i = 0; i < 8; i++) {
-            try {
-              const s = await api.getPaymentStatus(orderId);
-              if (s.payment_status === "authorized" || s.payment_status === "captured") {
-                paid = true;
-                break;
-              }
-            } catch {
-              /* keep polling */
-            }
-            await new Promise((r) => setTimeout(r, 1500));
-          }
-
-          if (paid) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-            router.replace(`/shipper-home?paid=1&order=${encodeURIComponent(orderNum || "")}`);
-          } else {
-            showBanner("Payment not completed. You can pay from the tracking screen.", "error", false);
-            setTimeout(() => router.replace(`/shipper-tracking?id=${orderId}&pay=1`), 1300);
-          }
-        } catch (payErr: any) {
-          showBanner(payErr?.message || "Could not start payment. Pay from the tracking screen.", "error", false);
-          setTimeout(() => router.replace(`/shipper-tracking?id=${orderId}&pay=1`), 1300);
-        }
+        return;
       } else {
         const err = await res.json().catch(() => ({}));
         showBanner(err.detail || "Failed to create shipment", "error");

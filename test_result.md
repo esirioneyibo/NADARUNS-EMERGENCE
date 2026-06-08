@@ -373,6 +373,18 @@ backend:
           comment: "Added Emergent push relay (SuprSend): POST /api/register-push {user_id, platform, device_token} relays to the Emergent push service via EMERGENT_PUSH_KEY. send_push() helper triggers pushes (chunks 100 recipients). Background triggers added (all wrapped in try/except + asyncio.create_task so push failure NEVER blocks the primary op): (1) create_shipment -> push_new_job_to_online_drivers (online drivers matching vehicle type), (2) accept_order -> push_status_to_shipper(accepted), (3) advance_order -> push_status_to_shipper(arrived_pickup/arrived_dropoff/delivered). NOTE: In this env EMERGENT_PUSH_KEY=placeholder, so the upstream relay returns 401 and /api/register-push will return 500 (EXPECTED until deploy replaces the key) - this is fine. CRITICAL TEST FOCUS: the ORDER LIFECYCLE must be UNAFFECTED - POST /api/shipper/shipments (201/200 + order created), POST /api/orders/{id}/accept (driver JWT, binds driver, 200), POST /api/orders/{id}/advance through the full flow to delivered must ALL still return success despite push relay failing in the background. Also verify /api/register-push exists and returns 422 on missing fields."
 
 frontend:
+  - task: "Instant create, pay later (shipper create flow)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/shipper-create.tsx, frontend/app/shipper-home.tsx, frontend/app/shipper-tracking.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Payment no longer blocks job creation. On submit, the shipment is created and the shipper is navigated straight to /shipper-home?created=1 with a success banner 'Job X is live for drivers! Pay anytime from the tracking screen.' — NO Stripe redirect/popup and NO 12s polling on the critical path. Payment is now a non-blocking action: the tracking screen (shipper-tracking.tsx) already has a Payment Card with a 'Pay now' button (handlePay) shown when payment_status is unpaid/pending/payment_failed. shipper-home.tsx now handles the ?created=1 param banner in addition to the legacy ?paid=1. NEEDS TESTING (frontend, web, shipper demo.shipper@nadaruns.com/demo1234): complete the create wizard and submit -> expect immediate navigation to home + green success banner mentioning 'live for drivers', the new shipment visible in the list, and NO redirect to Stripe. Then open the shipment's tracking screen and confirm a 'Pay now' / Payment card is present (unpaid)."
+
   - task: "Custom delivery date/time picker + scheduled_pickup persistence (shipper-create wizard)"
     implemented: true
     working: "NA"
