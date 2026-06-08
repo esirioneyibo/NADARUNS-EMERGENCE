@@ -111,11 +111,14 @@ backend:
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "REGRESSION FIX: shipper-created jobs stopped appearing on the driver map because GET /api/orders/available and GET /api/orders/pending gated on payment_status in [authorized, captured]. All 34 pending jobs in DB were unpaid/pending, so the driver map showed none. Per user decision (1a), removed the payment gate from both endpoints so jobs are visible to drivers as soon as the shipper creates them (status=pending). GET /api/orders/available/matched already had no gate. NEEDS TESTING (backend): As a driver (creds in test_credentials.md), GET /api/orders/available now returns pending shipper jobs that have payment_status unpaid/pending; GET /api/orders/pending returns a pending order; verify count > 0."
+        - working: true
+          agent: "testing"
+          comment: "Iteration 24: PASS (7/7). /api/orders/available returns 34 pending (29 unpaid + 5 pending, 8 shipper-created); /api/orders/pending returns a real order (not null); /api/orders/available/matched returns 10 matched and still 401s unauth. Fix verified."
 
 frontend:
   - task: "i18n (English/Finnish) foundation + language switching"
