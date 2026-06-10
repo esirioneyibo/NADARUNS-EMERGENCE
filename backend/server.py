@@ -4998,9 +4998,9 @@ def _build_invoice_pdf(inv: dict) -> bytes:
     pdf.cell(0, 7, "Order", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(0, 5, f"Order #: {s(inv.get('order_number'))}", new_x="LMARGIN", new_y="NEXT")
-    pdf.multi_cell(0, 5, f"Pickup: {s(inv.get('pickup_address'))}")
-    pdf.multi_cell(0, 5, f"Delivery: {s(inv.get('dropoff_address'))}")
-    pdf.multi_cell(0, 5, f"Description: {s(inv.get('description'))}")
+    pdf.set_x(pdf.l_margin); pdf.multi_cell(pdf.epw, 5, f"Pickup: {s(inv.get('pickup_address'))}")
+    pdf.set_x(pdf.l_margin); pdf.multi_cell(pdf.epw, 5, f"Delivery: {s(inv.get('dropoff_address'))}")
+    pdf.set_x(pdf.l_margin); pdf.multi_cell(pdf.epw, 5, f"Description: {s(inv.get('description'))}")
     pdf.ln(4)
 
     cur = s(inv.get("currency") or "EUR")
@@ -5017,7 +5017,7 @@ def _build_invoice_pdf(inv: dict) -> bytes:
     pdf.cell(0, 8, f"{cur} {float(inv.get('total_amount') or 0):.2f}", border=1, new_x="LMARGIN", new_y="NEXT", align="R")
     pdf.ln(6)
     pdf.set_font("Helvetica", "", 9)
-    pdf.multi_cell(0, 5, f"Payment terms: Net {s(inv.get('net_days'))} days. Please pay by {s(inv.get('due_date'))[:10]}. "
+    pdf.set_x(pdf.l_margin); pdf.multi_cell(pdf.epw, 5, f"Payment terms: Net {s(inv.get('net_days'))} days. Please pay by {s(inv.get('due_date'))[:10]}. "
                          f"Reference invoice {s(inv.get('invoice_number'))} with your payment.")
     out = pdf.output()
     return bytes(out)
