@@ -92,6 +92,29 @@ export const adminApi = {
   cancelOrder: (id: string) => req<any>(`/admin/manage/orders/${id}/cancel`, { method: "POST" }),
   reassignOrder: (id: string, driver_id: string) =>
     req<any>(`/admin/manage/orders/${id}/reassign`, { method: "POST", body: JSON.stringify({ driver_id }) }),
+  assignOrder: (id: string, driver_id: string) =>
+    req<any>(`/admin/manage/orders/${id}/assign`, { method: "POST", body: JSON.stringify({ driver_id }) }),
+  unassignOrder: (id: string, reason?: string) =>
+    req<any>(`/admin/manage/orders/${id}/unassign`, { method: "POST", body: JSON.stringify({ reason }) }),
+  restoreOrder: (id: string) => req<any>(`/admin/manage/orders/${id}/restore`, { method: "POST" }),
+  pauseOrder: (id: string) => req<any>(`/admin/manage/orders/${id}/pause`, { method: "POST" }),
+  completeOrder: (id: string) => req<any>(`/admin/manage/orders/${id}/complete`, { method: "POST" }),
+  failOrder: (id: string, reason?: string) =>
+    req<any>(`/admin/manage/orders/${id}/fail`, { method: "POST", body: JSON.stringify({ reason }) }),
+  addOrderNote: (id: string, note: string) =>
+    req<any>(`/admin/manage/orders/${id}/notes`, { method: "POST", body: JSON.stringify({ note }) }),
+  assignmentHistory: (id: string) => req<{ history: any[] }>(`/admin/manage/orders/${id}/assignment-history`),
+
+  // Invoices
+  invoices: (p: { status?: string; q?: string }) =>
+    req<{ invoices: any[]; totals: any }>(`/admin/invoices${qs(p)}`),
+  markInvoicePaid: (id: string) => req<any>(`/admin/invoices/${id}/mark-paid`, { method: "POST" }),
+  markInvoiceOverdue: (id: string) => req<any>(`/admin/invoices/${id}/mark-overdue`, { method: "POST" }),
+  resendInvoice: (id: string) => req<any>(`/admin/invoices/${id}/resend`, { method: "POST" }),
+  invoicingSettings: () => req<{ invoice_fee: number; net_days: number }>("/admin/settings/invoicing"),
+  updateInvoicingSettings: (body: { invoice_fee: number; net_days: number }) =>
+    req<{ invoice_fee: number; net_days: number }>("/admin/settings/invoicing", { method: "POST", body: JSON.stringify(body) }),
+  invoicePdfUrl: (id: string) => `${API_BASE}/api/invoices/${id}/pdf?token=${getToken() || ""}`,
 
   // Vehicles
   vehicles: (p: { search?: string; vehicle_type?: string }) =>

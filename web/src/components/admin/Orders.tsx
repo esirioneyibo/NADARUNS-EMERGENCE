@@ -58,16 +58,58 @@ function OrderDrawer({ id, onClose, onChanged, notify }: { id: string | null; on
   const [det, setDet] = useState<any>(null);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [reassignId, setReassignId] = useState("");
+  const [history, setHistory] = useState<any[]>([]);
+  const [invoice, setInvoice] = useState<any>(null);
+  const [noteText, setNoteText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const refresh = async () => {
+    if (!id) return;
+    try {
+      const d = await adminApi.order(id);
+      setDet(d);
+      const h = await adminApi.assignmentHistory(id).catch(() => ({ history: [] }));
+      setHistory(h.history || []);
+      const ordNum = d?.order?.order_number;
+      if (ordNum) {
+        const r = await adminApi.invoices({ q: ordNum }).catch(() => ({ invoices: [] }));
+        setInvoice((r.invoices || []).find((iv: any) => iv.order_id === id) || null);
+      } else { setInvoice(null); }
+    } catch (e: any) { notify(e.message, "err"); }
+  };
+
   useEffect(() => {
-    if (!id) { setDet(null); return; }
-    setDet(null); setReassignId("");
-    adminApi.order(id).then(setDet).catch((e) => notify(e.message, "err"));
+    if (!id) { setDet(null); setHistory([]); setInvoice(null); return; }
+    setDet(null); setReassignId(""); setNoteText(""); setInvoice(null);
+    refresh();
     adminApi.drivers({ limit: 100 }).then((d) => setDrivers(d.items || [])).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
-  const cancel = async () => { if (!id) return; try { await adminApi.cancelOrder(id); notify("Order cancelled"); setDet(await adminApi.order(id)); onChanged(); } catch (e: any) { notify(e.message, "err"); } };
-  const reassign = async () => { if (!id || !reassignId) return; try { await adminApi.reassignOrder(id, reassignId); notify("Driver reassigned"); setDet(await adminApi.order(id)); onChanged(); } catch (e: any) { notify(e.message, "err"); } };
+
+  const run = async (label: string, fn: () => Promise<any>) => {
+    if (!id || busy) return;
+    setBusy(true);
+    try { await fn(); notify(label); await refresh(); onChanged(); }
+    catch (e: any) { notify(e.message, "err"); }
+    finally { setBusy(false); }
+  };
+
   const o = det?.order;
-  const active = o && !["delivered", "cancelled"].includes(o.status);
+  const status = o?.status;
+  const isFinal = ["delivered", "cancelled"].includes(status);
+  const isActive = o && !isFinal;
+  const canRestore = ["cancelled", "paused", "failed"].includes(status);
+  const inv = invoice;
+
+  const reassign = () => {
+    if (!reassignId) return;
+    run("Driver assigned", () => adminApi.assignOrder(id!, reassignId));
+  };
+  const addNote = () => {
+    if (!noteText.trim()) return;
+    run("Note added", async () => { await adminApi.addOrderNote(id!, noteText.trim()); setNoteText(""); });
+  };
+
   return (
     <Drawer open={!!id} title="Order details" onClose={onClose}>
       {!det || !o ? <Spinner /> : (<>
@@ -83,6 +125,8 @@ function OrderDrawer({ id, onClose, onChanged, notify }: { id: string | null; on
           <InfoRow label="Price quote" value={money(o.price_quote)} />
           <InfoRow label="Tip / bonus" value={money(o.tip)} />
           <InfoRow label="Driver earnings" value={money(o.earnings)} />
+          <InfoRow label="Payment" value={(o.payment_status || "unpaid").replace(/_/g, " ")} />
+          {o.fail_reason ? <InfoRow label="Fail reason" value={o.fail_reason} /> : null}
           <InfoRow label="Created" value={fmtDate(o.created_at)} />
         </div>
         <div className="adm-card">
@@ -90,20 +134,83 @@ function OrderDrawer({ id, onClose, onChanged, notify }: { id: string | null; on
           <InfoRow label="Driver" value={det.driver ? det.driver.name : "Unassigned"} />
           <InfoRow label="Shipper" value={det.shipper ? det.shipper.company_name : "—"} />
         </div>
-        {det.events?.length > 0 && <div className="adm-card"><div className="adm-card-title">Timeline</div>
-          {det.events.map((e: any, i: number) => (<div key={i} className="adm-row-info"><span style={{ textTransform: "capitalize" }}>{(e.event_type || e.type || e.status || "event").toString().replace(/_/g, " ")}</span><span>{fmtDate(e.created_at)}</span></div>))}
-        </div>}
-        {active && <div className="adm-card">
-          <div className="adm-card-title">Reassign driver</div>
+
+        {/* Lifecycle actions */}
+        <div className="adm-card">
+          <div className="adm-card-title">Order controls</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {isActive && status !== "paused" && (
+              <button className="adm-btn adm-btn-ghost adm-btn-sm" data-testid="order-pause" disabled={busy} onClick={() => run("Order paused", () => adminApi.pauseOrder(id!))}>Pause</button>
+            )}
+            {canRestore && (
+              <button className="adm-btn adm-btn-ghost adm-btn-sm" data-testid="order-restore" disabled={busy} onClick={() => run("Order restored to marketplace", () => adminApi.restoreOrder(id!))}>Restore</button>
+            )}
+            {isActive && (
+              <button className="adm-btn adm-btn-ghost adm-btn-sm" data-testid="order-complete" disabled={busy} onClick={() => run("Order marked delivered", () => adminApi.completeOrder(id!))}>Mark delivered</button>
+            )}
+            {isActive && o.driver_id && (
+              <button className="adm-btn adm-btn-ghost adm-btn-sm" data-testid="order-unassign" disabled={busy} onClick={() => run("Returned to marketplace", () => adminApi.unassignOrder(id!, "Driver emergency"))}>Unassign (emergency)</button>
+            )}
+            {isActive && (
+              <button className="adm-btn adm-btn-danger adm-btn-sm" data-testid="order-fail" disabled={busy} onClick={() => run("Order marked failed", () => adminApi.failOrder(id!, "Marked failed by admin"))}>Mark failed</button>
+            )}
+            {isActive && (
+              <button className="adm-btn adm-btn-danger adm-btn-sm" data-testid="order-cancel" disabled={busy} onClick={() => run("Order cancelled", () => adminApi.cancelOrder(id!))}>Cancel</button>
+            )}
+          </div>
+        </div>
+
+        {/* Assign / reassign */}
+        {isActive && <div className="adm-card">
+          <div className="adm-card-title">{o.driver_id ? "Reassign driver" : "Assign driver"}</div>
           <div style={{ display: "flex", gap: 10 }}>
             <select className="adm-select" data-testid="order-reassign-select" style={{ flex: 1 }} value={reassignId} onChange={(e) => setReassignId(e.target.value)}>
               <option value="">Select driver…</option>
               {drivers.map((d) => <option key={d.id} value={d.id}>{d.name} {d.is_suspended ? "(suspended)" : ""}</option>)}
             </select>
-            <button className="adm-btn adm-btn-ghost" data-testid="order-reassign-btn" onClick={reassign} disabled={!reassignId}>Assign</button>
+            <button className="adm-btn adm-btn-ghost" data-testid="order-reassign-btn" onClick={reassign} disabled={!reassignId || busy}>Assign</button>
           </div>
         </div>}
-        {active && <button className="adm-btn adm-btn-danger" data-testid="order-cancel" onClick={cancel} style={{ justifyContent: "center" }}>Cancel order</button>}
+
+        {/* Invoice */}
+        {inv && <div className="adm-card">
+          <div className="adm-card-title">Invoice</div>
+          <InfoRow label="Number" value={inv.invoice_number} />
+          <InfoRow label="Status" value={<StatusBadge status={inv.status} />} />
+          <InfoRow label="Total" value={money(inv.total_amount)} />
+          <a className="adm-btn adm-btn-ghost adm-btn-sm" data-testid="order-invoice-pdf" href={adminApi.invoicePdfUrl(inv.id)} target="_blank" rel="noreferrer" style={{ marginTop: 8 }}>Download PDF</a>
+        </div>}
+
+        {/* Admin notes */}
+        <div className="adm-card">
+          <div className="adm-card-title">Admin notes</div>
+          {(o.admin_notes || []).length === 0 && <div style={{ color: "#94A3B8", fontSize: 13, marginBottom: 8 }}>No notes yet.</div>}
+          {(o.admin_notes || []).map((n: any, i: number) => (
+            <div key={n.id || i} className="adm-row-info" style={{ alignItems: "flex-start" }}>
+              <span style={{ flex: 1 }}>{n.note}</span>
+              <span style={{ color: "#94A3B8", whiteSpace: "nowrap", marginLeft: 8 }}>{fmtDate(n.created_at)}</span>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            <input className="adm-input" data-testid="order-note-input" style={{ flex: 1 }} placeholder="Add an internal note…" value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+            <button className="adm-btn adm-btn-ghost" data-testid="order-note-add" onClick={addNote} disabled={!noteText.trim() || busy}>Add</button>
+          </div>
+        </div>
+
+        {/* Assignment history */}
+        {history.length > 0 && <div className="adm-card">
+          <div className="adm-card-title">Assignment history</div>
+          {history.map((h, i) => (
+            <div key={h.id || i} className="adm-row-info">
+              <span style={{ textTransform: "capitalize" }}>{(h.action || "").replace(/_/g, " ")}{h.note ? ` · ${h.note}` : ""}</span>
+              <span style={{ color: "#94A3B8" }}>{fmtDate(h.created_at)}</span>
+            </div>
+          ))}
+        </div>}
+
+        {det.events?.length > 0 && <div className="adm-card"><div className="adm-card-title">Timeline</div>
+          {det.events.map((e: any, i: number) => (<div key={i} className="adm-row-info"><span style={{ textTransform: "capitalize" }}>{(e.event_type || e.type || e.status || "event").toString().replace(/_/g, " ")}</span><span>{fmtDate(e.created_at)}</span></div>))}
+        </div>}
       </>)}
     </Drawer>
   );

@@ -1,0 +1,40 @@
+{
+  "summary": "Iter-30 testing for the new Shipper 'Pay Now / Accept Invoice' choice modal in /app/frontend/app/shipper-create.tsx plus regression of all iter-29 backend endpoints. Backend: 25/25 pytest cases in test_iter29_invoicing_and_order_mgmt.py pass — including the previously failing test_invoice_pdf (main agent fixed _build_invoice_pdf). All 7 review-request bullets verified: shipper-create POST, accept-invoice POST, admin order lifecycle (pause/restore/complete/fail/unassign/notes/assignment-history), admin invoices list/totals/mark-paid/mark-overdue/resend, invoice PDF via ?token=ADMIN, invoicing settings GET+POST. Frontend (Expo web preview, 390x844 mobile viewport): completed full 6-step wizard end-to-end as demo.shipper@nadaruns.com — Pickup (Mannerheimintie 1) → Dropoff (Hämeentie 30) → Package (Cargo Van, 100kg, office supplies) → Price (€23.76 quote loaded fine) → When (ASAP) → Review → Confirm & Create. Modal pay-choice-modal appeared with 'Shipment created!', Total due €23.76, all three testIDs present (pay-now-button, accept-invoice-button, pay-later-button). Clicked accept-invoice-button → no error banner, redirected to /shipper-home?invoiced=1&order=SHP-2269&inv=NDR-2026-1009 ✅. The new shipment SHP-2269 appears in the active shipments list. End-to-end flow PASSING.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/shipper-login", "issue": "Still returns shipper id under key 'driver_id' (LoginResponse model reused). Cosmetic. Same finding as iter-29; not blocking."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "shipper-create wizard (all 6 steps)", "issues": ["TextInput components (pickup address, contact name, contact phone, weight, description, dimensions, bonus) have no testID. Tests had to fall back to placeholder matching. Recommend adding testID props for stable E2E coverage."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_30.json",
+    "/app/backend/tests/test_iter29_invoicing_and_order_mgmt.py",
+    "/app/test_reports/pytest/iter30_results.xml"
+  ],
+  "action_items": [
+    "(LOW) Add testID props to TextInputs in /app/frontend/app/shipper-create.tsx — e.g. testID='pickup-address-input', 'pickup-name-input', 'dropoff-address-input', 'dropoff-name-input', 'cargo-weight-input', 'cargo-desc-input', 'bonus-input', and to the Continue / Confirm & Create / back buttons. Same for shipper-login.tsx (email-input, password-input, sign-in-button). Currently every interactive element except the new pay-choice modal lacks testIDs, which slows automated regression tests.",
+    "(LOW) Consider returning 'shipper_id' (alias) in shipper-login response to disambiguate from driver_id."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/shipper-create.tsx — handleAcceptInvoice (~line 624-640) cleanly handles success (replaces to /shipper-home with invoiced=1) and shows a banner on error. Good.",
+    "/app/frontend/app/shipper-create.tsx — Modal onRequestClose (~line 1561-1567) navigates to shipper-tracking with pay=1, which is reasonable as a fallback when the user dismisses without choosing. Good UX.",
+    "/app/frontend/app/shipper-create.tsx is 2069 lines — exceeds the 700-line soft cap from the code review guidelines. Recommend splitting into smaller step components (Step1Pickup, Step2Dropoff, etc.) and a PayChoiceModal component.",
+    "/app/backend/server.py — _build_invoice_pdf now passes (1731-byte application/pdf returned for newly created invoices). The PDF endpoint regression is closed.",
+    "All four iter-29 backend modules (invoicing, admin invoices, invoicing settings, admin order lifecycle) continue to behave correctly under regression. No new issues."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (25/25 pytest cases)", "frontend": "100% (full 6-step → modal → accept-invoice → /shipper-home?invoiced=1 verified)"},
+  "seed_data_creation": "Reused existing demo-shipper account. Created 1 new test shipment SHP-2269 (Mannerheimintie 1 → Hämeentie 30, Cargo Van, 100 kg, €23.76) and 1 new invoice NDR-2026-1009 in unpaid status via the UI flow. pytest run also created a handful of throwaway demo orders/invoices as in iter-29.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Frontend tests must (a) bootstrap auth by POSTing to /api/auth/shipper-login and seeding localStorage with nadaruns_auth_token + nadaruns_user (type:'shipper') — direct AsyncStorage bootstrap works on web preview because AsyncStorage is backed by localStorage; (b) use the selector div[tabindex]:has-text('Continue') to click TouchableOpacity buttons — RN Web does not set role='button' on TouchableOpacity, so get_by_role and JS .click() do not fire onPress reliably; (c) fill TextInputs by placeholder text (no testIDs except on the pay-choice modal). pytest needs EXPO_PUBLIC_BACKEND_URL set in env.",
+  "rca_of_issue": "No new bugs found this iteration. Iter-29 open bug (invoice PDF 500) was fixed by main agent — verified by passing test_invoice_pdf which now returns 200 application/pdf (~1.7 kB)."
+}

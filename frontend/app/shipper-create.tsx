@@ -565,10 +565,13 @@ export default function ShipperCreateScreen() {
         // The job is now live for drivers. Ask the shipper how they want to settle
         // payment: Pay Now (Stripe) or Accept Invoice (Net-14 invoice).
         if (orderId) {
+          const settleTotal = quote
+            ? quote.total_price + Math.max(0, parseFloat(shipperOffer) || 0)
+            : Math.max(0, parseFloat(shipperOffer) || 0);
           setPayChoice({
             orderId,
             orderNum: orderNum || "",
-            total: parseFloat(shipperOffer) || (quote?.total ?? 0),
+            total: settleTotal,
           });
         } else {
           showBanner(`Shipment ${orderNum || ""} created!`, "success", false);
@@ -1549,6 +1552,94 @@ export default function ShipperCreateScreen() {
         theme={theme}
         markerColor={DROPOFF_COLOR}
       />
+
+      {/* Pay Now / Accept Invoice choice modal */}
+      <Modal
+        visible={!!payChoice}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!payBusy && payChoice) {
+            const oid = payChoice.orderId;
+            setPayChoice(null);
+            router.replace(`/shipper-tracking?id=${oid}&pay=1`);
+          }
+        }}
+      >
+        <View style={styles.payOverlay} testID="pay-choice-modal">
+          <Animated.View entering={FadeInUp.duration(220)} style={styles.paySheet}>
+            <View style={styles.paySuccessBadge}>
+              <Ionicons name="checkmark-circle" size={28} color="#22C55E" />
+            </View>
+            <Text style={styles.payTitle}>Shipment created!</Text>
+            <Text style={styles.paySubtitle}>
+              {payChoice?.orderNum ? `Order ${payChoice.orderNum} is live for drivers. ` : ""}
+              How would you like to settle payment?
+            </Text>
+
+            <View style={styles.payTotalCard}>
+              <Text style={styles.payTotalLabel}>Total due</Text>
+              <Text style={styles.payTotalValue}>€{(payChoice?.total ?? 0).toFixed(2)}</Text>
+            </View>
+
+            {/* Option A — Pay Now */}
+            <TouchableOpacity
+              style={[styles.payOptionPrimary, payBusy && styles.payOptionDisabled]}
+              onPress={handlePayNow}
+              disabled={!!payBusy}
+              testID="pay-now-button"
+            >
+              {payBusy === "pay" ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="card" size={20} color="#fff" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.payOptionPrimaryTitle}>Pay now</Text>
+                    <Text style={styles.payOptionPrimarySub}>Secure card payment via Stripe</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Option B — Accept Invoice */}
+            <TouchableOpacity
+              style={[styles.payOptionSecondary, payBusy && styles.payOptionDisabled]}
+              onPress={handleAcceptInvoice}
+              disabled={!!payBusy}
+              testID="accept-invoice-button"
+            >
+              {payBusy === "invoice" ? (
+                <ActivityIndicator size="small" color={ACCENT} />
+              ) : (
+                <>
+                  <Ionicons name="document-text" size={20} color={ACCENT} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.payOptionSecondaryTitle}>Accept invoice</Text>
+                    <Text style={styles.payOptionSecondarySub}>Net-14 terms · PDF invoice emailed</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={18} color={ACCENT} />
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.payLaterLink}
+              disabled={!!payBusy}
+              onPress={() => {
+                if (!payChoice) return;
+                const oid = payChoice.orderId;
+                setPayChoice(null);
+                router.replace(`/shipper-tracking?id=${oid}&pay=1`);
+              }}
+              testID="pay-later-button"
+            >
+              <Text style={styles.payLaterText}>Decide later</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1899,4 +1990,80 @@ const createStyles = (theme: any) =>
     bannerSuccess: { backgroundColor: "#16A34A" },
     bannerInfo: { backgroundColor: "#334155" },
     bannerText: { flex: 1, color: "#fff", fontSize: 13.5, fontWeight: "700", lineHeight: 18 },
+
+    // ---- Pay / Invoice choice modal ----
+    payOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(15, 23, 42, 0.55)",
+      justifyContent: "flex-end",
+    },
+    paySheet: {
+      backgroundColor: theme.background,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      padding: spacing.xl,
+      paddingBottom: spacing.xl * 1.6,
+      gap: spacing.md,
+      ...shadows.lg,
+    },
+    paySuccessBadge: {
+      alignSelf: "center",
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: "rgba(34, 197, 94, 0.12)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    payTitle: { fontSize: 22, fontWeight: "800", color: theme.textPrimary, textAlign: "center" },
+    paySubtitle: {
+      fontSize: 14,
+      color: theme.textSecondary,
+      textAlign: "center",
+      lineHeight: 20,
+      marginBottom: spacing.xs,
+    },
+    payTotalCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: theme.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1.5,
+      borderColor: theme.border,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    payTotalLabel: { fontSize: 14, fontWeight: "700", color: theme.textSecondary },
+    payTotalValue: { fontSize: 22, fontWeight: "800", color: theme.textPrimary },
+    payOptionPrimary: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: ACCENT,
+      borderRadius: radius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 16,
+      minHeight: 64,
+      ...shadows.sm,
+    },
+    payOptionPrimaryTitle: { fontSize: 16, fontWeight: "800", color: "#fff" },
+    payOptionPrimarySub: { fontSize: 12.5, fontWeight: "600", color: "rgba(255,255,255,0.85)", marginTop: 2 },
+    payOptionSecondary: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: theme.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1.5,
+      borderColor: ACCENT,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 16,
+      minHeight: 64,
+    },
+    payOptionSecondaryTitle: { fontSize: 16, fontWeight: "800", color: theme.textPrimary },
+    payOptionSecondarySub: { fontSize: 12.5, fontWeight: "600", color: theme.textSecondary, marginTop: 2 },
+    payOptionDisabled: { opacity: 0.6 },
+    payLaterLink: { alignSelf: "center", paddingVertical: spacing.sm },
+    payLaterText: { fontSize: 14, fontWeight: "700", color: theme.textSecondary },
   });
