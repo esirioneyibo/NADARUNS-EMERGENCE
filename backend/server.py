@@ -128,6 +128,31 @@ async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(sec
     return user
 
 
+async def get_current_shipper(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """Dependency to get the current authenticated shipper (full profile doc)."""
+    user = await get_current_user(credentials)
+    if user["type"] != "shipper":
+        raise HTTPException(403, "Shipper access required")
+    shipper = dict(user.get("shipper") or {})
+    shipper.setdefault("id", user["id"])
+    return shipper
+
+
+async def _notify_shipper_status(shipper_id: str, order_id: str, message: str):
+    """Record an in-app notification for a shipper (safe, best-effort)."""
+    try:
+        await db.shipper_notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "shipper_id": shipper_id,
+            "order_id": order_id,
+            "message": message,
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as exc:
+        logger.warning(f"notify shipper failed: {exc}")
+
+
 async def get_current_driver_id(request: Request) -> str:
     """Extract the authenticated driver's ID from the request's Authorization header."""
     auth_header = request.headers.get("Authorization", "")
@@ -172,7 +197,7 @@ async def get_optional_driver_id(request: Request) -> Optional[str]:
 OrderStatus = Literal[
     "pending", "accepted", "enroute_pickup", "arrived_pickup",
     "picked_up", "enroute_dropoff", "arrived_dropoff",
-    "delivered", "rejected", "cancelled"
+    "delivered", "rejected", "cancelled", "paused", "failed"
 ]
 
 ADVANCE_FLOW = {
@@ -1494,7 +1519,15 @@ async def get_available_orders(
         for o in items:
             _enrich(o)
 
-    return [Order(**o) for o in items]
+    # Defensive serialization: never let a single malformed order 500 the whole
+    # feed (which would make ALL jobs vanish from every driver's screen).
+    result = []
+    for o in items:
+        try:
+            result.append(Order(**o))
+        except Exception as exc:
+            logger.warning(f"Skipping malformed order {o.get('order_number') or o.get('id')} in available feed: {exc}")
+    return result
 
 
 @api_router.get("/orders/available/matched", response_model=List[Order])
@@ -4653,8 +4686,490 @@ async def admin_reassign_order(order_id: str, body: AdminReassignRequest, user: 
     if not d:
         raise HTTPException(404, "Driver not found")
     await db.orders.update_one({"id": order_id}, {"$set": {"driver_id": body.driver_id}})
+    await _record_assignment(order_id, "reassigned", body.driver_id, user.get("id"))
     o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
     return _admin_order_row(o2)
+
+
+# ============================================================
+# Order Management (admin) — assignment, lifecycle, notes
+# ============================================================
+
+async def _record_assignment(order_id: str, action: str, driver_id: Optional[str],
+                             admin_id: Optional[str], note: Optional[str] = None):
+    """Append an immutable assignment-history record for auditability."""
+    try:
+        await db.assignment_history.insert_one({
+            "id": str(uuid.uuid4()),
+            "order_id": order_id,
+            "action": action,          # assigned | reassigned | unassigned | returned_to_marketplace
+            "driver_id": driver_id,
+            "admin_id": admin_id,
+            "note": note,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as exc:
+        logger.warning(f"assignment_history insert failed: {exc}")
+
+
+class AdminNoteRequest(BaseModel):
+    note: str
+
+
+class AdminReasonRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+@api_router.post("/admin/manage/orders/{order_id}/assign")
+async def admin_assign_order(order_id: str, body: AdminReassignRequest, user: dict = Depends(get_admin_user)):
+    """Assign (or reassign) a job to a specific driver."""
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    d = await db.drivers.find_one({"id": body.driver_id}, {"_id": 0})
+    if not d:
+        raise HTTPException(404, "Driver not found")
+    new_status = o["status"] if o["status"] not in ("pending", "cancelled", "paused", "failed") else "accepted"
+    await db.orders.update_one({"id": order_id}, {"$set": {"driver_id": body.driver_id, "status": new_status}})
+    await _record_assignment(order_id, "assigned", body.driver_id, user.get("id"))
+    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _admin_order_row(o2)
+
+
+@api_router.post("/admin/manage/orders/{order_id}/unassign")
+async def admin_unassign_order(order_id: str, body: AdminReasonRequest = AdminReasonRequest(), user: dict = Depends(get_admin_user)):
+    """Remove the assigned driver and return the job to the open marketplace (pending).
+
+    Used for driver emergencies (illness, breakdown, no-response, etc.).
+    """
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    prev_driver = o.get("driver_id")
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"driver_id": None, "status": "pending"}},
+    )
+    await _record_assignment(order_id, "returned_to_marketplace", prev_driver, user.get("id"),
+                             note=(body.reason if body else None))
+    # Notify the affected shipper (non-blocking).
+    try:
+        if o.get("shipper_id"):
+            await _notify_shipper_status(o["shipper_id"], order_id,
+                                         "Your delivery was returned to the marketplace and will be reassigned shortly.")
+    except Exception:
+        pass
+    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _admin_order_row(o2)
+
+
+@api_router.post("/admin/manage/orders/{order_id}/restore")
+async def admin_restore_order(order_id: str, user: dict = Depends(get_admin_user)):
+    """Restore a cancelled/paused/failed job back to the open marketplace."""
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    if o["status"] not in ("cancelled", "paused", "failed"):
+        raise HTTPException(400, f"Only cancelled/paused/failed orders can be restored (is {o['status']})")
+    await db.orders.update_one({"id": order_id}, {"$set": {"status": "pending", "driver_id": None}})
+    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _admin_order_row(o2)
+
+
+@api_router.post("/admin/manage/orders/{order_id}/pause")
+async def admin_pause_order(order_id: str, user: dict = Depends(get_admin_user)):
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    if o["status"] in ("delivered", "cancelled"):
+        raise HTTPException(400, f"Cannot pause an order that is {o['status']}")
+    await db.orders.update_one({"id": order_id}, {"$set": {"status": "paused"}})
+    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _admin_order_row(o2)
+
+
+@api_router.post("/admin/manage/orders/{order_id}/complete")
+async def admin_complete_order(order_id: str, user: dict = Depends(get_admin_user)):
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"status": "delivered", "completed_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _admin_order_row(o2)
+
+
+@api_router.post("/admin/manage/orders/{order_id}/fail")
+async def admin_fail_order(order_id: str, body: AdminReasonRequest = AdminReasonRequest(), user: dict = Depends(get_admin_user)):
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    update = {"status": "failed"}
+    if body and body.reason:
+        update["fail_reason"] = body.reason
+    await db.orders.update_one({"id": order_id}, {"$set": update})
+    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _admin_order_row(o2)
+
+
+@api_router.post("/admin/manage/orders/{order_id}/notes")
+async def admin_add_order_note(order_id: str, body: AdminNoteRequest, user: dict = Depends(get_admin_user)):
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    note = {
+        "id": str(uuid.uuid4()),
+        "note": body.note,
+        "admin_id": user.get("id"),
+        "admin_name": user.get("name") or user.get("email"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.orders.update_one({"id": order_id}, {"$push": {"admin_notes": note}})
+    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return {"order": _admin_order_row(o2), "notes": o2.get("admin_notes", [])}
+
+
+@api_router.get("/admin/manage/orders/{order_id}/assignment-history")
+async def admin_assignment_history(order_id: str, user: dict = Depends(get_admin_user)):
+    rows = await db.assignment_history.find({"order_id": order_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"history": rows}
+
+
+# ============================================================
+# Invoicing — "Accept Invoice" flow (Net 14 + admin fee)
+# ============================================================
+
+DEFAULT_INVOICE_FEE = 9.0   # EUR, configurable via admin settings
+DEFAULT_NET_DAYS = 14
+
+NADARUNS_COMPANY = {
+    "name": "Nadaruns Oy",
+    "address": "Helsinki, Finland",
+    "email": "billing@nadaruns.com",
+    "phone": "+358 40 000 0000",
+    "business_id": "FI-NADARUNS-001",
+}
+
+
+class Invoice(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    invoice_number: str
+    order_id: str
+    order_number: str
+    shipper_id: str
+    # Shipper billing snapshot
+    shipper_company: str = ""
+    shipper_contact: str = ""
+    shipper_email: str = ""
+    shipper_phone: str = ""
+    shipper_address: Optional[str] = None
+    shipper_tax_id: Optional[str] = None
+    # Order snapshot
+    pickup_address: str = ""
+    dropoff_address: str = ""
+    description: str = "Delivery service"
+    order_value: float = 0.0
+    invoice_fee: float = 0.0
+    total_amount: float = 0.0
+    currency: str = "EUR"
+    status: str = "unpaid"     # unpaid | paid | overdue | cancelled
+    net_days: int = 14
+    issued_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    due_date: str = ""
+    paid_at: Optional[str] = None
+    last_sent_at: Optional[str] = None
+
+
+async def get_invoicing_settings() -> dict:
+    doc = await db.settings.find_one({"key": "invoicing"}, {"_id": 0}) or {}
+    try:
+        fee = float(doc.get("invoice_fee", DEFAULT_INVOICE_FEE))
+    except Exception:
+        fee = DEFAULT_INVOICE_FEE
+    try:
+        net = int(doc.get("net_days", DEFAULT_NET_DAYS))
+    except Exception:
+        net = DEFAULT_NET_DAYS
+    return {"invoice_fee": max(0.0, fee), "net_days": max(1, net)}
+
+
+async def _next_invoice_number() -> str:
+    doc = await db.settings.find_one_and_update(
+        {"key": "invoice_counter"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=True,  # ReturnDocument.AFTER
+    )
+    seq = (doc or {}).get("seq", 1)
+    return f"NDR-{datetime.now(timezone.utc).year}-{1000 + int(seq)}"
+
+
+async def _create_invoice_for_order(order: dict, shipper: dict) -> dict:
+    """Idempotently create (or return existing) invoice for an order."""
+    existing = await db.invoices.find_one({"order_id": order["id"]}, {"_id": 0})
+    if existing:
+        return existing
+    settings = await get_invoicing_settings()
+    order_value = float(
+        order.get("price_quote")
+        or order.get("payment_amount")
+        or order.get("price")
+        or 0.0
+    )
+    fee = float(settings["invoice_fee"])
+    net = int(settings["net_days"])
+    now = datetime.now(timezone.utc)
+    due = now + timedelta(days=net)
+    items = order.get("items") or []
+    description = items[0].get("name") if items and isinstance(items[0], dict) else "Delivery service"
+    inv = Invoice(
+        invoice_number=await _next_invoice_number(),
+        order_id=order["id"],
+        order_number=order.get("order_number", ""),
+        shipper_id=shipper["id"],
+        shipper_company=shipper.get("company_name", ""),
+        shipper_contact=shipper.get("contact_name", ""),
+        shipper_email=shipper.get("email", ""),
+        shipper_phone=shipper.get("phone", ""),
+        shipper_address=shipper.get("address"),
+        shipper_tax_id=shipper.get("tax_id"),
+        pickup_address=(order.get("pickup") or {}).get("address", ""),
+        dropoff_address=(order.get("dropoff") or {}).get("address", ""),
+        description=description,
+        order_value=round(order_value, 2),
+        invoice_fee=round(fee, 2),
+        total_amount=round(order_value + fee, 2),
+        net_days=net,
+        issued_at=now.isoformat(),
+        due_date=due.isoformat(),
+    )
+    doc = inv.model_dump()
+    await db.invoices.insert_one(doc)
+    # Motor's insert_one mutates the dict in place to inject an ObjectId `_id`,
+    # which is not JSON-serializable. Drop it before returning to clients.
+    doc.pop("_id", None)
+    await db.orders.update_one(
+        {"id": order["id"]},
+        {"$set": {"payment_status": "invoiced", "payment_method_choice": "invoice"}},
+    )
+    logger.info(f"Invoice {inv.invoice_number} created for order {order.get('order_number')}")
+    return doc
+
+
+def _build_invoice_pdf(inv: dict) -> bytes:
+    from fpdf import FPDF
+
+    def s(v):
+        return str(v if v is not None else "")
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 22)
+    pdf.cell(0, 12, "INVOICE", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, f"Invoice #: {s(inv.get('invoice_number'))}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Issued: {s(inv.get('issued_at'))[:10]}    Due: {s(inv.get('due_date'))[:10]}  (Net {s(inv.get('net_days'))} days)", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Status: {s(inv.get('status')).upper()}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, "From", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 5, f"{NADARUNS_COMPANY['name']}  ({NADARUNS_COMPANY['business_id']})", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, NADARUNS_COMPANY["address"], new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, f"{NADARUNS_COMPANY['email']}  |  {NADARUNS_COMPANY['phone']}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, "Bill To", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 5, s(inv.get("shipper_company")), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, f"Attn: {s(inv.get('shipper_contact'))}", new_x="LMARGIN", new_y="NEXT")
+    if inv.get("shipper_address"):
+        pdf.cell(0, 5, s(inv.get("shipper_address")), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, f"{s(inv.get('shipper_email'))}  |  {s(inv.get('shipper_phone'))}", new_x="LMARGIN", new_y="NEXT")
+    if inv.get("shipper_tax_id"):
+        pdf.cell(0, 5, f"Tax ID: {s(inv.get('shipper_tax_id'))}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, "Order", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 5, f"Order #: {s(inv.get('order_number'))}", new_x="LMARGIN", new_y="NEXT")
+    pdf.multi_cell(0, 5, f"Pickup: {s(inv.get('pickup_address'))}")
+    pdf.multi_cell(0, 5, f"Delivery: {s(inv.get('dropoff_address'))}")
+    pdf.multi_cell(0, 5, f"Description: {s(inv.get('description'))}")
+    pdf.ln(4)
+
+    cur = s(inv.get("currency") or "EUR")
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(120, 7, "Item", border=1)
+    pdf.cell(0, 7, "Amount", border=1, new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(120, 7, "Delivery service", border=1)
+    pdf.cell(0, 7, f"{cur} {float(inv.get('order_value') or 0):.2f}", border=1, new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.cell(120, 7, "Invoice administration fee", border=1)
+    pdf.cell(0, 7, f"{cur} {float(inv.get('invoice_fee') or 0):.2f}", border=1, new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(120, 8, "TOTAL DUE", border=1)
+    pdf.cell(0, 8, f"{cur} {float(inv.get('total_amount') or 0):.2f}", border=1, new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.ln(6)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.multi_cell(0, 5, f"Payment terms: Net {s(inv.get('net_days'))} days. Please pay by {s(inv.get('due_date'))[:10]}. "
+                         f"Reference invoice {s(inv.get('invoice_number'))} with your payment.")
+    out = pdf.output()
+    return bytes(out)
+
+
+@api_router.post("/shipper/shipments/{order_id}/accept-invoice")
+async def shipper_accept_invoice(order_id: str, shipper: dict = Depends(get_current_shipper)):
+    """Shipper chooses 'Accept Invoice' for an order -> generate a Net-14 invoice."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.get("shipper_id") != shipper["id"]:
+        raise HTTPException(403, "This order does not belong to you")
+    invoice = await _create_invoice_for_order(order, shipper)
+    return invoice
+
+
+@api_router.get("/shipper/invoices")
+async def shipper_list_invoices(shipper: dict = Depends(get_current_shipper)):
+    rows = await db.invoices.find({"shipper_id": shipper["id"]}, {"_id": 0}).sort("issued_at", -1).to_list(200)
+    return rows
+
+
+@api_router.get("/invoices/{invoice_id}")
+async def get_invoice(invoice_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        raise HTTPException(401, "Authentication required")
+    payload = decode_token(credentials.credentials)
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        inv = await db.invoices.find_one({"invoice_number": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+    # Shippers may only view their own invoices; admins may view all.
+    if payload.get("type") == "shipper" and inv.get("shipper_id") != payload.get("sub"):
+        raise HTTPException(403, "Not authorized to view this invoice")
+    return inv
+
+
+@api_router.get("/invoices/{invoice_id}/pdf")
+async def get_invoice_pdf(invoice_id: str, token: Optional[str] = None,
+                          credentials: HTTPAuthorizationCredentials = Depends(security)):
+    from fastapi.responses import Response
+    # Allow either header auth or ?token= (for direct browser downloads).
+    raw = credentials.credentials if credentials else token
+    if not raw:
+        raise HTTPException(401, "Authentication required")
+    payload = decode_token(raw)
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0}) \
+        or await db.invoices.find_one({"invoice_number": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+    if payload.get("type") == "shipper" and inv.get("shipper_id") != payload.get("sub"):
+        raise HTTPException(403, "Not authorized")
+    pdf_bytes = _build_invoice_pdf(inv)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={inv['invoice_number']}.pdf"},
+    )
+
+
+# ---------- Admin invoice management ----------
+
+@api_router.get("/admin/invoices")
+async def admin_list_invoices(
+    status: Optional[str] = None,
+    q: Optional[str] = None,
+    user: dict = Depends(get_admin_user),
+):
+    query: dict = {}
+    if status and status != "all":
+        query["status"] = status
+    if q:
+        rx = {"$regex": q, "$options": "i"}
+        query["$or"] = [
+            {"invoice_number": rx}, {"order_number": rx},
+            {"shipper_company": rx}, {"shipper_email": rx},
+        ]
+    # Auto-flag overdue (unpaid past due date) on read.
+    now_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        await db.invoices.update_many(
+            {"status": "unpaid", "due_date": {"$lt": now_iso}},
+            {"$set": {"status": "overdue"}},
+        )
+    except Exception:
+        pass
+    rows = await db.invoices.find(query, {"_id": 0}).sort("issued_at", -1).to_list(500)
+    totals = {
+        "count": len(rows),
+        "unpaid": sum(1 for r in rows if r.get("status") == "unpaid"),
+        "overdue": sum(1 for r in rows if r.get("status") == "overdue"),
+        "paid": sum(1 for r in rows if r.get("status") == "paid"),
+        "total_outstanding": round(sum(float(r.get("total_amount") or 0) for r in rows if r.get("status") in ("unpaid", "overdue")), 2),
+    }
+    return {"invoices": rows, "totals": totals}
+
+
+@api_router.post("/admin/invoices/{invoice_id}/mark-paid")
+async def admin_mark_invoice_paid(invoice_id: str, user: dict = Depends(get_admin_user)):
+    res = await db.invoices.update_one(
+        {"id": invoice_id},
+        {"$set": {"status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Invoice not found")
+    return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+
+
+@api_router.post("/admin/invoices/{invoice_id}/mark-overdue")
+async def admin_mark_invoice_overdue(invoice_id: str, user: dict = Depends(get_admin_user)):
+    res = await db.invoices.update_one({"id": invoice_id}, {"$set": {"status": "overdue"}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Invoice not found")
+    return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+
+
+@api_router.post("/admin/invoices/{invoice_id}/resend")
+async def admin_resend_invoice(invoice_id: str, user: dict = Depends(get_admin_user)):
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.invoices.update_one({"id": invoice_id}, {"$set": {"last_sent_at": now_iso}})
+    # Email delivery is not wired yet; this records the resend and notifies the shipper in-app.
+    try:
+        await _notify_shipper_status(inv["shipper_id"], inv["order_id"],
+                                     f"Invoice {inv['invoice_number']} has been re-sent. Amount due: EUR {inv.get('total_amount')}.")
+    except Exception:
+        pass
+    return {"ok": True, "last_sent_at": now_iso, "invoice_number": inv["invoice_number"]}
+
+
+@api_router.get("/admin/settings/invoicing")
+async def admin_get_invoicing_settings(user: dict = Depends(get_admin_user)):
+    return await get_invoicing_settings()
+
+
+class InvoicingSettingsRequest(BaseModel):
+    invoice_fee: float
+    net_days: int = 14
+
+
+@api_router.post("/admin/settings/invoicing")
+async def admin_update_invoicing_settings(body: InvoicingSettingsRequest, user: dict = Depends(get_admin_user)):
+    await db.settings.update_one(
+        {"key": "invoicing"},
+        {"$set": {"key": "invoicing", "invoice_fee": max(0.0, float(body.invoice_fee)), "net_days": max(1, int(body.net_days))}},
+        upsert=True,
+    )
+    return await get_invoicing_settings()
 
 
 # ---------- Vehicles overview ----------

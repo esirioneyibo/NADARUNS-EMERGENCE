@@ -1,0 +1,45 @@
+{
+  "summary": "Both iteration-28 critical bug fixes are VERIFIED. (1) CRASH FIX: The /order screen now renders cleanly on demo driver after accepting / resuming a job — no ReferenceError, no STAGE_TITLES error, no blank screen. Stage pill 'ORDER ACCEPTED' (testID=stage-accepted) renders with title 'Order accepted' / subtitle 'Head to the pickup location' / primary CTA 'Start navigation' (all resolved via t('order.stages.<status>.*')). SPA-style re-load (back → Resume) renders again without crash. Tapping 'Start navigation' (testID=advance-button) advances the order to stage-enroute_pickup ('NAVIGATING TO PICKUP' / 'Navigating to pickup' / 'I've arrived') — also no crash. (2) AVAILABLE FEED RESILIENCE: GET /api/orders/available returns 200 with len>0 pending jobs. ADMIN CANCEL ISOLATION: POST /api/admin/manage/orders/{id}/cancel marks one order cancelled; subsequent /api/orders/available still returns the OTHER pending jobs (cancelled id absent, count drop ≤ 2). REGRESSION: demo driver (KYC approved) accept flow still works (200). All 3 pytest cases pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Deprecation warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' on login/home/order screens. Reference: /app/frontend/src/theme.ts shadows + components that spread shadows.md/lg."},
+      {"component": "props.pointerEvents", "issue": "Deprecation warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'."},
+      {"component": "expo-router REPLACE driver-home", "issue": "Console error after login: 'The action REPLACE with payload {\"name\":\"driver-home\"} was not handled by any navigator.' App still ends up on /driver-home; route name should be declared in the navigator. Reference: /app/frontend/app/login.tsx (router.replace target)."},
+      {"component": "Driver WebSocket", "issue": "wss://.../ws/driver/<id> returns 502 (handshake failure) repeatedly on driver home and /order. Pre-existing, unrelated to crash fix; surface for ingress / endpoint check."},
+      {"component": "Reanimated easing", "issue": "Warning: '[Reanimated] Selected easing is not currently supported on web. Using linear easing instead.' on /order entering animations. Reference: /app/frontend/app/order.tsx SlideInDown(...).easing(Easing.out(Easing.cubic))."},
+      {"component": "Animated useNativeDriver", "issue": "Warning: 'Animated: useNativeDriver is not supported because the native animated module is missing.' on web preview."}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_28.json",
+    "/app/backend/tests/test_iter28_crash_fix_and_feed.py",
+    "/app/test_reports/pytest/iter28_results.xml"
+  ],
+  "action_items": [
+    "(Non-blocking) Migrate 'shadow*' style props → 'boxShadow' and 'props.pointerEvents' → 'style.pointerEvents' in /app/frontend/src/theme.ts and consuming components.",
+    "(Non-blocking) Register a 'driver-home' route in the navigator (or change router.replace target) to silence the REPLACE-not-handled console error in /app/frontend/app/login.tsx.",
+    "(Non-blocking, pre-existing) Investigate /ws/driver/{id} returning 502 handshake on the preview ingress.",
+    "(Non-blocking) Use a web-supported reanimated easing or guard with Platform.OS check in /app/frontend/app/order.tsx."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/order.tsx lines 131-135 — stage object now correctly derives title/subtitle/primary from t(`order.stages.${order.status}.*`); i18n keys for all OrderStatus values exist in /app/frontend/src/i18n/locales/{en,fi}.json (pending, accepted, enroute_pickup, arrived_pickup, picked_up, enroute_dropoff, arrived_dropoff, delivered, rejected). Crash root cause is resolved.",
+    "/app/backend/server.py lines 1497-1505 — defensive serialization loop wraps `Order(**o)` in try/except per row and logs+skips malformed orders. Good resilience hardening; consider also returning a structured warning header so admins can audit how many rows were skipped.",
+    "/app/backend/server.py admin_cancel_order (≈4639) — idempotently rejects already-delivered/cancelled orders (400) and updates status to 'cancelled'. Verified isolated effect on the available feed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter28_crash_fix_and_feed.py (new pytest module)"
+  ],
+  "success_rate": {"backend": "100% (3/3 pytest cases)", "frontend": "100% (order render + SPA reload + stage advance all crash-free)"},
+  "seed_data_creation": "POST /api/seed-demo invoked (idempotent). One throwaway pending order was created by the shipper instant-create attempt (404 — endpoint not present), so the test fell back to cancelling an existing pending order picked from /api/admin/manage/orders?status=pending. Net effect: 1 demo pending order moved to 'cancelled'. The driver-accept regression test also moved 1 pending order to 'accepted' for the demo driver — this is intentional and powered the frontend Resume-button verification.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The demo driver currently has an active accepted order (stage advanced to enroute_pickup during this run). To re-test from a clean 'no active' state, either (a) hit POST /api/seed-demo to re-seed (idempotent — but won't auto-deliver in-flight orders) or (b) advance the existing order through pickup→dropoff→delivered. testIDs to know: order-flow-screen, stage-<status> (e.g. stage-accepted, stage-enroute_pickup), order-action-sheet, order-back-button, advance-button, resume-order-button, active-order-banner, submit-button (login), email-input, password-input. Use page.click('[data-testid=\"submit-button\"]', force=True) to log in (the visible 'Sign In' text is not the testID-bearing pressable). Web auth is in-memory so always navigate via taps within the SPA, never page.goto('/order') after login.",
+  "rca_of_issue": "Original crash: /app/frontend/app/order.tsx still referenced a removed STAGE_TITLES constant in its render path → ReferenceError as soon as an active Order arrived (immediately after accept, and again on resume). Fix verified in this iteration: lines 131-135 now build `stage = { title: t('order.stages.<status>.title'), subtitle: ..., primary: ... }` using i18n keys present in both en.json and fi.json. Original /api/orders/available 500: a single malformed Mongo document could blow up Pydantic model validation for the WHOLE feed, hiding every job from every driver after an admin cancel (which was the trigger). Fix verified: server.py:1497-1505 now wraps `Order(**o)` per row in try/except, logging+skipping malformed rows so the feed continues to return the rest."
+}
