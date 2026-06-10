@@ -373,6 +373,18 @@ backend:
           comment: "Added Emergent push relay (SuprSend): POST /api/register-push {user_id, platform, device_token} relays to the Emergent push service via EMERGENT_PUSH_KEY. send_push() helper triggers pushes (chunks 100 recipients). Background triggers added (all wrapped in try/except + asyncio.create_task so push failure NEVER blocks the primary op): (1) create_shipment -> push_new_job_to_online_drivers (online drivers matching vehicle type), (2) accept_order -> push_status_to_shipper(accepted), (3) advance_order -> push_status_to_shipper(arrived_pickup/arrived_dropoff/delivered). NOTE: In this env EMERGENT_PUSH_KEY=placeholder, so the upstream relay returns 401 and /api/register-push will return 500 (EXPECTED until deploy replaces the key) - this is fine. CRITICAL TEST FOCUS: the ORDER LIFECYCLE must be UNAFFECTED - POST /api/shipper/shipments (201/200 + order created), POST /api/orders/{id}/accept (driver JWT, binds driver, 200), POST /api/orders/{id}/advance through the full flow to delivered must ALL still return success despite push relay failing in the background. Also verify /api/register-push exists and returns 422 on missing fields."
 
 frontend:
+  - task: "Real KYC verification (per-driver) + admin approval + job-accept hard-block + strict per-driver scoping"
+    implemented: true
+    working: true
+    file: "backend/server.py, frontend/app/kyc.tsx, frontend/app/settings.tsx, frontend/app/driver-home.tsx, frontend/src/api.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Iteration 26 (backend 14/14) + 27 (frontend retest PASS). KYC endpoints now per-driver (no global driver-001); submit -> pending (no auto-approval); simulate-approval removed (404); admin approve -> approved; accept_order 403 for unverified, 200 for Verified/demo; per-driver scoping: new driver wallet/performance/history all empty, no global leak; Settings badge shows Verified (green) for demo driver via GET /api/driver/kyc-status."
+
   - task: "Instant create, pay later (shipper create flow)"
     implemented: true
     working: "NA"
