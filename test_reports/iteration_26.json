@@ -1,0 +1,54 @@
+{
+  "summary": "Backend KYC + per-driver scoping work is FULLY FUNCTIONAL (14/14 pytest pass). Verified: (1) per-driver KYC isolation — new driver gets overall_status='incomplete', NOT the global driver-001 state; demo driver returns 'approved'. (2) POST /api/driver/kyc/submit moves status to 'pending' — NO auto-jump to 'approved'. (3) POST /api/driver/kyc/simulate-approval returns 404 as required. (4) Admin can list pending applications via /api/admin/kyc-applications and approve via /api/admin/kyc/{id}/approve, after which the new driver reports 'approved'. (5) accept_order KYC gate: unverified new driver → 403 with 'KYC verification required ...' message; demo (Verified) driver → 200; idempotent re-accept also 200; new driver can accept once admin approves. (6) Per-driver scoping: new driver with zero deliveries → /driver/wallet (available=0,pending=0,no delivery txns), /driver/performance (earnings.today/week/total=0, deliveries.today/week/total=0, recent_deliveries=[]), /orders/history=[] — no global demo data leaks in. FRONTEND BUG: Settings screen shows 'Required' (orange) for the demo driver even though /api/driver/kyc-status returns overall_status='approved'. Network capture confirms the Settings screen only calls /api/driver/me and NEVER calls /api/driver/kyc-status — so kycStatus state stays at the initial 'incomplete' value and the badge resolves to t('settings.kycRequired'). No JS errors are emitted. Most likely a control-flow regression in settings.tsx load() between setNotifications(d.notifications) and the inner try { api.getKYCStatus() } block, or a useFocusEffect timing issue on web. Note: deprecated Expo warnings remain ('shadow*' style props, props.pointerEvents). Driver registration endpoint in code is /api/auth/driver-register (the review_request mentioned /api/auth/register which returns 404).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "settings.tsx KYC badge",
+        "issue": "Demo driver Settings shows 'Required' (theme.warning) badge even though backend /api/driver/kyc-status returns overall_status='approved'. Network trace shows /api/driver/kyc-status is NEVER requested on this screen — only /api/driver/me is. As a result kycStatus state stays 'incomplete' and the badge defaults to t('settings.kycRequired').",
+        "testID": "link-kyc",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Settings → KYC status badge",
+        "issue": "load() in /app/frontend/app/settings.tsx (lines 124-152) calls api.getDriver() (HTTP 200) but the subsequent inner try { api.getKYCStatus() } block does not fire any network request. No JS error or console warning is emitted. Suspect that something between setNotifications(d.notifications) and the inner try silently aborts the async function (e.g., setNotifications receiving undefined, or useFocusEffect tearing down on web), OR that the inner try is being silently caught due to a token race in the api.ts client. Repro: clear localStorage, login demo.driver@nadaruns.com/demo1234, open /settings → KYC row badge='Required' while in-page fetch('/api/driver/kyc-status', Bearer <token>) returns overall_status='approved'.",
+        "affected_testIDs": ["link-kyc"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Deprecation warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' — emitted across multiple screens via theme/shadows. Reference: /app/frontend/src/theme.ts."},
+      {"component": "pointerEvents prop", "issue": "Deprecation warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_kyc_per_driver.py",
+    "/app/test_reports/pytest/iter26_kyc.xml"
+  ],
+  "action_items": [
+    "Fix settings.tsx KYC badge: ensure api.getKYCStatus() actually fires after api.getDriver() succeeds. Suggested debug: temporarily add console.log('[settings] KYC fetch starting'); right before the inner try, then before setKycStatus. If the log never fires, the outer try is short-circuiting silently — most likely setNotifications(d.notifications) when d.notifications is undefined (or via a side effect of useFocusEffect re-running). A simple, robust fix is to hoist the KYC fetch into its OWN useEffect that runs when isAuthenticated && !authLoading, independent of the driver load (so a failure in driver load can never block the KYC badge update).",
+    "Replace the silent `catch {}` around api.getKYCStatus() with `catch (e) { console.warn('[settings] KYC fetch failed', e); }` so future regressions are visible.",
+    "Migrate deprecated 'shadow*' style props to 'boxShadow' and 'props.pointerEvents' to 'style.pointerEvents' to silence Expo warnings (non-blocking)."
+  ],
+  "critical_code_review_comments": [
+    "server.py /driver/kyc-status, /driver/kyc/upload, /driver/kyc/submit now correctly use `driver = Depends(get_current_driver)` and scope by `driver['id']` — no more hardcoded DRIVER_ID. Verified end-to-end.",
+    "server.py accept_order KYC gate (lines 1607-1614) checks db.kyc_status overall_status=='approved' before allowing the atomic claim and returns a clear 403 message. Confirmed unverified blocks, demo passes, post-approval passes.",
+    "server.py /driver/wallet (lines 1953-1957), /driver/performance (lines 2038-2041), and /orders/history (lines 1588-1592) all filter by driver_id from the JWT — verified empty for a new driver and scoped to the demo driver's own deliveries.",
+    "Seed-demo (lines 1208-1221) idempotently upserts demo driver KYC to approved — verified.",
+    "settings.tsx (line 145) silently swallows api.getKYCStatus() errors with `catch {}` — this hid the integration bug. Add a console.warn at minimum."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_kyc_per_driver.py (new pytest suite, 14 tests, all green)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "50% (KYC accept gate API works; Settings badge UI shows wrong value)"},
+  "seed_data_creation": "POST /api/seed-demo invoked (idempotent). One TEST_kyc_<hex>@nadaruns.com driver registered + KYC-approved during the run; a couple of TEST shipments were created via /api/shipper/shipments to exercise the accept gate.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend registration endpoint is POST /api/auth/driver-register (body: {name,email,password,phone,vehicle_type}). Shipment create is POST /api/shipper/shipments (NOT /api/shipper/orders). Demo driver pre-Verified via /api/seed-demo. Frontend testID for Settings KYC row is 'link-kyc' (text shows 'KYC Verification' + badge). Verify the badge via `inner_text` on the row. Reproduce the Settings bug by: clear localStorage → login → goto /settings → wait 3s → check row text; backend `fetch('/api/driver/kyc-status')` from inside the page returns approved 200 while badge stays 'Required'.",
+  "rca_of_issue": "Settings KYC badge bug RCA: /api/driver/kyc-status is never called on the Settings screen (Network trace from Playwright while on /settings only shows /api/driver/me). settings.tsx load() awaits api.getDriver() (OK), runs ~7 setters including setNotifications(d.notifications) which may be undefined for the demo driver, then has an INNER try { api.getKYCStatus() } catch {} block. Since no JS pageerror/console error is emitted, either (a) the await chain is silently terminated before reaching the inner try (likely due to setNotifications receiving undefined being treated normally but a subsequent line throwing, e.g., via i18n during re-render), or (b) the useFocusEffect on web tears the effect down between the first await and the inner one. Mitigation: move the KYC fetch into a dedicated useEffect keyed on `[isAuthenticated, authLoading]` so it is not coupled with the driver-profile load."
+}

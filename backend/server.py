@@ -1202,6 +1202,23 @@ async def seed_demo_data():
         await db.drivers.insert_one(demo_driver.model_dump())
         result["created"]["driver"] = {"email": demo_driver_email, "password": "demo1234"}
         logger.info(f"Created demo driver: {demo_driver_email}")
+    else:
+        demo_driver_id = existing_driver["id"]
+
+    # Demo driver is pre-Verified so the demo works end-to-end (KYC approved).
+    await db.kyc_status.update_one(
+        {"driver_id": demo_driver_id},
+        {"$set": {
+            "driver_id": demo_driver_id,
+            "license_front": "approved",
+            "license_back": "approved",
+            "selfie": "approved",
+            "overall_status": "approved",
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
+            "reviewed_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
     
     # Create demo shipper if not exists
     demo_shipper_email = "demo.shipper@nadaruns.com"
@@ -1586,6 +1603,16 @@ async def accept_order(order_id: str, request: Request):
     else gets a 409 Conflict.
     """
     driver_id = await get_optional_driver_id(request)
+
+    # KYC gate: a driver must be Verified (admin-approved) before accepting jobs.
+    if driver_id:
+        kyc = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
+        if not kyc or kyc.get("overall_status") != "approved":
+            raise HTTPException(
+                403,
+                "KYC verification required. Please complete identity verification and wait for admin approval before accepting jobs.",
+            )
+
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
@@ -1929,13 +1956,6 @@ async def get_driver_wallet(credentials: HTTPAuthorizationCredentials = Depends(
         {"_id": 0}
     ).sort("completed_at", -1).limit(100).to_list(100)
     
-    # Also get orders without driver_id for backward compatibility with seeded data
-    if not history:
-        history = await db.orders.find(
-            {"status": "delivered"}, 
-            {"_id": 0}
-        ).sort("completed_at", -1).limit(40).to_list(40)
-    
     txns: List[dict] = []
     available = 0.0
     pending = 0.0
@@ -2015,14 +2035,10 @@ async def get_driver_performance(credentials: HTTPAuthorizationCredentials = Dep
     week_ago = now - timedelta(days=7)
     today = now.date()
 
-    # Delivered orders for this driver (fallback to global for legacy/demo data).
+    # Delivered orders for THIS driver only (strict per-driver scoping).
     delivered = await db.orders.find(
         {"status": "delivered", "driver_id": driver_id}, {"_id": 0}
     ).sort("completed_at", -1).to_list(500)
-    if not delivered:
-        delivered = await db.orders.find(
-            {"status": "delivered"}, {"_id": 0}
-        ).sort("completed_at", -1).to_list(200)
 
     def parse_ts(ts):
         if not ts:
@@ -3636,13 +3652,14 @@ async def track_shipment(
 # ===================== KYC Endpoints =====================
 
 @api_router.get("/driver/kyc-status", response_model=KYCStatus)
-async def get_kyc_status():
-    """Get the current driver's KYC verification status."""
-    status = await db.kyc_status.find_one({"driver_id": DRIVER_ID}, {"_id": 0})
+async def get_kyc_status(driver: dict = Depends(get_current_driver)):
+    """Get the authenticated driver's KYC verification status."""
+    driver_id = driver["id"]
+    status = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
     if not status:
         # Initialize if not exists
         status = {
-            "driver_id": DRIVER_ID,
+            "driver_id": driver_id,
             "license_front": None,
             "license_back": None,
             "selfie": None,
@@ -3655,8 +3672,9 @@ async def get_kyc_status():
 
 
 @api_router.post("/driver/kyc/upload", response_model=KYCStatus)
-async def upload_kyc_document(request: KYCUploadRequest):
-    """Upload a single KYC document."""
+async def upload_kyc_document(request: KYCUploadRequest, driver: dict = Depends(get_current_driver)):
+    """Upload a single KYC document for the authenticated driver."""
+    driver_id = driver["id"]
     image_data = (request.image_data or "").strip()
     if not image_data:
         raise HTTPException(400, "Image data is required")
@@ -3671,7 +3689,7 @@ async def upload_kyc_document(request: KYCUploadRequest):
     
     # Store the document
     doc = KYCDocument(
-        driver_id=DRIVER_ID,
+        driver_id=driver_id,
         document_type=request.document_type,
         image_data=image_data,
         status="pending"
@@ -3679,22 +3697,22 @@ async def upload_kyc_document(request: KYCUploadRequest):
     
     # Upsert - replace if exists
     await db.kyc_documents.update_one(
-        {"driver_id": DRIVER_ID, "document_type": request.document_type},
+        {"driver_id": driver_id, "document_type": request.document_type},
         {"$set": doc.model_dump()},
         upsert=True
     )
     
     # Update KYC status
     await db.kyc_status.update_one(
-        {"driver_id": DRIVER_ID},
-        {"$set": {request.document_type: "pending"}},
+        {"driver_id": driver_id},
+        {"$set": {request.document_type: "pending", "driver_id": driver_id}},
         upsert=True
     )
     
     # Check if all documents uploaded
-    status = await db.kyc_status.find_one({"driver_id": DRIVER_ID}, {"_id": 0})
+    status = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
     if not status:
-        status = {"driver_id": DRIVER_ID, "overall_status": "incomplete"}
+        status = {"driver_id": driver_id, "overall_status": "incomplete"}
     
     # Update overall status
     all_uploaded = all([
@@ -3705,17 +3723,22 @@ async def upload_kyc_document(request: KYCUploadRequest):
     
     if all_uploaded:
         await db.kyc_status.update_one(
-            {"driver_id": DRIVER_ID},
+            {"driver_id": driver_id},
             {"$set": {"overall_status": "pending", "submitted_at": datetime.now(timezone.utc).isoformat()}}
         )
     
-    updated_status = await db.kyc_status.find_one({"driver_id": DRIVER_ID}, {"_id": 0})
+    updated_status = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
     return KYCStatus(**updated_status)
 
 
 @api_router.post("/driver/kyc/submit", response_model=KYCStatus)
-async def submit_kyc_documents(request: KYCSubmitRequest):
-    """Submit all KYC documents at once."""
+async def submit_kyc_documents(request: KYCSubmitRequest, driver: dict = Depends(get_current_driver)):
+    """Submit all KYC documents at once for the authenticated driver.
+
+    Sets the application to PENDING and routes it to the admin for review.
+    There is NO auto-approval — an admin must approve via the dashboard.
+    """
+    driver_id = driver["id"]
     documents = [
         ("license_front", request.license_front),
         ("license_back", request.license_back),
@@ -3735,14 +3758,14 @@ async def submit_kyc_documents(request: KYCSubmitRequest):
             raise HTTPException(413, f"{doc_type} image too large")
         
         doc = KYCDocument(
-            driver_id=DRIVER_ID,
+            driver_id=driver_id,
             document_type=doc_type,
             image_data=image,
             status="pending"
         )
         
         await db.kyc_documents.update_one(
-            {"driver_id": DRIVER_ID, "document_type": doc_type},
+            {"driver_id": driver_id, "document_type": doc_type},
             {"$set": doc.model_dump()},
             upsert=True
         )
@@ -3750,47 +3773,22 @@ async def submit_kyc_documents(request: KYCSubmitRequest):
     # Update KYC status to pending review
     now = datetime.now(timezone.utc).isoformat()
     await db.kyc_status.update_one(
-        {"driver_id": DRIVER_ID},
+        {"driver_id": driver_id},
         {"$set": {
+            "driver_id": driver_id,
             "license_front": "pending",
             "license_back": "pending",
             "selfie": "pending",
             "overall_status": "pending",
             "submitted_at": now,
+            "reviewed_at": None,
         }},
         upsert=True
     )
     
-    logger.info(f"KYC documents submitted for driver {DRIVER_ID}")
+    logger.info(f"KYC documents submitted for driver {driver_id} — awaiting admin review")
     
-    status = await db.kyc_status.find_one({"driver_id": DRIVER_ID}, {"_id": 0})
-    return KYCStatus(**status)
-
-
-@api_router.post("/driver/kyc/simulate-approval", response_model=KYCStatus)
-async def simulate_kyc_approval():
-    """Simulate KYC approval (for testing/demo purposes)."""
-    now = datetime.now(timezone.utc).isoformat()
-    await db.kyc_status.update_one(
-        {"driver_id": DRIVER_ID},
-        {"$set": {
-            "license_front": "approved",
-            "license_back": "approved",
-            "selfie": "approved",
-            "overall_status": "approved",
-            "reviewed_at": now,
-        }}
-    )
-    
-    # Update documents status
-    await db.kyc_documents.update_many(
-        {"driver_id": DRIVER_ID},
-        {"$set": {"status": "approved"}}
-    )
-    
-    logger.info(f"KYC approved for driver {DRIVER_ID}")
-    
-    status = await db.kyc_status.find_one({"driver_id": DRIVER_ID}, {"_id": 0})
+    status = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
     return KYCStatus(**status)
 
 

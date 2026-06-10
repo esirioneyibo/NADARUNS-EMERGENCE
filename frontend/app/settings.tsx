@@ -86,6 +86,7 @@ export default function SettingsScreen() {
   });
   const [savingField, setSavingField] = useState(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [kycStatus, setKycStatus] = useState<string>("incomplete");
 
   const handleSignOut = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
@@ -137,6 +138,13 @@ export default function SettingsScreen() {
       setVehicleType(d.vehicle_type || "cargo_van");
       setVehicleCapacity(d.vehicle_capacity_kg || 1500);
       setNotifications(d.notifications);
+      // Load KYC verification status for the dynamic badge.
+      try {
+        const k = await api.getKYCStatus();
+        setKycStatus(k.overall_status || "incomplete");
+      } catch {
+        /* non-fatal */
+      }
     } catch (e: any) {
       console.warn("Settings load failed:", e);
       setLoadError(t("settings.sessionExpired"));
@@ -351,8 +359,18 @@ export default function SettingsScreen() {
           <LinkRow 
             icon="document-text-outline" 
             label={t("settings.kycVerification")} 
-            badge={t("settings.kycRequired")}
-            badgeColor={theme.warning}
+            badge={
+              kycStatus === "approved" ? t("settings.kycVerified")
+              : kycStatus === "pending" ? t("settings.kycPending")
+              : kycStatus === "rejected" ? t("settings.kycRejected")
+              : t("settings.kycRequired")
+            }
+            badgeColor={
+              kycStatus === "approved" ? theme.success
+              : kycStatus === "pending" ? theme.warning
+              : kycStatus === "rejected" ? theme.error
+              : theme.warning
+            }
             testID="link-kyc" 
             onPress={() => router.push("/kyc")}
             theme={theme}

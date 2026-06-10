@@ -398,8 +398,6 @@ export const api = {
       body: JSON.stringify({ license_front, license_back, selfie }),
     }),
   
-  simulateKYCApproval: () => request<any>("/driver/kyc/simulate-approval", { method: "POST" }),
-  
   // Real-time location tracking
   updateDriverLocation: (location: { lat: number; lng: number }, orderId?: string) =>
     request<{ status: string }>("/driver/location", {

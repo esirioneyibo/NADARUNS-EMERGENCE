@@ -328,6 +328,18 @@ export default function HomeScreen() {
       setAvailableOrders(prev => prev.filter(o => o.id !== orderId));
       router.push("/order");
     } catch (error: any) {
+      const msg = String(error?.message || error?.detail || "").toLowerCase();
+      if (msg.includes("kyc") || msg.includes("verification required") || msg.includes("403")) {
+        Alert.alert(
+          t("driverHome.kycRequiredTitle"),
+          t("driverHome.kycRequiredMsg"),
+          [
+            { text: t("common.cancel"), style: "cancel" },
+            { text: t("driverHome.kycVerifyNow"), onPress: () => router.push("/kyc") },
+          ]
+        );
+        return;
+      }
       Alert.alert(t("driverHome.jobTakenTitle"), t("driverHome.jobTakenMsg"));
       // Refresh available orders
       const available = await api.getAvailableOrders(driverCoordsRef.current ?? undefined);
@@ -633,7 +645,7 @@ export default function HomeScreen() {
                   <Text style={styles.statValue} testID="earnings-today">
                     €{driver.earnings_today.toFixed(2)}
                   </Text>
-                  <Text style={styles.statLabel}>Today's earnings</Text>
+                  <Text style={styles.statLabel}>{"Today's earnings"}</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statBox}>
@@ -746,8 +758,24 @@ export default function HomeScreen() {
               style={({ pressed }) => [styles.acceptBtn, pressed && { opacity: 0.85 }]}
               onPress={async () => {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-                await api.accept(pending!.id);
-                router.push("/order");
+                try {
+                  await api.accept(pending!.id);
+                  router.push("/order");
+                } catch (error: any) {
+                  const msg = String(error?.message || error?.detail || "").toLowerCase();
+                  if (msg.includes("kyc") || msg.includes("verification required") || msg.includes("403")) {
+                    Alert.alert(
+                      t("driverHome.kycRequiredTitle"),
+                      t("driverHome.kycRequiredMsg"),
+                      [
+                        { text: t("common.cancel"), style: "cancel" },
+                        { text: t("driverHome.kycVerifyNow"), onPress: () => router.push("/kyc") },
+                      ]
+                    );
+                  } else {
+                    Alert.alert(t("driverHome.jobTakenTitle"), t("driverHome.jobTakenMsg"));
+                  }
+                }
               }}
               testID="accept-order-button"
             >
@@ -1103,17 +1131,6 @@ const createStyles = (theme: any) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
-  },
-  statCardValue: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: theme.textPrimary,
-  },
-  statCardLabel: {
-    fontSize: 11,
-    color: theme.textSecondary,
-    marginTop: 2,
-    textAlign: "center",
   },
   vehicleInfoBar: {
     flexDirection: "row",

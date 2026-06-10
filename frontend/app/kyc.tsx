@@ -231,11 +231,13 @@ export default function KYCScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     
     try {
-      await api.simulateKYCApproval();
-      
+      // All three documents are already uploaded to the backend; this marks the
+      // application as submitted/pending. Admin must approve it — no auto-approval.
+      await loadKYCStatus();
+
       Alert.alert(
         "Documents Submitted",
-        "Your documents have been submitted for verification. This usually takes 1-2 business days.",
+        "Your documents have been submitted for verification. An admin will review them, usually within 1-2 business days. You'll be able to accept jobs once you're verified.",
         [{ text: "OK", onPress: () => loadKYCStatus() }]
       );
     } catch (error) {
@@ -507,7 +509,7 @@ export default function KYCScreen() {
           </Text>
         </Animated.View>
 
-        <Text style={styles.sectionTitle}>DRIVER'S LICENSE</Text>
+        <Text style={styles.sectionTitle}>{"DRIVER'S LICENSE"}</Text>
         
         <Animated.View entering={FadeInUp.delay(160)}>
           <DocumentCard
@@ -588,7 +590,7 @@ export default function KYCScreen() {
         </Animated.View>
 
         <Text style={styles.noteText}>
-          Verification typically takes 1-2 business days. You'll receive a notification once complete.
+          {"Verification typically takes 1-2 business days. You'll receive a notification once complete."}
         </Text>
       </ScrollView>
     </View>
