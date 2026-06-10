@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -184,6 +185,9 @@ export default function ShipperCreateScreen() {
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  // Pay Now / Accept Invoice choice modal (shown after a shipment is created)
+  const [payChoice, setPayChoice] = useState<{ orderId: string; orderNum: string; total: number } | null>(null);
+  const [payBusy, setPayBusy] = useState<null | "pay" | "invoice">(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -558,17 +562,16 @@ export default function ShipperCreateScreen() {
         const orderId: string | undefined = data.order_id;
         const orderNum: string | undefined = data.order_number;
 
-        // Instant create, pay later: the job goes live to drivers the moment it
-        // is created. We do NOT block the shipper on Stripe here — they can pay
-        // anytime from the tracking screen via the "Pay now" button.
-        showBanner(
-          `Shipment ${orderNum || ""} created — it's now live for drivers!`,
-          "success",
-          false,
-        );
+        // The job is now live for drivers. Ask the shipper how they want to settle
+        // payment: Pay Now (Stripe) or Accept Invoice (Net-14 invoice).
         if (orderId) {
-          setTimeout(() => router.replace(`/shipper-home?created=1&order=${encodeURIComponent(orderNum || "")}`), 700);
+          setPayChoice({
+            orderId,
+            orderNum: orderNum || "",
+            total: parseFloat(shipperOffer) || (quote?.total ?? 0),
+          });
         } else {
+          showBanner(`Shipment ${orderNum || ""} created!`, "success", false);
           setTimeout(() => router.replace("/shipper-home"), 700);
         }
         return;
@@ -581,6 +584,55 @@ export default function ShipperCreateScreen() {
       showBanner("Failed to create shipment. Please check your connection and try again.", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePayNow = async () => {
+    if (!payChoice) return;
+    const { orderId, orderNum } = payChoice;
+    setPayBusy("pay");
+    try {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        const origin = window.location.origin;
+        const { url } = await api.createPaymentCheckout(orderId, {
+          success_url: `${origin}/shipper-home?paid=1&order=${encodeURIComponent(orderNum)}&oid=${orderId}`,
+          cancel_url: `${origin}/shipper-tracking?id=${orderId}&pay=1`,
+        });
+        window.location.href = url;
+        return;
+      }
+      const returnUrl = Linking.createURL("payment-complete");
+      const { url } = await api.createPaymentCheckout(orderId, {
+        success_url: `${BASE}/api/payments/return?status=success&order_id=${orderId}&redirect=${encodeURIComponent(returnUrl)}`,
+        cancel_url: `${BASE}/api/payments/return?status=cancel&order_id=${orderId}&redirect=${encodeURIComponent(returnUrl)}`,
+      });
+      await WebBrowser.openAuthSessionAsync(url, returnUrl);
+      setPayChoice(null);
+      router.replace(`/shipper-home?paid=1&order=${encodeURIComponent(orderNum)}&oid=${orderId}`);
+    } catch (e: any) {
+      setPayChoice(null);
+      showBanner(e?.message || "Could not start payment. You can pay later from tracking.", "error", false);
+      setTimeout(() => router.replace(`/shipper-tracking?id=${orderId}&pay=1`), 800);
+    } finally {
+      setPayBusy(null);
+    }
+  };
+
+  const handleAcceptInvoice = async () => {
+    if (!payChoice) return;
+    const { orderId, orderNum } = payChoice;
+    setPayBusy("invoice");
+    try {
+      const inv = await api.acceptInvoice(orderId);
+      setPayChoice(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      router.replace(
+        `/shipper-home?invoiced=1&order=${encodeURIComponent(orderNum)}&inv=${encodeURIComponent(inv?.invoice_number || "")}`,
+      );
+    } catch (e: any) {
+      showBanner(e?.message || "Could not create invoice. Please try again.", "error", false);
+    } finally {
+      setPayBusy(null);
     }
   };
 

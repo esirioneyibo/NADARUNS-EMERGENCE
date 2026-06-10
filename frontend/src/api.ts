@@ -363,6 +363,11 @@ export const api = {
     ),
   getPaymentStatus: (orderId: string) =>
     request<PaymentSummary>(`/payments/orders/${orderId}/status`),
+  // Invoicing ("Accept Invoice" flow)
+  acceptInvoice: (orderId: string) =>
+    request<any>(`/shipper/shipments/${orderId}/accept-invoice`, { method: "POST" }),
+  getShipperInvoices: () => request<any[]>("/shipper/invoices"),
+  getInvoice: (invoiceId: string) => request<any>(`/invoices/${invoiceId}`),
   authorizePaymentTest: (orderId: string) =>
     request<PaymentSummary>(`/payments/orders/${orderId}/authorize-test`, { method: "POST" }),
 
