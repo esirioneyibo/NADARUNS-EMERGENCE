@@ -138,22 +138,27 @@ export default function SettingsScreen() {
       setVehicleType(d.vehicle_type || "cargo_van");
       setVehicleCapacity(d.vehicle_capacity_kg || 1500);
       setNotifications(d.notifications);
-      // Load KYC verification status for the dynamic badge.
-      try {
-        const k = await api.getKYCStatus();
-        setKycStatus(k.overall_status || "incomplete");
-      } catch {
-        /* non-fatal */
-      }
     } catch (e: any) {
       console.warn("Settings load failed:", e);
       setLoadError(t("settings.sessionExpired"));
     }
   }, [authLoading, isAuthenticated]);
 
+  // KYC status is fetched in its own effect (independent of the profile load)
+  // so the verification badge stays correct even if the profile call changes.
+  const loadKyc = useCallback(async () => {
+    if (authLoading || !isAuthenticated) return;
+    try {
+      const k = await api.getKYCStatus();
+      setKycStatus(k.overall_status || "incomplete");
+    } catch (e) {
+      console.warn("KYC status fetch failed:", e);
+    }
+  }, [authLoading, isAuthenticated]);
+
   useFocusEffect(useCallback(() => { 
-    if (!authLoading) load(); 
-  }, [load, authLoading]));
+    if (!authLoading) { load(); loadKyc(); }
+  }, [load, loadKyc, authLoading]));
 
   // Show login prompt if not authenticated
   if (!authLoading && (!isAuthenticated || loadError)) {

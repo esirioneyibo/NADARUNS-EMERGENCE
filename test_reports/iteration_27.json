@@ -1,0 +1,37 @@
+{
+  "summary": "RETEST PASSED. The iteration-26 frontend fix for the driver Settings KYC badge is working. Flow tested in-SPA (no page reload): launched /login, logged in as demo.driver@nadaruns.com / demo1234, app navigated to /driver-home, then tapped the 'Profile' bottom-tab which routes to /settings. On Settings, the KYC Verification row badge text is now exactly 'Verified' (green) instead of 'Required'. Network capture confirms GET /api/driver/kyc-status fires from the Settings screen and returns HTTP 200 with overall_status='approved' (one request observed: https://nadaruns-logistics.preview.emergentagent.com/api/driver/kyc-status). Settings inner_text on the KYC row: '\\uf2b4\\nKYC Verification\\nVerified\\n\\uf23b'. POST /api/seed-demo was invoked first (idempotent). Deprecated Expo warnings still present (shadow* style props, props.pointerEvents) and a non-blocking 'driver-home' navigator REPLACE warning + WebSocket /ws/driver/* 502 — these are pre-existing and unrelated to this retest.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Deprecation warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' — emitted on login + settings. Reference: /app/frontend/src/theme.ts (shadows)."},
+      {"component": "pointerEvents prop", "issue": "Deprecation warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'."},
+      {"component": "expo-router navigator", "issue": "Console error after login: 'The action REPLACE with payload {\"name\":\"driver-home\"} was not handled by any navigator. Do you have a route named driver-home?'. App still ends up on /driver-home so functionality works, but the route should be declared in the navigator. Reference: /app/frontend/app/login.tsx (router.replace target)."},
+      {"component": "Driver WebSocket", "issue": "wss://.../ws/driver/<id> returns 502 (handshake failure) repeatedly on the driver home screen. Pre-existing, unrelated to KYC badge but worth surfacing."}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_27.json"
+  ],
+  "action_items": [
+    "(Non-blocking) Migrate deprecated 'shadow*' style props to 'boxShadow' and 'props.pointerEvents' to 'style.pointerEvents' in /app/frontend/src/theme.ts and affected components.",
+    "(Non-blocking) Investigate the 'REPLACE driver-home not handled by any navigator' warning after driver login — the screen still loads via deep-link but the navigator should know about the route.",
+    "(Non-blocking) Investigate /ws/driver/{id} 502 handshake on the driver home screen."
+  ],
+  "critical_code_review_comments": [
+    "settings.tsx (lines 149-161) — KYC fetch is now in its own useCallback (loadKyc) invoked alongside load() inside useFocusEffect; the catch is un-silenced via console.warn. This correctly decouples the badge state from the profile load and resolves the iteration-26 bug.",
+    "settings.tsx kycStatus initial state defaults to 'incomplete' (line 89). With the new loadKyc on focus this is fine, but if the network call is ever slow the user briefly sees 'Required'. Consider rendering no badge (or a skeleton) until the first kyc-status response arrives."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (single endpoint verified)", "frontend": "100% (KYC badge fix verified)"},
+  "seed_data_creation": "POST /api/seed-demo was invoked (idempotent, no new docs created this run).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Driver Settings is reached by tapping the bottom-tab labelled 'Profile' (route /settings) — NOT a separate Settings tab. testID for the KYC row is 'link-kyc'; the inner_text contains the badge label on its own line ('Verified' / 'Pending' / 'Rejected' / 'Required'). To avoid losing in-memory auth on web, navigate via the tab bar (page.click on 'text=Profile') instead of page.goto('/settings'). Demo driver credentials are pre-Verified after /api/seed-demo.",
+  "rca_of_issue": "Original bug (iteration 26): api.getKYCStatus() was nested inside the same try block as api.getDriver() in settings.tsx load(); a silent catch swallowed any short-circuit and kycStatus stayed at 'incomplete'. Fix (iteration 27 verified): hoisted KYC fetch into its own useCallback loadKyc() invoked alongside load() inside useFocusEffect, with a console.warn on failure, and expo was restarted to serve the new bundle. Verified network call now fires (one /api/driver/kyc-status request observed → 200 approved) and the badge renders 'Verified' (green)."
+}
