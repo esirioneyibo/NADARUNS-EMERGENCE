@@ -61,11 +61,17 @@ All frontend iter3 testIDs (otp-modal, otp-digit-*, wallet-screen, wallet-balanc
 - adminApi (`/app/web/src/lib/adminApi.ts`) extended with all order-action + invoice + invoicePdfUrl(token) methods.
 - Backend (all pre-existing & tested, 25/25 pytest iter30): `/api/admin/manage/orders/{id}/{pause|restore|complete|fail|unassign|assign|notes}`, `/assignment-history`, `/api/admin/invoices`, `/mark-paid|mark-overdue|resend`, `/api/invoices/{id}/pdf?token=`, `/api/admin/settings/invoicing`.
 
+## Recent Work — P2 Saved Cards + P3 Tracking i18n (Feb 2026, same fork)
+- **P2 DONE — Shipper Saved Payment Methods (Stripe)** via SetupIntent through hosted Checkout (mode=setup), consistent with existing redirect-based Pay Now (no native Stripe SDK).
+  - Backend (`services/payments.py` + `server.py`): `create_customer`, `create_setup_checkout_session`, `list_payment_methods`, `set_default_payment_method`, `detach_payment_method`. Endpoints: `POST /api/shipper/payment-methods/setup-checkout`, `GET /api/shipper/payment-methods`, `POST /api/shipper/payment-methods/{pm_id}/default`, `DELETE /api/shipper/payment-methods/{pm_id}`. Lazy Stripe customer stored as `stripe_customer_id` on shipper doc. Ownership guard (403). Tested 9/9 pytest (`tests/test_iter31_payment_methods.py`).
+  - Frontend: new `app/shipper-payment-methods.tsx` (list, add-card redirect, set-default, delete) linked from shipper-settings. `api.ts` methods added. Verified end-to-end.
+- **P3 DONE — shipper-tracking.tsx i18n** (English + Finnish): added `tracking` + `paymentMethods` blocks to en/fi locales; all status/payment labels + UI strings + alerts translated. Verified bilingual render, no raw-key leakage.
+
 ## Roadmap / Backlog
-- **P2 — Shipper Saved Payment Methods (Stripe cards)**: SetupIntent-based save/update/delete/default cards for faster "Pay Now". MUST use integration_playbook_expert_v2.
-- **P3 — App/Web i18n (English/Finnish)**: resume shipper-tracking.tsx + Batch C, then web.
-- **Refactor**: split `server.py` (~6900 lines) into routers/models; split `shipper-create.tsx` (~2069 lines) into per-step components; add testIDs to shipper-create inputs.
+- **P3 (remaining) — i18n Batch C** for any other untranslated Expo screens + the Next.js web admin.
+- **Refactor**: split `server.py` (~7000 lines) into routers/models; split `shipper-create.tsx` (~2069 lines) into per-step components; add testIDs to shipper-create inputs.
 - Cosmetic: `/api/auth/shipper-login` returns shipper id under `driver_id` key.
+- **Env note**: the Expo frontend supervisor program is named **`expo`** (not `frontend`); restart with `sudo supervisorctl restart expo`. New Expo Router route files require an `expo` restart to register.
 
 ## Planned Next Iterations
 - Photo proof at delivery (camera + base64)
