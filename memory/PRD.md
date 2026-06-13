@@ -53,6 +53,20 @@ All frontend iter3 testIDs (otp-modal, otp-digit-*, wallet-screen, wallet-balanc
 - React-native-maps requires an EAS dev build for iOS/Android — Expo Go cannot bundle the native Google Maps SDK. Web preview always shows the SVG map.
 - Expo's auto-link emits a non-blocking PluginError for react-native-maps in dev logs (no app.plugin.js export). Bundle still builds successfully.
 
+## Recent Work (Feb 2026 — Forked session)
+**Shipper payment settlement + Admin order/invoice management.**
+- **Shipper "Pay Now / Accept Invoice" modal** (`/app/frontend/app/shipper-create.tsx`): after a shipment is created, a bottom-sheet `<Modal>` (testID `pay-choice-modal`) offers Option A `pay-now-button` (Stripe checkout) and Option B `accept-invoice-button` (Net-14 invoice + PDF), plus `pay-later-button`. Verified end-to-end (iteration_30).
+- **Admin Web — Order Management** (`/app/web/src/components/admin/Orders.tsx`): OrderDrawer now supports pause, restore, mark-delivered, unassign (driver emergency → marketplace), mark-failed, cancel, assign/reassign driver, internal admin notes, assignment-history timeline, and linked-invoice PDF download.
+- **Admin Web — Invoice Management** (`/app/web/src/components/admin/Invoices.tsx`, new nav tab): list with search + status filter, KPI totals (count/unpaid/overdue/outstanding), invoice drawer with full billing/order/amount details, mark-paid, mark-overdue, resend, download PDF, and an Invoicing Settings drawer (configurable admin fee + net days).
+- adminApi (`/app/web/src/lib/adminApi.ts`) extended with all order-action + invoice + invoicePdfUrl(token) methods.
+- Backend (all pre-existing & tested, 25/25 pytest iter30): `/api/admin/manage/orders/{id}/{pause|restore|complete|fail|unassign|assign|notes}`, `/assignment-history`, `/api/admin/invoices`, `/mark-paid|mark-overdue|resend`, `/api/invoices/{id}/pdf?token=`, `/api/admin/settings/invoicing`.
+
+## Roadmap / Backlog
+- **P2 — Shipper Saved Payment Methods (Stripe cards)**: SetupIntent-based save/update/delete/default cards for faster "Pay Now". MUST use integration_playbook_expert_v2.
+- **P3 — App/Web i18n (English/Finnish)**: resume shipper-tracking.tsx + Batch C, then web.
+- **Refactor**: split `server.py` (~6900 lines) into routers/models; split `shipper-create.tsx` (~2069 lines) into per-step components; add testIDs to shipper-create inputs.
+- Cosmetic: `/api/auth/shipper-login` returns shipper id under `driver_id` key.
+
 ## Planned Next Iterations
 - Photo proof at delivery (camera + base64)
 - Dark-mode toggle in settings (extract theme tokens behind ThemeContext)
