@@ -307,15 +307,51 @@
   },
   "order": {
     "stages": {
-      "pending": { "title": "Uusi pyyntö", "subtitle": "Tarkastetaan tilauksen tietoja", "primary": "Jatka" },
-      "accepted": { "title": "Tilaus hyväksytty", "subtitle": "Siirry noutopaikalle", "primary": "Aloita navigointi" },
-      "enroute_pickup": { "title": "Matkalla noutoon", "subtitle": "Aja turvallisesti noutopaikalle", "primary": "Olen perillä" },
-      "arrived_pickup": { "title": "Saavuit noutopaikalle", "subtitle": "Tarkista ja nouda tilaus", "primary": "Näytä noutotiedot" },
-      "picked_up": { "title": "Tilaus noudettu", "subtitle": "Siirry asiakkaalle", "primary": "Aloita toimitus" },
-      "enroute_dropoff": { "title": "Matkalla asiakkaalle", "subtitle": "Olet matkalla asiakkaalle", "primary": "Olen perillä" },
-      "arrived_dropoff": { "title": "Saavuit toimituspaikalle", "subtitle": "Luovuta tilaus asiakkaalle", "primary": "Vahvista toimitus" },
-      "delivered": { "title": "Toimitettu", "subtitle": "Hienoa työtä!", "primary": "Valmis" },
-      "rejected": { "title": "Hylätty", "subtitle": "", "primary": "Takaisin" }
+      "pending": {
+        "title": "Uusi pyyntö",
+        "subtitle": "Tarkastetaan tilauksen tietoja",
+        "primary": "Jatka"
+      },
+      "accepted": {
+        "title": "Tilaus hyväksytty",
+        "subtitle": "Siirry noutopaikalle",
+        "primary": "Aloita navigointi"
+      },
+      "enroute_pickup": {
+        "title": "Matkalla noutoon",
+        "subtitle": "Aja turvallisesti noutopaikalle",
+        "primary": "Olen perillä"
+      },
+      "arrived_pickup": {
+        "title": "Saavuit noutopaikalle",
+        "subtitle": "Tarkista ja nouda tilaus",
+        "primary": "Näytä noutotiedot"
+      },
+      "picked_up": {
+        "title": "Tilaus noudettu",
+        "subtitle": "Siirry asiakkaalle",
+        "primary": "Aloita toimitus"
+      },
+      "enroute_dropoff": {
+        "title": "Matkalla asiakkaalle",
+        "subtitle": "Olet matkalla asiakkaalle",
+        "primary": "Olen perillä"
+      },
+      "arrived_dropoff": {
+        "title": "Saavuit toimituspaikalle",
+        "subtitle": "Luovuta tilaus asiakkaalle",
+        "primary": "Vahvista toimitus"
+      },
+      "delivered": {
+        "title": "Toimitettu",
+        "subtitle": "Hienoa työtä!",
+        "primary": "Valmis"
+      },
+      "rejected": {
+        "title": "Hylätty",
+        "subtitle": "",
+        "primary": "Takaisin"
+      }
     },
     "noActiveDelivery": "Ei aktiivista toimitusta",
     "backToDashboard": "Takaisin koontinäyttöön",
@@ -356,5 +392,133 @@
     "skipContinue": "Ohita & jatka",
     "submitContinue": "Lähetä & jatka",
     "viewHistory": "Näytä toimitushistoria →"
+  },
+  "paymentMethods": {
+    "title": "Maksutavat",
+    "subtitle": "Tallenna kortti nopeampaa maksamista varten. Stripe säilyttää korttitietosi turvallisesti.",
+    "emptyTitle": "Ei tallennettuja kortteja",
+    "emptySub": "Lisää kortti maksaaksesi heti kun varaat kuljetuksen.",
+    "addCard": "Lisää kortti",
+    "makeDefault": "Aseta oletukseksi",
+    "default": "Oletus",
+    "expires": "Voimassa",
+    "deleteTitle": "Poista kortti",
+    "deleteConfirm": "Poistetaanko {{card}} tallennetuista korteista?",
+    "securedByStripe": "Stripen suojaama",
+    "addError": "Kortin lisäystä ei voitu aloittaa. Yritä uudelleen.",
+    "defaultError": "Oletuskorttia ei voitu asettaa.",
+    "deleteError": "Korttia ei voitu poistaa."
+  },
+  "tracking": {
+    "status": {
+      "pending": {
+        "label": "Etsitään kuljettajaa",
+        "desc": "Etsitään saatavilla olevia kuljettajia..."
+      },
+      "accepted": {
+        "label": "Kuljettaja määritetty",
+        "desc": "Kuljettaja on hyväksynyt lähetyksesi"
+      },
+      "enroute_pickup": {
+        "label": "Kuljettaja matkalla",
+        "desc": "Kuljettaja on matkalla noutopaikkaan"
+      },
+      "arrived_pickup": {
+        "label": "Kuljettaja saapui",
+        "desc": "Kuljettaja on saapunut noutopisteeseen"
+      },
+      "picked_up": {
+        "label": "Noudettu",
+        "desc": "Pakettisi on noudettu"
+      },
+      "enroute_dropoff": {
+        "label": "Kuljetuksessa",
+        "desc": "Paketti on matkalla määränpäähän"
+      },
+      "arrived_dropoff": {
+        "label": "Saapunut",
+        "desc": "Kuljettaja on saapunut toimituspaikkaan"
+      },
+      "delivered": {
+        "label": "Toimitettu",
+        "desc": "Paketti toimitettu onnistuneesti!"
+      },
+      "rejected": {
+        "label": "Peruutettu",
+        "desc": "Tämä lähetys peruutettiin"
+      }
+    },
+    "payment": {
+      "unpaid": {
+        "label": "Maksu vaaditaan",
+        "sub": "Vahvista varauksesi valtuuttamalla maksu"
+      },
+      "pending": {
+        "label": "Odottaa valtuutusta",
+        "sub": "Suorita maksu varataksesi summan kortiltasi"
+      },
+      "authorized": {
+        "label": "Maksu valtuutettu",
+        "sub": "Varat varattu — veloitetaan automaattisesti toimituksen yhteydessä"
+      },
+      "captured": {
+        "label": "Maksettu",
+        "sub": "Maksu veloitettu toimituksen yhteydessä"
+      },
+      "payment_failed": {
+        "label": "Maksu epäonnistui",
+        "sub": "Jokin meni pieleen. Yritä uudelleen."
+      },
+      "refunded": {
+        "label": "Hyvitetty",
+        "sub": "Tämä maksu hyvitettiin"
+      },
+      "canceled": {
+        "label": "Maksu vapautettu",
+        "sub": "Valtuutusvaraus vapautettiin"
+      }
+    },
+    "errorTitle": "Lähetystä ei voitu ladata",
+    "errorSub": "Tarkista yhteytesi ja yritä uudelleen.",
+    "goBack": "Takaisin",
+    "offRoute": "Kuljettaja näyttää poikenneen suunnitellulta reitiltä",
+    "live": "LIVE",
+    "toDropoff": "toimitukseen",
+    "toPickup": "noutoon",
+    "kmRemaining": "{{km}} km jäljellä",
+    "calculating": "Lasketaan…",
+    "paymentTitle": "Maksu",
+    "authorize": "Valtuuta €{{amount}}",
+    "yourDriver": "Kuljettajasi",
+    "youRated": "Arvioit kuljettajan {{name}}",
+    "thanksFeedback": "Kiitos palautteestasi!",
+    "rateYourDriver": "Arvioi kuljettaja",
+    "howWasDelivery": "Millainen toimitus kuljettajan {{name}} kanssa oli?",
+    "addComment": "Lisää kommentti (valinnainen)",
+    "submitRating": "Lähetä arvio",
+    "ratingSubmitted": "Kiitos! Arviosi on lähetetty.",
+    "ratingError": "Arviota ei voitu lähettää. Yritä uudelleen.",
+    "verificationCodes": "Vahvistuskoodit",
+    "pickupCode": "Noutokoodi",
+    "deliveryCode": "Toimituskoodi",
+    "shareCodes": "Jaa nämä koodit kuljettajan kanssa vahvistusta varten",
+    "routeDetails": "Reitin tiedot",
+    "pickup": "Nouto",
+    "dropoff": "Toimitus",
+    "packageDetails": "Paketin tiedot",
+    "weight": "Paino",
+    "vehicle": "Ajoneuvo",
+    "price": "Hinta",
+    "description": "Kuvaus",
+    "timeline": "Aikajana",
+    "cancelShipment": "Peruuta lähetys",
+    "cancelTitle": "Peruuta lähetys",
+    "cancelConfirm": "Haluatko varmasti peruuttaa tämän lähetyksen? Tätä toimintoa ei voi kumota.",
+    "keepIt": "Ei, säilytä",
+    "yesCancel": "Kyllä, peruuta",
+    "cancelledTitle": "Peruutettu",
+    "cancelledMsg": "Lähetyksesi on peruutettu.",
+    "cancelError": "Lähetyksen peruutus epäonnistui",
+    "couldNotPay": "Maksua ei voitu aloittaa"
   }
 }

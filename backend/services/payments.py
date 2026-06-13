@@ -260,3 +260,81 @@ def map_intent_status(intent_status: str) -> str:
         "canceled": "canceled",
     }
     return mapping.get(intent_status, "pending")
+
+
+# ----------------------------------------------------------------------------
+# Saved payment methods (SetupIntent via hosted Checkout in setup mode)
+# ----------------------------------------------------------------------------
+
+def create_customer(*, email: str | None, name: str | None, metadata: dict | None = None) -> stripe.Customer:
+    """Create a Stripe Customer for a shipper (one per shipper, reused)."""
+    return stripe.Customer.create(
+        email=email or None,
+        name=name or None,
+        metadata={k: str(v) for k, v in (metadata or {}).items() if v is not None},
+    )
+
+
+def create_setup_checkout_session(
+    *,
+    customer_id: str,
+    success_url: str,
+    cancel_url: str,
+    metadata: dict | None = None,
+) -> stripe.checkout.Session:
+    """Hosted Checkout in ``setup`` mode — collects + saves a card to the customer.
+
+    Uses the same hosted-page pattern as one-off payments so it works on web,
+    Expo Go and native dev builds without bundling native Stripe modules. Under
+    the hood Stripe creates a SetupIntent and attaches the PaymentMethod to the
+    customer for future off-session charges.
+    """
+    md = {k: str(v) for k, v in (metadata or {}).items() if v is not None}
+    return stripe.checkout.Session.create(
+        mode="setup",
+        customer=customer_id,
+        payment_method_types=["card"],
+        metadata=md,
+        success_url=success_url,
+        cancel_url=cancel_url,
+    )
+
+
+def list_payment_methods(customer_id: str) -> list[dict]:
+    """Return sanitized saved cards for a customer, marking the default."""
+    customer = stripe.Customer.retrieve(customer_id)
+    default_pm_id = None
+    inv = getattr(customer, "invoice_settings", None)
+    if inv and getattr(inv, "default_payment_method", None):
+        default_pm_id = inv.default_payment_method
+    pms = stripe.PaymentMethod.list(customer=customer_id, type="card")
+    out: list[dict] = []
+    for pm in pms.data:
+        card = pm.card
+        out.append({
+            "id": pm.id,
+            "brand": card.brand,
+            "last4": card.last4,
+            "exp_month": card.exp_month,
+            "exp_year": card.exp_year,
+            "is_default": pm.id == default_pm_id,
+        })
+    # Default card first, then most recently added.
+    out.sort(key=lambda c: (not c["is_default"]))
+    return out
+
+
+def set_default_payment_method(customer_id: str, payment_method_id: str) -> None:
+    stripe.Customer.modify(
+        customer_id,
+        invoice_settings={"default_payment_method": payment_method_id},
+    )
+
+
+def detach_payment_method(payment_method_id: str) -> None:
+    stripe.PaymentMethod.detach(payment_method_id)
+
+
+def retrieve_payment_method(payment_method_id: str) -> stripe.PaymentMethod:
+    return stripe.PaymentMethod.retrieve(payment_method_id)
+

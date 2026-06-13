@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
+import { useTranslation } from "react-i18next";
 
 import { getAuthToken, api } from "../src/api";
 import type { PaymentSummary, PaymentStatus } from "../src/types";
@@ -105,6 +106,7 @@ export default function ShipperTrackingScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { notify } = useNotify();
+  const { t } = useTranslation();
   const prevStatusRef = useRef<string | null>(null);
   const authRetryRef = useRef(0);
 
@@ -227,11 +229,11 @@ export default function ShipperTrackingScreen() {
         if (s.payment_status === "authorized" || s.payment_status === "captured") break;
       }
     } catch (e: any) {
-      setPayBanner(e.message || "Could not start payment");
+      setPayBanner(e.message || t("tracking.couldNotPay"));
     } finally {
       setPayLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     loadShipment();
@@ -287,11 +289,11 @@ export default function ShipperTrackingScreen() {
     try {
       await api.rateDriver(id, rateStars, rateReview || undefined);
       setRateDone(true);
-      setRateBanner("Thanks! Your rating has been submitted.");
+      setRateBanner(t("tracking.ratingSubmitted"));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       loadShipment();
     } catch (e: any) {
-      setRateBanner(e?.message || "Could not submit rating. Please try again.");
+      setRateBanner(e?.message || t("tracking.ratingError"));
     } finally {
       setRateSubmitting(false);
     }
@@ -299,12 +301,12 @@ export default function ShipperTrackingScreen() {
 
   const handleCancel = () => {
     Alert.alert(
-      "Cancel Shipment",
-      "Are you sure you want to cancel this shipment? This action cannot be undone.",
+      t("tracking.cancelTitle"),
+      t("tracking.cancelConfirm"),
       [
-        { text: "No, Keep It", style: "cancel" },
+        { text: t("tracking.keepIt"), style: "cancel" },
         {
-          text: "Yes, Cancel",
+          text: t("tracking.yesCancel"),
           style: "destructive",
           onPress: async () => {
             setCancelling(true);
@@ -318,15 +320,15 @@ export default function ShipperTrackingScreen() {
               });
               
               if (res.ok) {
-                Alert.alert("Cancelled", "Your shipment has been cancelled.", [
-                  { text: "OK", onPress: () => router.back() }
+                Alert.alert(t("tracking.cancelledTitle"), t("tracking.cancelledMsg"), [
+                  { text: t("common.ok"), onPress: () => router.back() }
                 ]);
               } else {
                 const err = await res.json();
-                Alert.alert("Error", err.detail || "Failed to cancel shipment");
+                Alert.alert(t("common.error"), err.detail || t("tracking.cancelError"));
               }
             } catch (e) {
-              Alert.alert("Error", "Failed to cancel shipment");
+              Alert.alert(t("common.error"), t("tracking.cancelError"));
             } finally {
               setCancelling(false);
             }
@@ -340,8 +342,8 @@ export default function ShipperTrackingScreen() {
     return (
       <View style={[styles.centered, { paddingTop: insets.top }]} testID="tracking-error">
         <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
-        <Text style={styles.errorTitle}>Couldn't load shipment</Text>
-        <Text style={styles.errorSub}>Check your connection and try again.</Text>
+        <Text style={styles.errorTitle}>{t("tracking.errorTitle")}</Text>
+        <Text style={styles.errorSub}>{t("tracking.errorSub")}</Text>
         <TouchableOpacity
           style={styles.retryBtn}
           testID="tracking-retry"
@@ -352,10 +354,10 @@ export default function ShipperTrackingScreen() {
           }}
         >
           <Ionicons name="refresh" size={16} color="#fff" />
-          <Text style={styles.retryBtnText}>Retry</Text>
+          <Text style={styles.retryBtnText}>{t("common.retry")}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
-          <Text style={styles.errorBack}>Go back</Text>
+          <Text style={styles.errorBack}>{t("tracking.goBack")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -400,7 +402,7 @@ export default function ShipperTrackingScreen() {
           <Text style={styles.heading}>{shipment.order_number}</Text>
           <View style={[styles.statusBadge, { backgroundColor: statusConfig.color + "20" }]}>
             <Ionicons name={statusConfig.icon as any} size={12} color={statusConfig.color} />
-            <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+            <Text style={[styles.statusText, { color: statusConfig.color }]}>{t(`tracking.status.${shipment.status}.label`, { defaultValue: statusConfig.label })}</Text>
           </View>
         </View>
         <View style={{ width: 44 }} />
@@ -421,8 +423,8 @@ export default function ShipperTrackingScreen() {
             />
             {wsConnected && (
               <View style={styles.liveIndicator}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveText}>LIVE</Text>
+                <View style={styles.liveDotRed} />
+                <Text style={styles.liveText}>{t("tracking.live")}</Text>
               </View>
             )}
           </Animated.View>
@@ -432,7 +434,7 @@ export default function ShipperTrackingScreen() {
         {isActive && tracking?.off_route && (
           <Animated.View entering={FadeInDown.duration(220)} style={styles.offRouteBanner} testID="off-route-banner">
             <Ionicons name="warning" size={18} color="#fff" />
-            <Text style={styles.offRouteText}>Driver appears to be off the expected route</Text>
+            <Text style={styles.offRouteText}>{t("tracking.offRoute")}</Text>
           </Animated.View>
         )}
 
@@ -445,15 +447,15 @@ export default function ShipperTrackingScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.etaValue}>
                 {tracking.eta_minutes} min{" "}
-                <Text style={styles.etaUnit}>{tracking.target === "dropoff" ? "to dropoff" : "to pickup"}</Text>
+                <Text style={styles.etaUnit}>{tracking.target === "dropoff" ? t("tracking.toDropoff") : t("tracking.toPickup")}</Text>
               </Text>
               <Text style={styles.etaSub}>
-                {tracking.remaining_km != null ? `${tracking.remaining_km.toFixed(1)} km remaining` : "Calculating…"}
+                {tracking.remaining_km != null ? t("tracking.kmRemaining", { km: tracking.remaining_km.toFixed(1) }) : t("tracking.calculating")}
               </Text>
             </View>
             <View style={styles.etaLive}>
-              <View style={styles.liveDot} />
-              <Text style={styles.etaLiveText}>LIVE</Text>
+              <View style={styles.liveDotRed} />
+              <Text style={styles.etaLiveText}>{t("tracking.live")}</Text>
             </View>
           </Animated.View>
         )}
@@ -463,8 +465,8 @@ export default function ShipperTrackingScreen() {
           <View style={[styles.statusIcon, { backgroundColor: statusConfig.color + "20" }]}>
             <Ionicons name={statusConfig.icon as any} size={28} color={statusConfig.color} />
           </View>
-          <Text style={styles.statusTitle}>{statusConfig.label}</Text>
-          <Text style={styles.statusDescription}>{statusConfig.description}</Text>
+          <Text style={styles.statusTitle}>{t(`tracking.status.${shipment.status}.label`, { defaultValue: statusConfig.label })}</Text>
+          <Text style={styles.statusDescription}>{t(`tracking.status.${shipment.status}.desc`, { defaultValue: statusConfig.description })}</Text>
         </Animated.View>
 
         {/* Payment Card */}
@@ -475,14 +477,14 @@ export default function ShipperTrackingScreen() {
           const amt = payment?.payment_amount ?? shipment.price_quote;
           return (
             <Animated.View entering={FadeInUp.delay(175)} style={[styles.card, shadows.sm]} testID="payment-card">
-              <Text style={styles.cardTitle}>Payment</Text>
+              <Text style={styles.cardTitle}>{t("tracking.paymentTitle")}</Text>
               <View style={styles.payRow}>
                 <View style={[styles.payIcon, { backgroundColor: pm.color + "20" }]}>
                   <Ionicons name={pm.icon as any} size={22} color={pm.color} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.payStatus, { color: pm.color }]} testID="payment-status-label">{pm.label}</Text>
-                  <Text style={styles.paySub}>{pm.sub}</Text>
+                  <Text style={[styles.payStatus, { color: pm.color }]} testID="payment-status-label">{t(`tracking.payment.${ps}.label`, { defaultValue: pm.label })}</Text>
+                  <Text style={styles.paySub}>{t(`tracking.payment.${ps}.sub`, { defaultValue: pm.sub })}</Text>
                 </View>
                 <Text style={styles.payAmount}>€{amt?.toFixed(2)}</Text>
               </View>
@@ -499,7 +501,7 @@ export default function ShipperTrackingScreen() {
                   ) : (
                     <>
                       <Ionicons name="lock-closed" size={18} color="#fff" />
-                      <Text style={styles.payBtnText}>Authorize €{amt?.toFixed(2)}</Text>
+                      <Text style={styles.payBtnText}>{t("tracking.authorize", { amount: amt?.toFixed(2) })}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -511,7 +513,7 @@ export default function ShipperTrackingScreen() {
         {/* Driver Info */}
         {shipment.driver && (
           <Animated.View entering={FadeInUp.delay(200)} style={[styles.card, shadows.sm]}>
-            <Text style={styles.cardTitle}>Your Driver</Text>
+            <Text style={styles.cardTitle}>{t("tracking.yourDriver")}</Text>
             <View style={styles.driverRow}>
               <Image source={{ uri: shipment.driver.avatar }} style={styles.driverAvatar} />
               <View style={{ flex: 1 }}>
@@ -537,7 +539,7 @@ export default function ShipperTrackingScreen() {
           <Animated.View entering={FadeInUp.delay(220)} style={[styles.card, shadows.sm]}>
             {(shipment.driver_rating || rateDone) ? (
               <View style={{ alignItems: "center" }}>
-                <Text style={styles.cardTitle}>You rated {shipment.driver.name.split(" ")[0]}</Text>
+                <Text style={styles.cardTitle}>{t("tracking.youRated", { name: shipment.driver.name.split(" ")[0] })}</Text>
                 <View style={{ marginTop: 8 }}>
                   <StarRating
                     value={shipment.driver_rating || rateStars}
@@ -551,13 +553,13 @@ export default function ShipperTrackingScreen() {
                     “{shipment.driver_review}”
                   </Text>
                 ) : null}
-                <Text style={[styles.codeNote, { marginTop: 6 }]}>Thanks for your feedback!</Text>
+                <Text style={[styles.codeNote, { marginTop: 6 }]}>{t("tracking.thanksFeedback")}</Text>
               </View>
             ) : (
               <View>
-                <Text style={styles.cardTitle}>Rate your driver</Text>
+                <Text style={styles.cardTitle}>{t("tracking.rateYourDriver")}</Text>
                 <Text style={[styles.codeNote, { textAlign: "center", marginTop: 2, marginBottom: 12 }]}>
-                  How was your delivery with {shipment.driver.name.split(" ")[0]}?
+                  {t("tracking.howWasDelivery", { name: shipment.driver.name.split(" ")[0] })}
                 </Text>
                 <View style={{ alignItems: "center", marginBottom: 12 }}>
                   <StarRating
@@ -571,7 +573,7 @@ export default function ShipperTrackingScreen() {
                   <TextInput
                     value={rateReview}
                     onChangeText={setRateReview}
-                    placeholder="Add a comment (optional)"
+                    placeholder={t("tracking.addComment")}
                     placeholderTextColor={theme.textSecondary}
                     style={styles.reviewInput}
                     multiline
@@ -595,7 +597,7 @@ export default function ShipperTrackingScreen() {
                   {rateSubmitting ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
-                    <Text style={styles.rateSubmitText}>Submit rating</Text>
+                    <Text style={styles.rateSubmitText}>{t("tracking.submitRating")}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -606,33 +608,33 @@ export default function ShipperTrackingScreen() {
         {/* Verification Codes */}
         {(shipment.pickup_code || shipment.dropoff_code) && (
           <Animated.View entering={FadeInUp.delay(250)} style={[styles.card, shadows.sm]}>
-            <Text style={styles.cardTitle}>Verification Codes</Text>
+            <Text style={styles.cardTitle}>{t("tracking.verificationCodes")}</Text>
             <View style={styles.codesRow}>
               {shipment.pickup_code && (
                 <View style={styles.codeBox}>
-                  <Text style={styles.codeLabel}>Pickup Code</Text>
+                  <Text style={styles.codeLabel}>{t("tracking.pickupCode")}</Text>
                   <Text style={styles.codeValue}>{shipment.pickup_code}</Text>
                 </View>
               )}
               {shipment.dropoff_code && (
                 <View style={styles.codeBox}>
-                  <Text style={styles.codeLabel}>Delivery Code</Text>
+                  <Text style={styles.codeLabel}>{t("tracking.deliveryCode")}</Text>
                   <Text style={styles.codeValue}>{shipment.dropoff_code}</Text>
                 </View>
               )}
             </View>
-            <Text style={styles.codeNote}>Share these codes with the driver for verification</Text>
+            <Text style={styles.codeNote}>{t("tracking.shareCodes")}</Text>
           </Animated.View>
         )}
 
         {/* Route Details */}
         <Animated.View entering={FadeInUp.delay(300)} style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Route Details</Text>
+          <Text style={styles.cardTitle}>{t("tracking.routeDetails")}</Text>
           
           <View style={styles.routeItem}>
             <View style={[styles.routeDot, { backgroundColor: "#6366F1" }]} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.routeLabel}>Pickup</Text>
+              <Text style={styles.routeLabel}>{t("tracking.pickup")}</Text>
               <Text style={styles.routeAddress}>{shipment.pickup.address}</Text>
               <Text style={styles.routeContact}>{shipment.pickup.name}</Text>
             </View>
@@ -643,7 +645,7 @@ export default function ShipperTrackingScreen() {
           <View style={styles.routeItem}>
             <View style={[styles.routeDot, { backgroundColor: "#10B981" }]} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.routeLabel}>Dropoff</Text>
+              <Text style={styles.routeLabel}>{t("tracking.dropoff")}</Text>
               <Text style={styles.routeAddress}>{shipment.dropoff.address}</Text>
               <Text style={styles.routeContact}>{shipment.dropoff.name}</Text>
             </View>
@@ -652,27 +654,27 @@ export default function ShipperTrackingScreen() {
 
         {/* Package Info */}
         <Animated.View entering={FadeInUp.delay(350)} style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Package Details</Text>
+          <Text style={styles.cardTitle}>{t("tracking.packageDetails")}</Text>
           <View style={styles.detailsGrid}>
             <View style={styles.detailItem}>
               <Ionicons name="cube-outline" size={20} color={theme.textSecondary} />
               <Text style={styles.detailValue}>{shipment.cargo_weight_kg} kg</Text>
-              <Text style={styles.detailLabel}>Weight</Text>
+              <Text style={styles.detailLabel}>{t("tracking.weight")}</Text>
             </View>
             <View style={styles.detailItem}>
               <Ionicons name="car-outline" size={20} color={theme.textSecondary} />
               <Text style={styles.detailValue}>{shipment.vehicle_type}</Text>
-              <Text style={styles.detailLabel}>Vehicle</Text>
+              <Text style={styles.detailLabel}>{t("tracking.vehicle")}</Text>
             </View>
             <View style={styles.detailItem}>
               <Ionicons name="pricetag-outline" size={20} color={theme.textSecondary} />
               <Text style={[styles.detailValue, { color: "#6366F1" }]}>€{shipment.price_quote?.toFixed(2)}</Text>
-              <Text style={styles.detailLabel}>Price</Text>
+              <Text style={styles.detailLabel}>{t("tracking.price")}</Text>
             </View>
           </View>
           {shipment.cargo_description && (
             <View style={styles.descriptionBox}>
-              <Text style={styles.descriptionLabel}>Description</Text>
+              <Text style={styles.descriptionLabel}>{t("tracking.description")}</Text>
               <Text style={styles.descriptionText}>{shipment.cargo_description}</Text>
             </View>
           )}
@@ -681,14 +683,14 @@ export default function ShipperTrackingScreen() {
         {/* Timeline */}
         {shipment.timeline && shipment.timeline.length > 0 && (
           <Animated.View entering={FadeInUp.delay(400)} style={[styles.card, shadows.sm]}>
-            <Text style={styles.cardTitle}>Timeline</Text>
+            <Text style={styles.cardTitle}>{t("tracking.timeline")}</Text>
             {shipment.timeline.map((event, idx) => {
               const eventConfig = STATUS_CONFIG[event.status] || STATUS_CONFIG.pending;
               return (
                 <View key={idx} style={styles.timelineItem}>
                   <View style={[styles.timelineDot, { backgroundColor: eventConfig.color }]} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.timelineStatus}>{eventConfig.label}</Text>
+                    <Text style={styles.timelineStatus}>{t(`tracking.status.${event.status}.label`, { defaultValue: eventConfig.label })}</Text>
                     <Text style={styles.timelineTime}>
                       {new Date(event.timestamp).toLocaleString()}
                     </Text>
@@ -713,7 +715,7 @@ export default function ShipperTrackingScreen() {
             ) : (
               <>
                 <Ionicons name="close-circle-outline" size={20} color="#EF4444" />
-                <Text style={styles.cancelBtnText}>Cancel Shipment</Text>
+                <Text style={styles.cancelBtnText}>{t("tracking.cancelShipment")}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -818,7 +820,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderRadius: radius.pill,
     gap: 4,
   },
-  liveDot: {
+  liveDotRed: {
     width: 8,
     height: 8,
     borderRadius: 4,

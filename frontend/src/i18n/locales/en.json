@@ -307,15 +307,51 @@
   },
   "order": {
     "stages": {
-      "pending": { "title": "New request", "subtitle": "Reviewing order details", "primary": "Continue" },
-      "accepted": { "title": "Order accepted", "subtitle": "Head to the pickup location", "primary": "Start navigation" },
-      "enroute_pickup": { "title": "Navigating to pickup", "subtitle": "Drive safely to the pickup", "primary": "I've arrived" },
-      "arrived_pickup": { "title": "Arrived at pickup", "subtitle": "Verify and pick up the order", "primary": "View pickup details" },
-      "picked_up": { "title": "Order picked up", "subtitle": "Head to the customer", "primary": "Start delivery" },
-      "enroute_dropoff": { "title": "Navigating to customer", "subtitle": "On your way to the customer", "primary": "I've arrived" },
-      "arrived_dropoff": { "title": "Arrived at dropoff", "subtitle": "Hand the order to the customer", "primary": "Confirm delivery" },
-      "delivered": { "title": "Delivered", "subtitle": "Great work!", "primary": "Done" },
-      "rejected": { "title": "Rejected", "subtitle": "", "primary": "Back" }
+      "pending": {
+        "title": "New request",
+        "subtitle": "Reviewing order details",
+        "primary": "Continue"
+      },
+      "accepted": {
+        "title": "Order accepted",
+        "subtitle": "Head to the pickup location",
+        "primary": "Start navigation"
+      },
+      "enroute_pickup": {
+        "title": "Navigating to pickup",
+        "subtitle": "Drive safely to the pickup",
+        "primary": "I've arrived"
+      },
+      "arrived_pickup": {
+        "title": "Arrived at pickup",
+        "subtitle": "Verify and pick up the order",
+        "primary": "View pickup details"
+      },
+      "picked_up": {
+        "title": "Order picked up",
+        "subtitle": "Head to the customer",
+        "primary": "Start delivery"
+      },
+      "enroute_dropoff": {
+        "title": "Navigating to customer",
+        "subtitle": "On your way to the customer",
+        "primary": "I've arrived"
+      },
+      "arrived_dropoff": {
+        "title": "Arrived at dropoff",
+        "subtitle": "Hand the order to the customer",
+        "primary": "Confirm delivery"
+      },
+      "delivered": {
+        "title": "Delivered",
+        "subtitle": "Great work!",
+        "primary": "Done"
+      },
+      "rejected": {
+        "title": "Rejected",
+        "subtitle": "",
+        "primary": "Back"
+      }
     },
     "noActiveDelivery": "No active delivery",
     "backToDashboard": "Back to dashboard",
@@ -356,5 +392,133 @@
     "skipContinue": "Skip & continue",
     "submitContinue": "Submit & continue",
     "viewHistory": "View delivery history →"
+  },
+  "paymentMethods": {
+    "title": "Payment methods",
+    "subtitle": "Save a card for faster checkout. Your card details are stored securely by Stripe.",
+    "emptyTitle": "No saved cards yet",
+    "emptySub": "Add a card to pay instantly when you book a shipment.",
+    "addCard": "Add a card",
+    "makeDefault": "Make default",
+    "default": "Default",
+    "expires": "Expires",
+    "deleteTitle": "Remove card",
+    "deleteConfirm": "Remove {{card}} from your saved cards?",
+    "securedByStripe": "Secured by Stripe",
+    "addError": "Could not start card setup. Please try again.",
+    "defaultError": "Could not set default card.",
+    "deleteError": "Could not remove card."
+  },
+  "tracking": {
+    "status": {
+      "pending": {
+        "label": "Finding Driver",
+        "desc": "Looking for available drivers..."
+      },
+      "accepted": {
+        "label": "Driver Assigned",
+        "desc": "A driver has accepted your shipment"
+      },
+      "enroute_pickup": {
+        "label": "Driver En Route",
+        "desc": "Driver is heading to pickup location"
+      },
+      "arrived_pickup": {
+        "label": "Driver Arrived",
+        "desc": "Driver has arrived at pickup point"
+      },
+      "picked_up": {
+        "label": "Picked Up",
+        "desc": "Your package has been collected"
+      },
+      "enroute_dropoff": {
+        "label": "In Transit",
+        "desc": "Package is on its way to destination"
+      },
+      "arrived_dropoff": {
+        "label": "Arrived",
+        "desc": "Driver has arrived at delivery location"
+      },
+      "delivered": {
+        "label": "Delivered",
+        "desc": "Package successfully delivered!"
+      },
+      "rejected": {
+        "label": "Cancelled",
+        "desc": "This shipment was cancelled"
+      }
+    },
+    "payment": {
+      "unpaid": {
+        "label": "Payment required",
+        "sub": "Authorize payment to confirm your booking"
+      },
+      "pending": {
+        "label": "Awaiting authorization",
+        "sub": "Complete payment to place a hold on your card"
+      },
+      "authorized": {
+        "label": "Payment authorized",
+        "sub": "Funds held — captured automatically on delivery"
+      },
+      "captured": {
+        "label": "Paid",
+        "sub": "Payment captured on delivery"
+      },
+      "payment_failed": {
+        "label": "Payment failed",
+        "sub": "Something went wrong. Please try again."
+      },
+      "refunded": {
+        "label": "Refunded",
+        "sub": "This payment was refunded"
+      },
+      "canceled": {
+        "label": "Payment released",
+        "sub": "The authorization hold was released"
+      }
+    },
+    "errorTitle": "Couldn't load shipment",
+    "errorSub": "Check your connection and try again.",
+    "goBack": "Go back",
+    "offRoute": "Driver appears to be off the expected route",
+    "live": "LIVE",
+    "toDropoff": "to dropoff",
+    "toPickup": "to pickup",
+    "kmRemaining": "{{km}} km remaining",
+    "calculating": "Calculating…",
+    "paymentTitle": "Payment",
+    "authorize": "Authorize €{{amount}}",
+    "yourDriver": "Your Driver",
+    "youRated": "You rated {{name}}",
+    "thanksFeedback": "Thanks for your feedback!",
+    "rateYourDriver": "Rate your driver",
+    "howWasDelivery": "How was your delivery with {{name}}?",
+    "addComment": "Add a comment (optional)",
+    "submitRating": "Submit rating",
+    "ratingSubmitted": "Thanks! Your rating has been submitted.",
+    "ratingError": "Could not submit rating. Please try again.",
+    "verificationCodes": "Verification Codes",
+    "pickupCode": "Pickup Code",
+    "deliveryCode": "Delivery Code",
+    "shareCodes": "Share these codes with the driver for verification",
+    "routeDetails": "Route Details",
+    "pickup": "Pickup",
+    "dropoff": "Dropoff",
+    "packageDetails": "Package Details",
+    "weight": "Weight",
+    "vehicle": "Vehicle",
+    "price": "Price",
+    "description": "Description",
+    "timeline": "Timeline",
+    "cancelShipment": "Cancel Shipment",
+    "cancelTitle": "Cancel Shipment",
+    "cancelConfirm": "Are you sure you want to cancel this shipment? This action cannot be undone.",
+    "keepIt": "No, Keep It",
+    "yesCancel": "Yes, Cancel",
+    "cancelledTitle": "Cancelled",
+    "cancelledMsg": "Your shipment has been cancelled.",
+    "cancelError": "Failed to cancel shipment",
+    "couldNotPay": "Could not start payment"
   }
 }

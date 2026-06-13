@@ -312,6 +312,12 @@ export default function ShipperSettingsScreen() {
               <Text style={styles.accountRowLabel}>{t("shipperSettings.changePassword")}</Text>
               <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
             </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.accountRow} onPress={() => router.push("/shipper-payment-methods" as any)} testID="shipper-payment-methods-link">
+              <Ionicons name="card-outline" size={20} color={theme.textSecondary} />
+              <Text style={styles.accountRowLabel}>{t("paymentMethods.title")}</Text>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
           </View>
         </Animated.View>
 

@@ -368,6 +368,18 @@ export const api = {
     request<any>(`/shipper/shipments/${orderId}/accept-invoice`, { method: "POST" }),
   getShipperInvoices: () => request<any[]>("/shipper/invoices"),
   getInvoice: (invoiceId: string) => request<any>(`/invoices/${invoiceId}`),
+  // Saved payment methods (Stripe SetupIntent via hosted Checkout)
+  createSetupCheckout: (urls?: { success_url?: string; cancel_url?: string }) =>
+    request<{ url: string; session_id: string }>("/shipper/payment-methods/setup-checkout", {
+      method: "POST",
+      body: JSON.stringify(urls || {}),
+    }),
+  getPaymentMethods: () =>
+    request<{ customer_id: string | null; payment_methods: any[] }>("/shipper/payment-methods"),
+  setDefaultPaymentMethod: (pmId: string) =>
+    request<any>(`/shipper/payment-methods/${pmId}/default`, { method: "POST" }),
+  deletePaymentMethod: (pmId: string) =>
+    request<any>(`/shipper/payment-methods/${pmId}`, { method: "DELETE" }),
   authorizePaymentTest: (orderId: string) =>
     request<PaymentSummary>(`/payments/orders/${orderId}/authorize-test`, { method: "POST" }),
 

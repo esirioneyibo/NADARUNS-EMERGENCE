@@ -5988,6 +5988,105 @@ def _payment_summary(order: dict) -> dict:
     }
 
 
+# ---------- Shipper saved payment methods (Stripe SetupIntent via Checkout) ----------
+
+async def _get_or_create_shipper_customer(shipper: dict) -> str:
+    """Resolve (or lazily create) the Stripe Customer for a shipper.
+
+    The customer id is persisted on the shipper document and reused for both
+    saved-card setup and future off-session charges.
+    """
+    sid = shipper.get("id")
+    doc = await db.shippers.find_one({"id": sid}, {"_id": 0, "stripe_customer_id": 1})
+    existing = (doc or {}).get("stripe_customer_id")
+    if existing:
+        return existing
+    customer = payments.create_customer(
+        email=shipper.get("email"),
+        name=shipper.get("company_name") or shipper.get("contact_name"),
+        metadata={"shipper_id": sid},
+    )
+    await db.shippers.update_one({"id": sid}, {"$set": {"stripe_customer_id": customer.id}})
+    return customer.id
+
+
+class SetupCheckoutBody(BaseModel):
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
+
+
+@api_router.post("/shipper/payment-methods/setup-checkout")
+async def shipper_setup_card_checkout(
+    body: SetupCheckoutBody,
+    request: Request,
+    shipper: dict = Depends(get_current_shipper),
+):
+    """Start a hosted Checkout (setup mode) so the shipper can save a card."""
+    if not payments.is_configured():
+        raise HTTPException(503, "Payments are not configured")
+    customer_id = await _get_or_create_shipper_customer(shipper)
+    base = _public_base(request)
+    success = body.success_url or f"{base}/api/payments/return?status=success&redirect="
+    cancel = body.cancel_url or f"{base}/api/payments/return?status=cancel&redirect="
+    try:
+        session = payments.create_setup_checkout_session(
+            customer_id=customer_id,
+            success_url=success,
+            cancel_url=cancel,
+            metadata={"shipper_id": shipper.get("id")},
+        )
+    except Exception as exc:
+        logger.error(f"Stripe setup checkout failed for shipper {shipper.get('id')}: {exc}")
+        raise HTTPException(502, "Could not start card setup")
+    return {"url": session.url, "session_id": session.id}
+
+
+@api_router.get("/shipper/payment-methods")
+async def shipper_list_payment_methods(shipper: dict = Depends(get_current_shipper)):
+    """List the shipper's saved cards (default first)."""
+    sid = shipper.get("id")
+    doc = await db.shippers.find_one({"id": sid}, {"_id": 0, "stripe_customer_id": 1})
+    customer_id = (doc or {}).get("stripe_customer_id")
+    if not customer_id:
+        return {"customer_id": None, "payment_methods": []}
+    try:
+        pms = payments.list_payment_methods(customer_id)
+    except Exception as exc:
+        logger.warning(f"list payment methods failed for shipper {sid}: {exc}")
+        pms = []
+    return {"customer_id": customer_id, "payment_methods": pms}
+
+
+async def _assert_pm_owned(shipper: dict, payment_method_id: str) -> str:
+    sid = shipper.get("id")
+    doc = await db.shippers.find_one({"id": sid}, {"_id": 0, "stripe_customer_id": 1})
+    customer_id = (doc or {}).get("stripe_customer_id")
+    if not customer_id:
+        raise HTTPException(400, "No saved cards for this account")
+    try:
+        pm = payments.retrieve_payment_method(payment_method_id)
+    except Exception:
+        raise HTTPException(404, "Payment method not found")
+    if getattr(pm, "customer", None) != customer_id:
+        raise HTTPException(403, "Payment method does not belong to this account")
+    return customer_id
+
+
+@api_router.post("/shipper/payment-methods/{payment_method_id}/default")
+async def shipper_set_default_card(payment_method_id: str, shipper: dict = Depends(get_current_shipper)):
+    customer_id = await _assert_pm_owned(shipper, payment_method_id)
+    payments.set_default_payment_method(customer_id, payment_method_id)
+    return {"ok": True, "default_payment_method_id": payment_method_id}
+
+
+@api_router.delete("/shipper/payment-methods/{payment_method_id}")
+async def shipper_delete_card(payment_method_id: str, shipper: dict = Depends(get_current_shipper)):
+    await _assert_pm_owned(shipper, payment_method_id)
+    payments.detach_payment_method(payment_method_id)
+    return {"ok": True}
+
+
+
 async def _record_ledger(order: dict, intent, kind: str, status: str, split: dict):
     """Idempotently write a payment ledger entry (authorization | capture | refund)."""
     intent_id = getattr(intent, "id", None)
