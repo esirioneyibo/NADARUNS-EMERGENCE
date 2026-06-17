@@ -84,6 +84,10 @@ frontend/.metro-cache/
 
 memory/test_credentials.md
 
+# Emergent-only dependency (not on public PyPI) — keep it out of GitHub so
+# `pip install -r requirements.txt` never fails in external/CI environments.
+backend/requirements-emergent.txt
+
 # Mobile development
 android-sdk/-e 
 # Environment and credential files
