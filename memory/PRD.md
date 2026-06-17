@@ -77,6 +77,17 @@ All frontend iter3 testIDs (otp-modal, otp-digit-*, wallet-screen, wallet-balanc
   - Frontend: new `app/shipper-payment-methods.tsx` (list, add-card redirect, set-default, delete) linked from shipper-settings. `api.ts` methods added. Verified end-to-end.
 - **P3 DONE — shipper-tracking.tsx i18n** (English + Finnish): added `tracking` + `paymentMethods` blocks to en/fi locales; all status/payment labels + UI strings + alerts translated. Verified bilingual render, no raw-key leakage.
 
+## Fleet Management — Phase 1: Foundation (Jun 2026)
+Upgraded from single-driver to a company/fleet model (backward compatible — solo drivers unaffected; `company_id`/`company_role` are null for them).
+- **Account model**: any existing driver creates a Company (`POST /api/company`) and becomes `owner`. No separate login. Invited drivers log in via the normal driver login with their own email/password.
+- **Roles**: Owner (full management) + Driver (own jobs/stats). Dispatcher excluded per spec.
+- **Collections**: `companies`, `fleet_vehicles`; `drivers` gain `company_id`/`company_role`. Indexes added in `create_database_indexes`.
+- **Endpoints** (owner JWT): `POST/GET/PATCH /api/company`, `GET/POST /api/company/drivers`, `PATCH /api/company/drivers/{id}/suspend|activate`, `DELETE /api/company/drivers/{id}` (detaches, keeps account), `GET/POST/PATCH/DELETE /api/company/vehicles`, `POST /api/company/vehicles/{id}/assign|unassign`. Non-owners get 403.
+- **Job Acceptance Mode** setting stored on company: `self_accept` (default) | `owner_assign` | `hybrid` (enforcement = Phase 2).
+- **Frontend**: new `/app/frontend/app/fleet.tsx` (Settings → Fleet). Create-company form, owner dashboard with mode chips + Drivers/Vehicles tabs (add/suspend/remove/assign/disable/delete via modals), member read-only view. Localized EN+FI (`fleet` namespace). `fleet` route hidden from bottom tab bar in `_layout.tsx`.
+- **Verified**: testing_agent iter34 — 22/22 backend pytest + full frontend owner flow + EN/FI, no key leakage.
+- **Next phases**: P2 job acceptance enforcement + owner assignment + company job visibility; P3 company wallet + earnings split + driver stats; P4 payouts (admin-approved ledger, no Stripe transfers yet); P5 admin fleet dashboard.
+
 ## Finnish Road-Freight Pricing — chargeable weight (Jun 2026)
 Pricing now follows the Finnish road-transport model (Logistiikan Maailma). The WEIGHT component is charged on the **chargeable freight weight (rahdituspaino)** = the GREATEST of:
 - actual weight (kg)
