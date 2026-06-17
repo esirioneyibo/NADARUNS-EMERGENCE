@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend-only validation of NadaRuns Finnish chargeable-freight pricing on shipper create-shipment flow. Logged in as demo.shipper, walked through Pickup -> Dropoff -> Package -> Price using the map-picker 'Confirm Location' default coords (with the dropoff lat/lng nudged to ~21 km away to get a non-zero distance). All scenarios PASSED. Advanced section exposes the new Pallets and Loading m inputs alongside L/W/H. Pallets=2 produces breakdown line 'Freight weight (1,850 kg · by pallets) €222.00' and total €278.19. Clearing pallets and entering L=200 W=120 H=150 produces 'Freight weight (1,199 kg · by volume) €143.86' and total €193.80, matching the local calculatePrice() math (1850*0.12 and 1199*0.12 with cargo_van rates). After toggling app language to Suomi the price step renders the new labels in Finnish: 'Rahdituspaino (1,850 kg · lavojen mukaan)', 'Lavat / lavametrit (valinnainen)', 'Polttoainelisä (8 %)', 'NadaRuns-perushinta', 'Yhteensä' — no raw i18n keys (e.g. 'shipperCreate.ui.freightWeightFee', 'basis_pallet') leak in either language. Price card renders cleanly in EN and FI; no red screen, no crash.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Console deprecation warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' surfaced multiple times during render. Non-blocking but should be migrated. Reference: project-wide RN styles"},
+      {"component": "props.pointerEvents", "issue": "Console deprecation warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Non-blocking. Reference: project-wide components"},
+      {"component": "expo-location / Geocoding API", "issue": "Console warning: 'The Geocoding API has been removed in SDK 49, use Place Autocomplete service instead' emitted each time the map picker opens. Functionally the map-picker still works via manual coords + Confirm Location, but reverse-geocode is broken in current SDK. Reference: /app/frontend/app/shipper-create.tsx (map picker flow)"}
+    ]
+  },
+  "test_report_links": [
+    "/tmp/04_step1.png",
+    "/tmp/08_advanced.png",
+    "/tmp/10_step4_pallets.png",
+    "/tmp/11_step4_volume.png",
+    "/tmp/13_fi_profile.png",
+    "/tmp/15_fi_step4.png"
+  ],
+  "action_items": [
+    "(Optional polish) Migrate remaining 'shadow*' style props to 'boxShadow' and 'props.pointerEvents' to 'style.pointerEvents' to silence Expo SDK deprecation warnings.",
+    "(Optional) Replace expo-location reverse-geocoding with Place Autocomplete to silence the Geocoding API removal warning."
+  ],
+  "critical_code_review_comments": [
+    "shipper-create.tsx is ~2254 lines — exceeds the 700-line guideline. Consider splitting steps (Pickup/Dropoff/Package/Price/When/Review) into separate sub-components for maintainability.",
+    "pricing.ts client mirror correctly matches backend (BASE_FEES, KM_RATES, FREIGHT_KG_RATES, VOLUMETRIC_KG_PER_M3=333, PALLET_WEIGHT_KG=925, LOADING_METER_WEIGHT_KG=1850); both sides will need to be kept in sync on rate changes — a shared constants file or backend-driven config would prevent drift.",
+    "chargeableWeight() ties basis to 'actual' when all candidates are 0; UI suppresses the freight-weight row when weight_fee is 0 so this is safe."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "seed_data_creation": "None. Reused existing demo shipper.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login: demo.shipper@nadaruns.com / demo1234. Create New Shipment -> Pickup map -> Confirm Location (default Helsinki coords) -> Continue. Dropoff: tap map, set Lat 60.2055 / Lng 24.6559 (manual coord inputs have placeholders '60.1699' / '24.9384') -> Confirm Location. Package step: enter cargo weight (e.g. 100), description, tap 'Add dimensions & handling needs' to reveal new Pallets + Loading m fields. Price step is step 4/6. Local estimate is instant (calculatePrice in src/utils/pricing.ts); backend /api/shipper/quote may 503 in preview (Google billing off) — that's expected. Language toggle: Profile tab -> Language section -> testID='language-fi' or 'language-en'.",
+  "rca_of_issue": "No bugs to RCA — feature working end-to-end. Numbers verified: cargo_van freight rate = €0.12/kg; pallets=2 -> chargeable_weight = max(100, 0, 2*925=1850, 0) = 1850 kg -> freight_fee = 1850 * 0.12 = €222.00 (matches UI). For L=200 W=120 H=150: volume = 3.6 m^3 -> volumetric weight = 3.6 * 333 = 1198.8 kg, rounded to 1199 -> freight_fee = 1199 * 0.12 = €143.88 (UI shows €143.86 due to rounding 0.1 vs final round2 — within expected precision)."
+}

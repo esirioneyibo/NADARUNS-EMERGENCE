@@ -458,6 +458,9 @@ class ShipmentCreateRequest(BaseModel):
     vehicle_type: str
     cargo_weight_kg: float
     cargo_dimensions: Optional[str] = None  # LxWxH
+    cargo_volume_m3: Optional[float] = 0.0   # computed volume (stackable cargo)
+    pallet_count: Optional[int] = 0          # FIN pallets (non-stackable)
+    loading_meters: Optional[float] = 0.0    # loading meters (full width/height)
     cargo_type: str = "general"
     cargo_description: str
     special_requirements: Optional[List[str]] = None
@@ -477,6 +480,9 @@ class PriceQuoteRequest(BaseModel):
     cargo_weight_kg: float
     urgency: str = "standard"  # standard | express | priority | emergency
     special_handling: bool = False
+    cargo_volume_m3: Optional[float] = 0.0
+    pallet_count: Optional[int] = 0
+    loading_meters: Optional[float] = 0.0
 
 
 class PriceQuoteResponse(BaseModel):
@@ -494,6 +500,11 @@ class PriceQuoteResponse(BaseModel):
     base_fee: float = 0.0
     distance_fee: float = 0.0
     weight_fee: float = 0.0
+    freight_fee: float = 0.0
+    freight_rate_per_kg: float = 0.0
+    chargeable_weight: float = 0.0
+    chargeable_basis: str = "actual"
+    actual_weight_kg: float = 0.0
     fuel_surcharge: float = 0.0
     urgency: str = "standard"
     urgency_multiplier: float = 1.0
@@ -3199,6 +3210,9 @@ async def get_price_quote(request: PriceQuoteRequest):
         weight_kg=request.cargo_weight_kg,
         urgency=request.urgency,
         special_handling=request.special_handling,
+        volume_m3=request.cargo_volume_m3,
+        pallets=request.pallet_count,
+        loading_meters=request.loading_meters,
     )
 
     estimated_duration = max(1, int(round(route["duration_minutes"])))
@@ -3210,12 +3224,17 @@ async def get_price_quote(request: PriceQuoteRequest):
         route_source=route["source"],
         estimated_duration_minutes=estimated_duration,
         base_price=round(breakdown["base_fee"] + breakdown["distance_fee"], 2),
-        weight_surcharge=breakdown["weight_fee"],
+        weight_surcharge=breakdown["freight_fee"],
         total_price=breakdown["total_price"],
         vehicle_type=request.vehicle_type,
         base_fee=breakdown["base_fee"],
         distance_fee=breakdown["distance_fee"],
-        weight_fee=breakdown["weight_fee"],
+        weight_fee=breakdown["freight_fee"],
+        freight_fee=breakdown["freight_fee"],
+        freight_rate_per_kg=breakdown["freight_rate_per_kg"],
+        chargeable_weight=breakdown["chargeable_weight"],
+        chargeable_basis=breakdown["chargeable_basis"],
+        actual_weight_kg=breakdown["actual_weight_kg"],
         fuel_surcharge=breakdown["fuel_surcharge"],
         urgency=breakdown["urgency"],
         urgency_multiplier=breakdown["urgency_multiplier"],
@@ -3296,6 +3315,9 @@ async def create_shipment(
         weight_kg=request.cargo_weight_kg,
         urgency=request.urgency,
         special_handling=special_handling,
+        volume_m3=request.cargo_volume_m3,
+        pallets=request.pallet_count,
+        loading_meters=request.loading_meters,
     )
     base_total = breakdown["total_price"]
 

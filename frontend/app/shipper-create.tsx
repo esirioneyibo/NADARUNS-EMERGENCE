@@ -174,6 +174,10 @@ interface Quote {
   base_fee?: number;
   distance_fee?: number;
   weight_fee?: number;
+  freight_fee?: number;
+  chargeable_weight?: number;
+  chargeable_basis?: string;
+  actual_weight_kg?: number;
   fuel_surcharge?: number;
   estimate_low?: number;
   estimate_high?: number;
@@ -252,6 +256,8 @@ export default function ShipperCreateScreen() {
   const [dimL, setDimL] = useState("");
   const [dimW, setDimW] = useState("");
   const [dimH, setDimH] = useState("");
+  const [palletCount, setPalletCount] = useState("");
+  const [loadingMeters, setLoadingMeters] = useState("");
   const [priority, setPriority] = useState(false);
   const [specialReqs, setSpecialReqs] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -312,6 +318,8 @@ export default function ShipperCreateScreen() {
           setDimL(d.dimL || "");
           setDimW(d.dimW || "");
           setDimH(d.dimH || "");
+          setPalletCount(d.palletCount || "");
+          setLoadingMeters(d.loadingMeters || "");
           setPriority(!!d.priority);
           setSpecialReqs(Array.isArray(d.specialReqs) ? d.specialReqs : []);
           setScheduleSlotId(d.scheduleSlotId || "asap");
@@ -348,6 +356,7 @@ export default function ShipperCreateScreen() {
     dropoffAddress, dropoffCoords, dropoffName, dropoffPhone, dropoffNotes,
     vehicleType, cargoWeight, cargoType, cargoDescription,
     dimL, dimW, dimH, priority, specialReqs, scheduleSlotId,
+    palletCount, loadingMeters,
   ]);
 
   const persistSavedAddress = useCallback(
@@ -379,6 +388,10 @@ export default function ShipperCreateScreen() {
     const p = pickupCoords || fallback;
     const d = dropoffCoords || fallback;
     const special = specialReqs.length > 0 || cargoType === "oversized";
+    const volM3 =
+      ((parseFloat(dimL) || 0) * (parseFloat(dimW) || 0) * (parseFloat(dimH) || 0)) / 1_000_000;
+    const palletsN = parseInt(palletCount) || 0;
+    const loadMetersN = parseFloat(loadingMeters) || 0;
 
     // 1) Instant local estimate — display right away.
     const distanceKm = haversineKm(p.latitude, p.longitude, d.latitude, d.longitude);
@@ -388,6 +401,9 @@ export default function ShipperCreateScreen() {
       weightKg: weight,
       urgency,
       specialHandling: special,
+      volumeM3: volM3,
+      pallets: palletsN,
+      loadingMeters: loadMetersN,
     });
     setQuote(local);
     setQuoteLoading(false);
@@ -409,6 +425,9 @@ export default function ShipperCreateScreen() {
           cargo_weight_kg: weight,
           urgency,
           special_handling: special,
+          cargo_volume_m3: volM3,
+          pallet_count: palletsN,
+          loading_meters: loadMetersN,
         }),
         signal: controller.signal,
       });
@@ -424,6 +443,10 @@ export default function ShipperCreateScreen() {
           base_fee: data.base_fee,
           distance_fee: data.distance_fee,
           weight_fee: data.weight_fee,
+          freight_fee: data.freight_fee,
+          chargeable_weight: data.chargeable_weight,
+          chargeable_basis: data.chargeable_basis,
+          actual_weight_kg: data.actual_weight_kg,
           fuel_surcharge: data.fuel_surcharge,
           estimate_low: data.estimate_low,
           estimate_high: data.estimate_high,
@@ -433,7 +456,7 @@ export default function ShipperCreateScreen() {
       // Network slow/unreachable — keep the instant local estimate. No spinner.
       console.warn("Quote reconcile skipped:", e);
     }
-  }, [BASE, pickupCoords, dropoffCoords, vehicleType, cargoWeight, urgency, specialReqs, cargoType]);
+  }, [BASE, pickupCoords, dropoffCoords, vehicleType, cargoWeight, urgency, specialReqs, cargoType, dimL, dimW, dimH, palletCount, loadingMeters]);
 
   useEffect(() => {
     if (step === 4) fetchQuote();
@@ -510,6 +533,8 @@ export default function ShipperCreateScreen() {
     setDimL("");
     setDimW("");
     setDimH("");
+    setPalletCount("");
+    setLoadingMeters("");
     setPriority(false);
     setSpecialReqs([]);
     setShowAdvanced(false);
@@ -554,6 +579,8 @@ export default function ShipperCreateScreen() {
         scheduledIso = cd.toISOString();
       }
       const dims = dimL && dimW && dimH ? `${dimL}x${dimW}x${dimH}` : null;
+      const volM3 =
+        ((parseFloat(dimL) || 0) * (parseFloat(dimW) || 0) * (parseFloat(dimH) || 0)) / 1_000_000;
       const reqs = [...specialReqs];
       if (priority && !reqs.includes("priority")) reqs.push("priority");
 
@@ -580,6 +607,9 @@ export default function ShipperCreateScreen() {
           vehicle_type: vehicleType,
           cargo_weight_kg: weightNum || 100,
           cargo_dimensions: dims,
+          cargo_volume_m3: volM3,
+          pallet_count: parseInt(palletCount) || 0,
+          loading_meters: parseFloat(loadingMeters) || 0,
           cargo_type: cargoType,
           cargo_description: cargoDescription || "General cargo",
           special_requirements: reqs.length ? reqs : null,
@@ -1126,6 +1156,33 @@ export default function ShipperCreateScreen() {
           </View>
 
           <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>{tu("freightWeightLabel")}</Text>
+            <View style={styles.dimRow}>
+              <View style={[styles.inputContainer, { flex: 1 }]}>
+                <TextInput
+                  style={[styles.input, { textAlign: "center" }]}
+                  placeholder={tu("palletCountPh")}
+                  placeholderTextColor={theme.textSecondary}
+                  value={palletCount}
+                  onChangeText={setPalletCount}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={[styles.inputContainer, { flex: 1 }]}>
+                <TextInput
+                  style={[styles.input, { textAlign: "center" }]}
+                  placeholder={tu("loadingMetersPh")}
+                  placeholderTextColor={theme.textSecondary}
+                  value={loadingMeters}
+                  onChangeText={setLoadingMeters}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+            <Text style={styles.quoteNote}>{tu("freightWeightHint")}</Text>
+          </View>
+
+          <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>{tu("specialHandling")}</Text>
             <View style={styles.chipWrap}>
               {SPECIAL_REQUIREMENTS.map((r) => {
@@ -1228,7 +1285,14 @@ export default function ShipperCreateScreen() {
               </View>
               {(quote.weight_fee ?? 0) > 0 && (
                 <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>{tu("weightSurcharge")}</Text>
+                  <Text style={styles.breakdownLabel}>
+                    {quote.chargeable_weight && quote.chargeable_basis && quote.chargeable_basis !== "actual"
+                      ? tu("freightWeightFee", {
+                          kg: Math.round(quote.chargeable_weight).toLocaleString(),
+                          basis: tu(`basis_${quote.chargeable_basis}`),
+                        })
+                      : tu("weightSurcharge")}
+                  </Text>
                   <Text style={styles.breakdownValue}>€{(quote.weight_fee ?? 0).toFixed(2)}</Text>
                 </View>
               )}
