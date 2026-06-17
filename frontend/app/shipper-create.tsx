@@ -211,6 +211,9 @@ export default function ShipperCreateScreen() {
     d.label === "Today" ? t("shipperCreate.schedule.today", { defaultValue: "Today" })
     : d.label === "Tomorrow" ? t("shipperCreate.schedule.tomorrow", { defaultValue: "Tomorrow" })
     : d.label;
+  // Shorthand for UI strings.
+  const tu = (k: string, opts?: any) => t(`shipperCreate.ui.${k}`, opts);
+  const tm = (k: string, opts?: any) => t(`shipperCreate.modal.${k}`, opts);
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -443,18 +446,22 @@ export default function ShipperCreateScreen() {
 
   const validateStep = (s: number): string | null => {
     if (s === 1) {
-      if (!pickupAddress.trim()) return "Please select or enter the pickup address.";
-      if (!pickupName.trim()) return "Please add the pickup contact name.";
+      if (!pickupAddress.trim()) return t("shipperCreate.validation.pickupAddr");
+      if (!pickupName.trim()) return t("shipperCreate.validation.pickupContact");
     }
     if (s === 2) {
-      if (!dropoffAddress.trim()) return "Please select or enter the dropoff address.";
-      if (!dropoffName.trim()) return "Please add the recipient name.";
+      if (!dropoffAddress.trim()) return t("shipperCreate.validation.dropoffAddr");
+      if (!dropoffName.trim()) return t("shipperCreate.validation.recipient");
     }
     if (s === 3) {
-      if (!weightNum || weightNum <= 0) return "Please enter the cargo weight in kg.";
+      if (!weightNum || weightNum <= 0) return t("shipperCreate.validation.weight");
       if (overCapacity)
-        return `Weight (${weightNum} kg) exceeds ${vehicle.name} capacity (${vehicle.maxWeight} kg). Pick a bigger vehicle.`;
-      if (!cargoDescription.trim()) return "Please briefly describe the cargo.";
+        return t("shipperCreate.validation.exceedsCapacity", {
+          weight: weightNum,
+          vehicle: tVehName(vehicle),
+          max: vehicle.maxWeight,
+        });
+      if (!cargoDescription.trim()) return t("shipperCreate.validation.describe");
     }
     return null;
   };
@@ -526,7 +533,7 @@ export default function ShipperCreateScreen() {
 
     const token = getAuthToken();
     if (!token) {
-      showBanner("Please sign in to create shipments.", "error");
+      showBanner(t("shipperCreate.validation.signIn"), "error");
       setTimeout(() => router.push("/shipper-login"), 900);
       return;
     }
@@ -604,17 +611,17 @@ export default function ShipperCreateScreen() {
             total: settleTotal,
           });
         } else {
-          showBanner(`Shipment ${orderNum || ""} created!`, "success", false);
+          showBanner(tu("shipmentCreatedNum", { num: orderNum || "" }), "success", false);
           setTimeout(() => router.replace("/shipper-home"), 700);
         }
         return;
       } else {
         const err = await res.json().catch(() => ({}));
-        showBanner(err.detail || "Failed to create shipment", "error");
+        showBanner(err.detail || t("shipperCreate.errors.createFailed"), "error");
       }
     } catch (e) {
       console.warn("Create shipment error:", e);
-      showBanner("Failed to create shipment. Please check your connection and try again.", "error");
+      showBanner(t("shipperCreate.errors.createFailedRetry"), "error");
     } finally {
       setLoading(false);
     }
@@ -644,7 +651,7 @@ export default function ShipperCreateScreen() {
       router.replace(`/shipper-home?paid=1&order=${encodeURIComponent(orderNum)}&oid=${orderId}`);
     } catch (e: any) {
       setPayChoice(null);
-      showBanner(e?.message || "Could not start payment. You can pay later from tracking.", "error", false);
+      showBanner(e?.message || t("shipperCreate.errors.paymentFailed"), "error", false);
       setTimeout(() => router.replace(`/shipper-tracking?id=${orderId}&pay=1`), 800);
     } finally {
       setPayBusy(null);
@@ -663,7 +670,7 @@ export default function ShipperCreateScreen() {
         `/shipper-home?invoiced=1&order=${encodeURIComponent(orderNum)}&inv=${encodeURIComponent(inv?.invoice_number || "")}`,
       );
     } catch (e: any) {
-      showBanner(e?.message || "Could not create invoice. Please try again.", "error", false);
+      showBanner(e?.message || t("shipperCreate.errors.invoiceFailed"), "error", false);
     } finally {
       setPayBusy(null);
     }
@@ -697,7 +704,7 @@ export default function ShipperCreateScreen() {
       router.replace(`/shipper-home?paid=1&order=${encodeURIComponent(orderNum)}&oid=${orderId}`);
     } catch (e: any) {
       showBanner(
-        e?.message || "That card was declined. Try another card or use the card form.",
+        e?.message || t("shipperCreate.errors.cardDeclined"),
         "error",
         false,
       );
@@ -735,11 +742,11 @@ export default function ShipperCreateScreen() {
   // ---------- Steps ----------
   const renderStep1 = () => (
     <Animated.View entering={FadeInUp.duration(280)}>
-      <Text style={styles.stepTitle}>Pickup location</Text>
-      <Text style={styles.stepDescription}>Where should the driver collect the cargo?</Text>
+      <Text style={styles.stepTitle}>{tu("pickupLocation")}</Text>
+      <Text style={styles.stepDescription}>{tu("pickupDesc")}</Text>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Pickup address *</Text>
+        <Text style={styles.inputLabel}>{tu("pickupAddrLabel")}</Text>
         <SavedAddressRow
           onPick={(a, c) => {
             setPickupAddress(a);
@@ -769,7 +776,7 @@ export default function ShipperCreateScreen() {
                 )}
               </>
             ) : (
-              <Text style={styles.addressSelectPlaceholder}>Tap to select on map</Text>
+              <Text style={styles.addressSelectPlaceholder}>{tu("tapSelectMap")}</Text>
             )}
           </View>
           <Ionicons name="map" size={24} color={ACCENT} />
@@ -779,7 +786,7 @@ export default function ShipperCreateScreen() {
           <Ionicons name="create-outline" size={18} color={theme.textSecondary} />
           <TextInput
             style={styles.input}
-            placeholder="Or type address manually..."
+            placeholder={tu("typeAddrManually")}
             placeholderTextColor={theme.textSecondary}
             value={pickupAddress}
             onChangeText={setPickupAddress}
@@ -792,18 +799,18 @@ export default function ShipperCreateScreen() {
             onPress={() => persistSavedAddress(pickupAddress, pickupCoords)}
           >
             <Ionicons name="bookmark-outline" size={14} color={ACCENT} />
-            <Text style={styles.saveAddrLinkText}>Save this address</Text>
+            <Text style={styles.saveAddrLinkText}>{tu("saveAddress")}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Contact name *</Text>
+        <Text style={styles.inputLabel}>{tu("contactName")}</Text>
         <View style={styles.inputContainer}>
           <Ionicons name="person-outline" size={20} color={theme.textSecondary} />
           <TextInput
             style={styles.input}
-            placeholder="Who hands over the cargo?"
+            placeholder={tu("whoHandsOver")}
             placeholderTextColor={theme.textSecondary}
             value={pickupName}
             onChangeText={setPickupName}
@@ -815,12 +822,12 @@ export default function ShipperCreateScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Contact phone</Text>
+        <Text style={styles.inputLabel}>{tu("contactPhone")}</Text>
         <View style={styles.inputContainer}>
           <Ionicons name="call-outline" size={20} color={theme.textSecondary} />
           <TextInput
             style={styles.input}
-            placeholder="+358 40 123 4567"
+            placeholder={tu("phonePh")}
             placeholderTextColor={theme.textSecondary}
             value={pickupPhone}
             onChangeText={setPickupPhone}
@@ -832,12 +839,12 @@ export default function ShipperCreateScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Pickup notes</Text>
+        <Text style={styles.inputLabel}>{tu("pickupNotes")}</Text>
         <View style={[styles.inputContainer, { alignItems: "flex-start", paddingVertical: 12 }]}>
           <Ionicons name="document-text-outline" size={20} color={theme.textSecondary} style={{ marginTop: 2 }} />
           <TextInput
             style={[styles.input, { minHeight: 60 }]}
-            placeholder="E.g., 'Loading dock B', 'Ask for warehouse manager'"
+            placeholder={tu("pickupNotePh")}
             placeholderTextColor={theme.textSecondary}
             value={pickupNotes}
             onChangeText={setPickupNotes}
@@ -850,11 +857,11 @@ export default function ShipperCreateScreen() {
 
   const renderStep2 = () => (
     <Animated.View entering={FadeInUp.duration(280)}>
-      <Text style={styles.stepTitle}>Dropoff location</Text>
-      <Text style={styles.stepDescription}>Where should the cargo be delivered?</Text>
+      <Text style={styles.stepTitle}>{tu("dropoffLocation")}</Text>
+      <Text style={styles.stepDescription}>{tu("dropoffDesc")}</Text>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Dropoff address *</Text>
+        <Text style={styles.inputLabel}>{tu("dropoffAddrLabel")}</Text>
         <SavedAddressRow
           onPick={(a, c) => {
             setDropoffAddress(a);
@@ -884,7 +891,7 @@ export default function ShipperCreateScreen() {
                 )}
               </>
             ) : (
-              <Text style={styles.addressSelectPlaceholder}>Tap to select on map</Text>
+              <Text style={styles.addressSelectPlaceholder}>{tu("tapSelectMap")}</Text>
             )}
           </View>
           <Ionicons name="map" size={24} color={DROPOFF_COLOR} />
@@ -894,7 +901,7 @@ export default function ShipperCreateScreen() {
           <Ionicons name="create-outline" size={18} color={theme.textSecondary} />
           <TextInput
             style={styles.input}
-            placeholder="Or type address manually..."
+            placeholder={tu("typeAddrManually")}
             placeholderTextColor={theme.textSecondary}
             value={dropoffAddress}
             onChangeText={setDropoffAddress}
@@ -907,18 +914,18 @@ export default function ShipperCreateScreen() {
             onPress={() => persistSavedAddress(dropoffAddress, dropoffCoords)}
           >
             <Ionicons name="bookmark-outline" size={14} color={ACCENT} />
-            <Text style={styles.saveAddrLinkText}>Save this address</Text>
+            <Text style={styles.saveAddrLinkText}>{tu("saveAddress")}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Recipient name *</Text>
+        <Text style={styles.inputLabel}>{tu("recipientName")}</Text>
         <View style={styles.inputContainer}>
           <Ionicons name="person-outline" size={20} color={theme.textSecondary} />
           <TextInput
             style={styles.input}
-            placeholder="Who receives the cargo?"
+            placeholder={tu("whoReceives")}
             placeholderTextColor={theme.textSecondary}
             value={dropoffName}
             onChangeText={setDropoffName}
@@ -927,12 +934,12 @@ export default function ShipperCreateScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Recipient phone</Text>
+        <Text style={styles.inputLabel}>{tu("recipientPhone")}</Text>
         <View style={styles.inputContainer}>
           <Ionicons name="call-outline" size={20} color={theme.textSecondary} />
           <TextInput
             style={styles.input}
-            placeholder="+358 40 123 4567"
+            placeholder={tu("phonePh")}
             placeholderTextColor={theme.textSecondary}
             value={dropoffPhone}
             onChangeText={setDropoffPhone}
@@ -944,12 +951,12 @@ export default function ShipperCreateScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Delivery notes</Text>
+        <Text style={styles.inputLabel}>{tu("deliveryNotes")}</Text>
         <View style={[styles.inputContainer, { alignItems: "flex-start", paddingVertical: 12 }]}>
           <Ionicons name="document-text-outline" size={20} color={theme.textSecondary} style={{ marginTop: 2 }} />
           <TextInput
             style={[styles.input, { minHeight: 60 }]}
-            placeholder="E.g., 'Leave at reception', 'Call on arrival'"
+            placeholder={tu("dropoffNotePh")}
             placeholderTextColor={theme.textSecondary}
             value={dropoffNotes}
             onChangeText={setDropoffNotes}
@@ -962,15 +969,15 @@ export default function ShipperCreateScreen() {
 
   const renderStep3 = () => (
     <Animated.View entering={FadeInUp.duration(280)}>
-      <Text style={styles.stepTitle}>Package details</Text>
-      <Text style={styles.stepDescription}>Tell us what you are shipping</Text>
+      <Text style={styles.stepTitle}>{tu("packageDetails")}</Text>
+      <Text style={styles.stepDescription}>{tu("packageDesc")}</Text>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Required vehicle type *</Text>
+        <Text style={styles.inputLabel}>{tu("requiredVehicle")}</Text>
         <ScrollView style={{ maxHeight: 250 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
           {VEHICLE_CATEGORIES.map((category) => (
             <View key={category.category} style={styles.vehicleCategory}>
-              <Text style={styles.vehicleCategoryTitle}>{category.category}</Text>
+              <Text style={styles.vehicleCategoryTitle}>{tCat(category.category)}</Text>
               <View style={styles.vehicleGrid}>
                 {category.vehicles.map((v) => (
                   <TouchableOpacity
@@ -990,10 +997,10 @@ export default function ShipperCreateScreen() {
                       style={[styles.vehicleName, vehicleType === v.id && styles.vehicleNameSelected]}
                       numberOfLines={1}
                     >
-                      {v.name}
+                      {tVehName(v)}
                     </Text>
                     <Text style={[styles.vehicleCapacity, vehicleType === v.id && styles.vehicleCapacitySelected]}>
-                      {v.capacity}
+                      {tVehCap(v)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1004,12 +1011,12 @@ export default function ShipperCreateScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Cargo weight (kg) *</Text>
+        <Text style={styles.inputLabel}>{tu("cargoWeight")}</Text>
         <View style={[styles.inputContainer, overCapacity && styles.inputContainerError]}>
           <Ionicons name="scale-outline" size={20} color={overCapacity ? "#EF4444" : theme.textSecondary} />
           <TextInput
             style={styles.input}
-            placeholder="e.g., 250"
+            placeholder={tu("weightPh")}
             placeholderTextColor={theme.textSecondary}
             value={cargoWeight}
             onChangeText={setCargoWeight}
@@ -1021,13 +1028,13 @@ export default function ShipperCreateScreen() {
         </View>
         {overCapacity && (
           <Text style={styles.errorText}>
-            Exceeds {vehicle.name} capacity ({vehicle.maxWeight.toLocaleString()} kg). Choose a bigger vehicle.
+            {tu("exceedsCapacity", { vehicle: tVehName(vehicle), max: vehicle.maxWeight.toLocaleString() })}
           </Text>
         )}
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Cargo type *</Text>
+        <Text style={styles.inputLabel}>{tu("cargoTypeLabel")}</Text>
         <View style={styles.chipWrap}>
           {CARGO_TYPES.map((c) => (
             <TouchableOpacity
@@ -1039,19 +1046,19 @@ export default function ShipperCreateScreen() {
               }}
             >
               <Ionicons name={c.icon as any} size={15} color={cargoType === c.id ? "#fff" : theme.textSecondary} />
-              <Text style={[styles.chipText, cargoType === c.id && styles.chipTextSelected]}>{c.name}</Text>
+              <Text style={[styles.chipText, cargoType === c.id && styles.chipTextSelected]}>{tCargo(c)}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Description *</Text>
+        <Text style={styles.inputLabel}>{tu("descriptionLabel")}</Text>
         <View style={[styles.inputContainer, { alignItems: "flex-start", paddingVertical: 12 }]}>
           <Ionicons name="cube-outline" size={20} color={theme.textSecondary} style={{ marginTop: 2 }} />
           <TextInput
             style={[styles.input, { minHeight: 56 }]}
-            placeholder="What's inside? (e.g., '5 pallets of electronics')"
+            placeholder={tu("whatsInside")}
             placeholderTextColor={theme.textSecondary}
             value={cargoDescription}
             onChangeText={setCargoDescription}
@@ -1073,8 +1080,8 @@ export default function ShipperCreateScreen() {
         <View style={styles.toggleRowLeft}>
           <Ionicons name="flash" size={18} color={priority ? ACCENT : theme.textSecondary} />
           <View>
-            <Text style={styles.toggleRowTitle}>Priority delivery</Text>
-            <Text style={styles.toggleRowSub}>Drivers see this job first</Text>
+            <Text style={styles.toggleRowTitle}>{tu("priorityDelivery")}</Text>
+            <Text style={styles.toggleRowSub}>{tu("prioritySub")}</Text>
           </View>
         </View>
         <Toggle value={priority} />
@@ -1089,7 +1096,7 @@ export default function ShipperCreateScreen() {
         }}
       >
         <Text style={styles.advancedToggleText}>
-          {showAdvanced ? "Hide extra details" : "Add dimensions & handling needs"}
+          {showAdvanced ? tu("hideExtra") : tu("addExtra")}
         </Text>
         <Ionicons name={showAdvanced ? "chevron-up" : "chevron-down"} size={16} color={ACCENT} />
       </TouchableOpacity>
@@ -1097,7 +1104,7 @@ export default function ShipperCreateScreen() {
       {showAdvanced && (
         <Animated.View entering={FadeInUp.duration(200)}>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Dimensions (cm)</Text>
+            <Text style={styles.inputLabel}>{tu("dimensions")}</Text>
             <View style={styles.dimRow}>
               {[
                 { v: dimL, set: setDimL, ph: "L" },
@@ -1119,7 +1126,7 @@ export default function ShipperCreateScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Special handling</Text>
+            <Text style={styles.inputLabel}>{tu("specialHandling")}</Text>
             <View style={styles.chipWrap}>
               {SPECIAL_REQUIREMENTS.map((r) => {
                 const on = specialReqs.includes(r.id);
@@ -1130,7 +1137,7 @@ export default function ShipperCreateScreen() {
                     onPress={() => toggleSpecialReq(r.id)}
                   >
                     <Ionicons name={r.icon as any} size={15} color={on ? "#fff" : theme.textSecondary} />
-                    <Text style={[styles.chipText, on && styles.chipTextSelected]}>{r.name}</Text>
+                    <Text style={[styles.chipText, on && styles.chipTextSelected]}>{tReq(r)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -1145,18 +1152,18 @@ export default function ShipperCreateScreen() {
     const offerNum = parseFloat(shipperOffer) || 0;
     const finalTotal = quote ? quote.total_price + Math.max(0, offerNum) : 0;
     const URGENCIES: { id: string; label: string; sub?: string }[] = [
-      { id: "standard", label: "Standard" },
-      { id: "express", label: "Express", sub: "+30%" },
-      { id: "priority", label: "Priority", sub: "+50%" },
-      { id: "emergency", label: "Emergency", sub: "×2" },
+      { id: "standard", label: tu("standard") },
+      { id: "express", label: tu("express"), sub: "+30%" },
+      { id: "priority", label: tu("priority"), sub: "+50%" },
+      { id: "emergency", label: tu("emergency"), sub: "×2" },
     ];
     return (
     <Animated.View entering={FadeInUp.duration(280)}>
-      <Text style={styles.stepTitle}>Price estimate</Text>
-      <Text style={styles.stepDescription}>Fair, transparent pricing — add a bonus to go faster</Text>
+      <Text style={styles.stepTitle}>{tu("priceEstimate")}</Text>
+      <Text style={styles.stepDescription}>{tu("priceDesc")}</Text>
 
       {/* Urgency selector */}
-      <Text style={styles.fieldLabel}>Delivery speed</Text>
+      <Text style={styles.fieldLabel}>{tu("deliverySpeed")}</Text>
       <View style={styles.urgencyRow}>
         {URGENCIES.map((u) => (
           <TouchableOpacity
@@ -1183,15 +1190,15 @@ export default function ShipperCreateScreen() {
         {quoteLoading ? (
           <View style={{ paddingVertical: 28, alignItems: "center" }}>
             <ActivityIndicator size="large" color={ACCENT} />
-            <Text style={[styles.quoteNote, { marginTop: 10 }]}>Calculating your price…</Text>
+            <Text style={[styles.quoteNote, { marginTop: 10 }]}>{tu("calculating")}</Text>
           </View>
         ) : quote ? (
           <>
-            <Text style={styles.priceLabel}>Estimated total</Text>
+            <Text style={styles.priceLabel}>{tu("estimatedTotal")}</Text>
             <Text style={styles.priceBig}>€{finalTotal.toFixed(2)}</Text>
             {quote.estimate_low ? (
               <Text style={styles.priceRange}>
-                Typically €{quote.estimate_low?.toFixed(0)}–€{quote.estimate_high?.toFixed(0)}
+                {tu("typically", { low: quote.estimate_low?.toFixed(0), high: quote.estimate_high?.toFixed(0) })}
               </Text>
             ) : null}
 
@@ -1206,47 +1213,47 @@ export default function ShipperCreateScreen() {
               </View>
               <View style={styles.priceMeta}>
                 <Ionicons name={`${vehicle.icon}-outline` as any} size={15} color={theme.textSecondary} />
-                <Text style={styles.priceMetaText}>{vehicle.name}</Text>
+                <Text style={styles.priceMetaText}>{tVehName(vehicle)}</Text>
               </View>
             </View>
 
             <View style={styles.breakdown}>
               <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Base fee</Text>
+                <Text style={styles.breakdownLabel}>{tu("baseFee")}</Text>
                 <Text style={styles.breakdownValue}>€{(quote.base_fee ?? 0).toFixed(2)}</Text>
               </View>
               <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Distance ({quote.distance_km.toFixed(1)} km)</Text>
+                <Text style={styles.breakdownLabel}>{tu("distanceFee", { km: quote.distance_km.toFixed(1) })}</Text>
                 <Text style={styles.breakdownValue}>€{(quote.distance_fee ?? 0).toFixed(2)}</Text>
               </View>
               {(quote.weight_fee ?? 0) > 0 && (
                 <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Weight surcharge</Text>
+                  <Text style={styles.breakdownLabel}>{tu("weightSurcharge")}</Text>
                   <Text style={styles.breakdownValue}>€{(quote.weight_fee ?? 0).toFixed(2)}</Text>
                 </View>
               )}
               <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Fuel surcharge (8%)</Text>
+                <Text style={styles.breakdownLabel}>{tu("fuelSurcharge")}</Text>
                 <Text style={styles.breakdownValue}>€{(quote.fuel_surcharge ?? 0).toFixed(2)}</Text>
               </View>
               <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>NadaRuns base price</Text>
+                <Text style={styles.breakdownLabel}>{tu("basePrice")}</Text>
                 <Text style={styles.breakdownValue}>€{quote.total_price.toFixed(2)}</Text>
               </View>
               {offerNum > 0 && (
                 <View style={styles.breakdownRow}>
-                  <Text style={[styles.breakdownLabel, { color: ACCENT }]}>Your bonus</Text>
+                  <Text style={[styles.breakdownLabel, { color: ACCENT }]}>{tu("yourBonus")}</Text>
                   <Text style={[styles.breakdownValue, { color: ACCENT }]}>+€{offerNum.toFixed(2)}</Text>
                 </View>
               )}
               <View style={[styles.breakdownRow, styles.breakdownTotalRow]}>
-                <Text style={styles.breakdownTotalLabel}>Total</Text>
+                <Text style={styles.breakdownTotalLabel}>{tu("total")}</Text>
                 <Text style={styles.breakdownTotalValue}>€{finalTotal.toFixed(2)}</Text>
               </View>
             </View>
 
             {/* Optional shipper bonus */}
-            <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Add a bonus (optional)</Text>
+            <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>{tu("addBonus")}</Text>
             <View style={styles.offerRow}>
               <Text style={styles.offerCurrency}>€</Text>
               <TextInput
@@ -1260,16 +1267,16 @@ export default function ShipperCreateScreen() {
               />
             </View>
             <Text style={styles.offerHint}>
-              A bonus goes 100% to the driver and helps your job get accepted faster.
+              {tu("bonusHint")}
             </Text>
           </>
         ) : (
           <View style={{ paddingVertical: 24, alignItems: "center" }}>
             <Ionicons name="cloud-offline-outline" size={28} color={theme.textSecondary} />
-            <Text style={[styles.quoteNote, { marginTop: 8 }]}>Couldn&apos;t load price.</Text>
+            <Text style={[styles.quoteNote, { marginTop: 8 }]}>{tu("cantLoadPrice")}</Text>
             <TouchableOpacity style={styles.retryBtn} onPress={fetchQuote}>
               <Ionicons name="refresh" size={15} color={ACCENT} />
-              <Text style={styles.retryBtnText}>Retry</Text>
+              <Text style={styles.retryBtnText}>{tu("retry")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1280,8 +1287,8 @@ export default function ShipperCreateScreen() {
 
   const renderStep5 = () => (
     <Animated.View entering={FadeInUp.duration(280)}>
-      <Text style={styles.stepTitle}>When to pick up?</Text>
-      <Text style={styles.stepDescription}>Choose immediate or schedule for later</Text>
+      <Text style={styles.stepTitle}>{tu("whenPickup")}</Text>
+      <Text style={styles.stepDescription}>{tu("whenDesc")}</Text>
 
       <View style={{ gap: 10, marginTop: spacing.sm }}>
         {scheduleSlots.map((slot) => {
@@ -1307,8 +1314,8 @@ export default function ShipperCreateScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.slotLabel, on && styles.slotLabelSelected]}>{slot.label}</Text>
-                <Text style={styles.slotSub}>{slot.sub}</Text>
+                <Text style={[styles.slotLabel, on && styles.slotLabelSelected]}>{tSlot(slot).label}</Text>
+                <Text style={styles.slotSub}>{tSlot(slot).sub}</Text>
               </View>
               {on && <Ionicons name="checkmark-circle" size={22} color={ACCENT} />}
             </TouchableOpacity>
@@ -1318,7 +1325,7 @@ export default function ShipperCreateScreen() {
 
       {scheduleSlotId === "custom" && (
         <View style={{ marginTop: spacing.lg }}>
-          <Text style={styles.inputLabel}>Select a day</Text>
+          <Text style={styles.inputLabel}>{tu("selectDay")}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
             {dayOptions.map((d) => {
               const on = customDate?.toDateString() === d.date.toDateString();
@@ -1328,13 +1335,13 @@ export default function ShipperCreateScreen() {
                   style={[styles.dayChip, on && styles.dayChipActive]}
                   onPress={() => { setCustomDate(d.date); Haptics.selectionAsync().catch(() => {}); }}
                 >
-                  <Text style={[styles.dayChipText, on && styles.dayChipTextActive]}>{d.label}</Text>
+                  <Text style={[styles.dayChipText, on && styles.dayChipTextActive]}>{tDay(d)}</Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
 
-          <Text style={[styles.inputLabel, { marginTop: spacing.md }]}>Select a time</Text>
+          <Text style={[styles.inputLabel, { marginTop: spacing.md }]}>{tu("selectTime")}</Text>
           <View style={styles.timeWrap}>
             {timeOptions.map((tm) => {
               const on = customTime === tm;
@@ -1352,10 +1359,10 @@ export default function ShipperCreateScreen() {
 
           {customDate && customTime ? (
             <Text style={[styles.slotSub, { marginTop: spacing.md }]}>
-              Scheduled for {customDate.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })} at {customTime}
+              {tu("scheduledFor", { date: customDate.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }), time: customTime })}
             </Text>
           ) : (
-            <Text style={[styles.slotSub, { marginTop: spacing.md, color: "#dc2626" }]}>Please choose a day and time</Text>
+            <Text style={[styles.slotSub, { marginTop: spacing.md, color: "#dc2626" }]}>{tu("chooseDayTime")}</Text>
           )}
         </View>
       )}
@@ -1383,7 +1390,7 @@ export default function ShipperCreateScreen() {
         </View>
         <TouchableOpacity style={styles.editBtn} onPress={() => setStep(editStep)}>
           <Ionicons name="pencil" size={13} color={ACCENT} />
-          <Text style={styles.editBtnText}>Edit</Text>
+          <Text style={styles.editBtnText}>{tu("edit")}</Text>
         </TouchableOpacity>
       </View>
       {children}
@@ -1396,19 +1403,19 @@ export default function ShipperCreateScreen() {
     const reviewTotal = quote ? quote.total_price + offerNum : 0;
     const warnings: string[] = [];
     if (quote && quote.distance_km > 100)
-      warnings.push(`Long-distance delivery (~${quote.distance_km.toFixed(0)} km). Allow extra time.`);
-    if (quote && quote.total_price > 200) warnings.push(`High-value order (€${quote.total_price.toFixed(0)}).`);
+      warnings.push(tu("longDistance", { km: quote.distance_km.toFixed(0) }));
+    if (quote && quote.total_price > 200) warnings.push(tu("highValue", { amount: quote.total_price.toFixed(0) }));
     if (weightNum > vehicle.maxWeight * 0.9 && !overCapacity)
-      warnings.push("Cargo weight is close to the vehicle's capacity.");
+      warnings.push(tu("weightWarning"));
     if (cargoType === "hazardous" && !specialReqs.includes("hazmat_certified"))
-      warnings.push("Hazardous cargo — consider requiring hazmat certification.");
+      warnings.push(tu("hazmatWarning"));
 
     return (
       <Animated.View entering={FadeInUp.duration(280)}>
-        <Text style={styles.stepTitle}>Review &amp; confirm</Text>
-        <Text style={styles.stepDescription}>Check everything before we dispatch</Text>
+        <Text style={styles.stepTitle}>{tu("reviewConfirm")}</Text>
+        <Text style={styles.stepDescription}>{tu("reviewDesc")}</Text>
 
-        <SummarySection icon="location" color={PICKUP_COLOR} title="Pickup" editStep={1}>
+        <SummarySection icon="location" color={PICKUP_COLOR} title={t("shipperCreate.steps.pickup")} editStep={1}>
           <Text style={styles.summaryMain}>{pickupAddress}</Text>
           <Text style={styles.summarySub}>
             {pickupName}
@@ -1417,7 +1424,7 @@ export default function ShipperCreateScreen() {
           {pickupNotes ? <Text style={styles.summaryNote}>📝 {pickupNotes}</Text> : null}
         </SummarySection>
 
-        <SummarySection icon="flag" color={DROPOFF_COLOR} title="Dropoff" editStep={2}>
+        <SummarySection icon="flag" color={DROPOFF_COLOR} title={t("shipperCreate.steps.dropoff")} editStep={2}>
           <Text style={styles.summaryMain}>{dropoffAddress}</Text>
           <Text style={styles.summarySub}>
             {dropoffName}
@@ -1426,29 +1433,29 @@ export default function ShipperCreateScreen() {
           {dropoffNotes ? <Text style={styles.summaryNote}>📝 {dropoffNotes}</Text> : null}
         </SummarySection>
 
-        <SummarySection icon="cube" color={ACCENT} title="Package" editStep={3}>
+        <SummarySection icon="cube" color={ACCENT} title={t("shipperCreate.steps.package")} editStep={3}>
           <Text style={styles.summaryMain}>
-            {vehicle.name} · {weightNum.toLocaleString()} kg · {CARGO_TYPES.find((c) => c.id === cargoType)?.name}
+            {tVehName(vehicle)} · {weightNum.toLocaleString()} kg · {tCargo(CARGO_TYPES.find((c) => c.id === cargoType) || CARGO_TYPES[0])}
           </Text>
           <Text style={styles.summarySub}>{cargoDescription}</Text>
           {(dimL && dimW && dimH) || specialReqs.length > 0 || priority ? (
             <Text style={styles.summaryNote}>
               {dimL && dimW && dimH ? `📐 ${dimL}×${dimW}×${dimH} cm  ` : ""}
               {priority ? "⚡ Priority  " : ""}
-              {specialReqs.length ? `🔧 ${specialReqs.map((r) => SPECIAL_REQUIREMENTS.find((s) => s.id === r)?.name).join(", ")}` : ""}
+              {specialReqs.length ? `🔧 ${specialReqs.map((r) => tReq(SPECIAL_REQUIREMENTS.find((s) => s.id === r) || { id: r, name: r })).join(", ")}` : ""}
             </Text>
           ) : null}
         </SummarySection>
 
-        <SummarySection icon="time" color="#F59E0B" title="Schedule" editStep={5}>
+        <SummarySection icon="time" color="#F59E0B" title={tu("schedule")} editStep={5}>
           <Text style={styles.summaryMain}>
             {scheduleSlotId === "custom" && customDate
               ? customDate.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })
-              : slot?.label}
+              : slot ? tSlot(slot).label : ""}
           </Text>
           {scheduleSlotId === "custom"
-            ? (customTime ? <Text style={styles.summarySub}>at {customTime}</Text> : null)
-            : (slot?.sub ? <Text style={styles.summarySub}>{slot.sub}</Text> : null)}
+            ? (customTime ? <Text style={styles.summarySub}>{tu("at", { time: customTime })}</Text> : null)
+            : (slot?.sub ? <Text style={styles.summarySub}>{tSlot(slot).sub}</Text> : null)}
         </SummarySection>
 
         {/* Price (immutable) */}
@@ -1456,7 +1463,7 @@ export default function ShipperCreateScreen() {
           <View style={styles.summaryHeader}>
             <View style={styles.summaryHeaderLeft}>
               <View style={[styles.summaryDot, { backgroundColor: "#22C55E" }]} />
-              <Text style={styles.summaryTitle}>Total price</Text>
+              <Text style={styles.summaryTitle}>{tu("totalPrice")}</Text>
             </View>
             <TouchableOpacity style={styles.editBtn} onPress={() => setStep(4)}>
               <Ionicons name="receipt-outline" size={13} color={ACCENT} />
@@ -1467,7 +1474,7 @@ export default function ShipperCreateScreen() {
           {quote && (
             <Text style={styles.summarySub}>
               {quote.distance_km.toFixed(1)} km · ~{quote.estimated_duration_minutes} min
-              {offerNum > 0 ? ` · incl. €${offerNum.toFixed(2)} bonus` : ""}
+              {offerNum > 0 ? ` · ${tu("inclBonus", { amount: offerNum.toFixed(2) })}` : ""}
             </Text>
           )}
         </View>
@@ -1495,7 +1502,7 @@ export default function ShipperCreateScreen() {
         <TouchableOpacity style={[styles.iconBtn, shadows.sm]} onPress={goBack}>
           <Ionicons name="chevron-back" size={22} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.heading}>New Shipment</Text>
+        <Text style={styles.heading}>{tu("newShipment")}</Text>
         <Text style={styles.stepCounter}>
           {step}/{TOTAL_STEPS}
         </Text>
@@ -1513,7 +1520,7 @@ export default function ShipperCreateScreen() {
               style={[styles.progressLabel, step >= s.id && styles.progressLabelActive]}
               numberOfLines={1}
             >
-              {s.label}
+              {tStep(s)}
             </Text>
           ))}
         </View>
@@ -1570,7 +1577,7 @@ export default function ShipperCreateScreen() {
           )}
           {step < TOTAL_STEPS ? (
             <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
-              <Text style={styles.nextBtnText}>Continue</Text>
+              <Text style={styles.nextBtnText}>{tu("continueBtn")}</Text>
               <Ionicons name="arrow-forward" size={20} color="#fff" />
             </TouchableOpacity>
           ) : (
@@ -1583,7 +1590,7 @@ export default function ShipperCreateScreen() {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Text style={styles.nextBtnText}>Confirm &amp; Create</Text>
+                  <Text style={styles.nextBtnText}>{tu("confirmCreate")}</Text>
                   <Ionicons name="checkmark" size={20} color="#fff" />
                 </>
               )}
@@ -1601,7 +1608,7 @@ export default function ShipperCreateScreen() {
           setPickupAddress(address);
           setPickupCoords(coords);
         }}
-        title="Select Pickup Location"
+        title={tu("selectPickup")}
         initialCoords={pickupCoords}
         theme={theme}
         markerColor={PICKUP_COLOR}
@@ -1614,7 +1621,7 @@ export default function ShipperCreateScreen() {
           setDropoffAddress(address);
           setDropoffCoords(coords);
         }}
-        title="Select Dropoff Location"
+        title={tu("selectDropoff")}
         initialCoords={dropoffCoords}
         theme={theme}
         markerColor={DROPOFF_COLOR}
