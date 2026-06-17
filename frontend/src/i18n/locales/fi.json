@@ -795,6 +795,13 @@
     "modeHint": "Miten kuljettajat saavat työt. Oletus: kuljettajat hyväksyvät vapaat työt itse.",
     "required": "Täytä pakolliset kentät",
     "added": "Lisätty onnistuneesti",
-    "settings": "Yrityksen asetukset"
+    "settings": "Yrityksen asetukset",
+    "tabJobs": "Työt",
+    "noJobs": "Ei vielä yrityksen töitä. Kuljettajien hyväksymät työt näkyvät tässä.",
+    "jobsActiveLabel": "Aktiiviset",
+    "jobsDoneLabel": "Valmiit",
+    "jobsEarnedLabel": "Ansaittu",
+    "jobUnassigned": "Ei kuljettajaa",
+    "jobBy": "kuljettaja {{name}}"
   }
 }

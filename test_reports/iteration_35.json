@@ -1,0 +1,41 @@
+{
+  "summary": "Phase 2 Fleet/Company end-to-end verified. BACKEND: 8/8 pytest passed (test_iter35_fleet_phase2.py). Verified (1) self_accept records assigned_company_id/assigned_driver_id (==demo-driver id)/assigned_vehicle_id(null when no fleet vehicle attached), order.status=accepted, driver_id=demo-driver; (2) owner_assign mode: POST /api/orders/{id}/accept by a company driver returns 403 ('Self-accept is disabled. Your company owner assigns jobs.') and POST /api/company/jobs/{order_id}/assign succeeds with {success:true, driver_id, vehicle_id} and order persisted as status=accepted in /api/company/jobs; (3) GET /api/company/jobs owner-only -> 200 returns {jobs:[{id,order_number,status,pickup,dropoff,earnings,distance_km,driver_id,driver_name,vehicle_id,vehicle_reg,created_at,completed_at},...], stats:{total,active,completed,completed_earnings}}; non-owner driver gets 403; (4) vehicle audit: after POST /api/company/vehicles + /assign on owner-driver, the next self-accepted order records assigned_vehicle_id == the new vehicle id and /company/jobs shows vehicle_reg matching. FRONTEND: logged in as demo driver, /fleet renders Drivers (1) / Vehicles (1) / Jobs (N) tabs. Jobs tab shows stats row (Active / Completed / Earned) and JobCards (order_number, pickup → dropoff, 'by Demo Driver', Accepted status, €earnings). Drivers + Vehicles tabs still functional (add-driver-btn & add-vehicle-btn visible). LOCALIZATION (FI): with @nadaruns_language=fi, /fleet renders 'Kalusto', 'TYÖN HYVÄKSYNTÄTAPA', 'Kuljettaja hyväksyy itse', 'Kuljettajat (1)', 'Ajoneuvot (1)', 'Työt (8)', 'Aktiiviset', 'Valmiit', 'Ansaittu' — NO raw i18n keys leaked (fleet.tabJobs, fleet.jobsActiveLabel, etc. absent from DOM).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Pre-existing console warning '\"shadow*\" style props are deprecated. Use \"boxShadow\".' (carried over from iter33/34)."},
+      {"component": "props.pointerEvents", "issue": "Pre-existing console warning 'props.pointerEvents is deprecated. Use style.pointerEvents'."},
+      {"component": "expo-notifications web", "issue": "Pre-existing warning '[expo-notifications] Listening to push token changes is not yet fully supported on web.' — informational, expected on web preview."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter35_fleet_phase2.py",
+    "/app/test_reports/pytest/iter35_fleet_phase2.xml",
+    "/tmp/p2_jobs_en.png",
+    "/tmp/p2_jobs_fi.png",
+    "/tmp/p2_fleet.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 7620 lines — splitting into routers per domain (auth/driver/shipper/orders/fleet/wallet/admin) is overdue.",
+    "POST /api/orders/seed-new-pending is unauthenticated and *deletes all* existing pending orders before inserting one — fine for demo, but document it / restrict to non-prod. Tests use /api/orders/add-pending instead to avoid wiping shared state.",
+    "Owner-assign endpoint at /api/company/jobs/{order_id}/assign correctly enforces owner role, validates pending status, persists assigned_company_id/assigned_driver_id/assigned_vehicle_id, and emits audit + shipper push — solid.",
+    "accept_order(): job-mode + fleet recording logic is concise and race-safe (still uses conditional update on status==pending).",
+    "GET /api/company/jobs returns enriched driver_name / vehicle_reg via two batched lookups — good. Limit is 200; consider pagination when fleets scale.",
+    "frontend/app/fleet.tsx is now ~978 lines — consider extracting DriverCard / VehicleCard / JobCard / AddDriverModal / AddVehicleModal into /app/frontend/src/components/fleet/."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter35_fleet_phase2.py (new)",
+    "/app/test_reports/pytest/iter35_fleet_phase2.xml (new)",
+    "/app/test_reports/iteration_35.json (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% of Phase-2 fleet flows verified (EN + FI)"},
+  "seed_data_creation": "Company 'TEST_NadaFleet_Phase2' (owner demo.driver) created in this run and retained — currently has 8+ accepted orders attributed to demo driver (from add-pending + self-accept loops). Mode reset to self_accept at end. A throwaway fleet driver (test_phase2_<uuid>@nadafleet.test) and a TEST<hex> vehicle were created and DELETED inside the tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Demo driver owns 'TEST_NadaFleet_Phase2' (job_acceptance_mode=self_accept). To verify FI locale on web, set localStorage['@nadaruns_language']='fi' then reload. Test file: /app/backend/tests/test_iter35_fleet_phase2.py (uses EXPO_PUBLIC_BACKEND_URL). API note: POST /api/auth/login returns token under key 'token' (not 'access_token'); POST /api/company expects {company_name}; POST /api/company/drivers expects {first_name,last_name,email,password,phone?}; POST /api/company/vehicles returns {vehicle:{...}}; GET /api/company/vehicles returns {vehicles:[...]}; vehicle unassign is POST /api/company/vehicles/{id}/unassign (not DELETE /assign). Fleet testIDs: tab-drivers, tab-vehicles, tab-jobs, add-driver-btn, add-vehicle-btn.",
+  "rca_of_issue": "No defects found in Phase 2."
+}

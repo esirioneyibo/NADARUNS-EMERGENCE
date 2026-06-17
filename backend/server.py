@@ -273,6 +273,10 @@ class Order(BaseModel):
     # Logistics fields
     shipper_id: Optional[str] = None  # FK to shipper who created the order
     driver_id: Optional[str] = None  # FK to assigned driver
+    # ---- Fleet (Phase 2): audit trail for company jobs ----
+    assigned_company_id: Optional[str] = None    # company that owns this job
+    assigned_driver_id: Optional[str] = None      # driver assigned (mirrors driver_id for fleet)
+    assigned_vehicle_id: Optional[str] = None     # fleet vehicle used
     vehicle_type: Optional[str] = None  # Required vehicle type
     cargo_weight_kg: Optional[float] = None
     cargo_dimensions: Optional[str] = None  # LxWxH in cm
@@ -740,6 +744,11 @@ class FleetVehicleUpdate(BaseModel):
 
 class AssignDriverRequest(BaseModel):
     driver_id: str
+
+
+class AssignJobRequest(BaseModel):
+    driver_id: str
+    vehicle_id: Optional[str] = None
 
 
 # ===================== Transaction & Wallet Models =====================
@@ -1747,6 +1756,7 @@ async def accept_order(order_id: str, request: Request):
     driver_id = await get_optional_driver_id(request)
 
     # KYC gate: a driver must be Verified (admin-approved) before accepting jobs.
+    fleet_fields: dict = {}
     if driver_id:
         kyc = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
         if not kyc or kyc.get("overall_status") != "approved":
@@ -1754,6 +1764,31 @@ async def accept_order(order_id: str, request: Request):
                 403,
                 "KYC verification required. Please complete identity verification and wait for admin approval before accepting jobs.",
             )
+        # Fleet: enforce job-acceptance mode and record company audit fields.
+        drv = await db.drivers.find_one(
+            {"id": driver_id}, {"_id": 0, "company_id": 1, "is_suspended": 1}
+        )
+        if drv and drv.get("is_suspended"):
+            raise HTTPException(403, "Your account is suspended. Contact your company owner.")
+        company_id = drv.get("company_id") if drv else None
+        if company_id:
+            company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+            if company and company.get("status") == "suspended":
+                raise HTTPException(403, "Your company is suspended. Contact support.")
+            mode = (company or {}).get("job_acceptance_mode", "self_accept")
+            if mode == "owner_assign":
+                raise HTTPException(
+                    403, "Self-accept is disabled. Your company owner assigns jobs."
+                )
+            veh = await db.fleet_vehicles.find_one(
+                {"company_id": company_id, "assigned_driver_id": driver_id, "status": "active"},
+                {"_id": 0, "id": 1},
+            )
+            fleet_fields = {
+                "assigned_company_id": company_id,
+                "assigned_driver_id": driver_id,
+                "assigned_vehicle_id": veh["id"] if veh else None,
+            }
 
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
@@ -1778,6 +1813,7 @@ async def accept_order(order_id: str, request: Request):
     set_fields: dict = {"status": sm.ACCEPTED}
     if driver_id:
         set_fields["driver_id"] = driver_id
+    set_fields.update(fleet_fields)
 
     # Atomic claim: only succeeds if the order is still pending.
     result = await db.orders.update_one(
@@ -7440,6 +7476,108 @@ async def delete_company_vehicle(vehicle_id: str, credentials: HTTPAuthorization
     if res.deleted_count == 0:
         raise HTTPException(404, "Vehicle not found in your company")
     return {"success": True}
+
+
+# ---- Company jobs visibility & owner assignment (Phase 2) ----
+
+@api_router.get("/company/jobs")
+async def list_company_jobs(
+    status: Optional[str] = None,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """All jobs belonging to the company (across every company driver)."""
+    driver, company = await _require_company_owner(credentials)
+    query: dict = {"assigned_company_id": company["id"]}
+    if status:
+        query["status"] = status
+    raw = [o async for o in db.orders.find(query, {"_id": 0}).sort("created_at", -1).limit(200)]
+
+    drv_ids = list({o.get("assigned_driver_id") for o in raw if o.get("assigned_driver_id")})
+    veh_ids = list({o.get("assigned_vehicle_id") for o in raw if o.get("assigned_vehicle_id")})
+    dnames: dict = {}
+    if drv_ids:
+        async for d in db.drivers.find({"id": {"$in": drv_ids}}, {"_id": 0, "id": 1, "name": 1}):
+            dnames[d["id"]] = d["name"]
+    vregs: dict = {}
+    if veh_ids:
+        async for v in db.fleet_vehicles.find({"id": {"$in": veh_ids}}, {"_id": 0, "id": 1, "registration_number": 1}):
+            vregs[v["id"]] = v["registration_number"]
+
+    def _name(p):
+        return p.get("name") if isinstance(p, dict) else None
+
+    jobs = [{
+        "id": o["id"],
+        "order_number": o.get("order_number"),
+        "status": o.get("status"),
+        "pickup": _name(o.get("pickup")),
+        "dropoff": _name(o.get("dropoff")),
+        "earnings": round(float(o.get("earnings", 0) or 0), 2),
+        "distance_km": o.get("distance_km"),
+        "driver_id": o.get("assigned_driver_id"),
+        "driver_name": dnames.get(o.get("assigned_driver_id")),
+        "vehicle_id": o.get("assigned_vehicle_id"),
+        "vehicle_reg": vregs.get(o.get("assigned_vehicle_id")),
+        "created_at": o.get("created_at"),
+        "completed_at": o.get("completed_at"),
+    } for o in raw]
+
+    active = sum(1 for o in raw if o.get("status") in sm.ACTIVE_STATES)
+    completed = sum(1 for o in raw if o.get("status") == sm.DELIVERED)
+    earnings = round(sum(float(o.get("earnings", 0) or 0) for o in raw if o.get("status") == sm.DELIVERED), 2)
+    return {
+        "jobs": jobs,
+        "stats": {"total": len(jobs), "active": active, "completed": completed, "completed_earnings": earnings},
+    }
+
+
+@api_router.post("/company/jobs/{order_id}/assign")
+async def owner_assign_job(
+    order_id: str,
+    body: AssignJobRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """Owner assigns a still-pending order to one of their drivers (owner_assign / hybrid)."""
+    owner, company = await _require_company_owner(credentials)
+    target = await _get_company_driver(company["id"], body.driver_id)
+    if target.get("is_suspended"):
+        raise HTTPException(400, "That driver is suspended")
+
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order["status"] != "pending":
+        raise HTTPException(400, "Order is no longer available")
+
+    vehicle_id = None
+    if body.vehicle_id:
+        veh = await _get_company_vehicle(company["id"], body.vehicle_id)
+        vehicle_id = veh["id"]
+    else:
+        veh = await db.fleet_vehicles.find_one(
+            {"company_id": company["id"], "assigned_driver_id": body.driver_id, "status": "active"},
+            {"_id": 0, "id": 1},
+        )
+        vehicle_id = veh["id"] if veh else None
+
+    set_fields = {
+        "status": sm.ACCEPTED,
+        "driver_id": body.driver_id,
+        "assigned_company_id": company["id"],
+        "assigned_driver_id": body.driver_id,
+        "assigned_vehicle_id": vehicle_id,
+    }
+    res = await db.orders.update_one({"id": order_id, "status": "pending"}, {"$set": set_fields})
+    if res.modified_count == 0:
+        raise HTTPException(409, "Order already accepted by another driver")
+    await audit.record_event(
+        db, order_id, "status_change",
+        from_status="pending", to_status=sm.ACCEPTED,
+        actor_id=owner["id"], actor_type="driver",
+    )
+    order.update(set_fields)
+    asyncio.create_task(push_status_to_shipper(order, "accepted"))
+    return {"success": True, "order_id": order_id, "driver_id": body.driver_id, "vehicle_id": vehicle_id}
 
 
 # ===================== Lifecycle =====================

@@ -17,7 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 
 import { api } from "../src/api";
-import { CompanyInfo, FleetDriver, FleetVehicle, JobAcceptanceMode } from "../src/types";
+import { CompanyInfo, CompanyJob, FleetDriver, FleetVehicle, JobAcceptanceMode } from "../src/types";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 
@@ -44,9 +44,11 @@ export default function FleetScreen() {
 
   const [loading, setLoading] = useState(true);
   const [info, setInfo] = useState<CompanyInfo | null>(null);
-  const [tab, setTab] = useState<"drivers" | "vehicles">("drivers");
+  const [tab, setTab] = useState<"drivers" | "vehicles" | "jobs">("drivers");
   const [drivers, setDrivers] = useState<FleetDriver[]>([]);
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([]);
+  const [jobs, setJobs] = useState<CompanyJob[]>([]);
+  const [jobStats, setJobStats] = useState<{ active: number; completed: number; completed_earnings: number } | null>(null);
   const [banner, setBanner] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
 
   // Create company form
@@ -70,9 +72,15 @@ export default function FleetScreen() {
       const ci = await api.getMyCompany();
       setInfo(ci);
       if (ci.company && ci.role === "owner") {
-        const [d, v] = await Promise.all([api.getCompanyDrivers(), api.getCompanyVehicles()]);
+        const [d, v, j] = await Promise.all([
+          api.getCompanyDrivers(),
+          api.getCompanyVehicles(),
+          api.getCompanyJobs(),
+        ]);
         setDrivers(d.drivers);
         setVehicles(v.vehicles);
+        setJobs(j.jobs);
+        setJobStats(j.stats);
       }
     } catch (e: any) {
       flash(e?.message || "Failed to load", "err");
@@ -89,14 +97,17 @@ export default function FleetScreen() {
   );
 
   const refreshOwnerData = async () => {
-    const [d, v, ci] = await Promise.all([
+    const [d, v, ci, j] = await Promise.all([
       api.getCompanyDrivers(),
       api.getCompanyVehicles(),
       api.getMyCompany(),
+      api.getCompanyJobs(),
     ]);
     setDrivers(d.drivers);
     setVehicles(v.vehicles);
     setInfo(ci);
+    setJobs(j.jobs);
+    setJobStats(j.stats);
   };
 
   const onCreateCompany = async () => {
@@ -291,6 +302,15 @@ export default function FleetScreen() {
               {t("fleet.tabVehicles")} ({vehicles.length})
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.tab, tab === "jobs" && s.tabActive]}
+            onPress={() => setTab("jobs")}
+            testID="tab-jobs"
+          >
+            <Text style={[s.tabText, tab === "jobs" && s.tabTextActive]}>
+              {t("fleet.tabJobs")} ({jobs.length})
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {tab === "drivers" ? (
@@ -346,7 +366,7 @@ export default function FleetScreen() {
               ))
             )}
           </View>
-        ) : (
+        ) : tab === "vehicles" ? (
           <View style={{ marginTop: spacing.md }}>
             <TouchableOpacity
               style={[s.addBtn]}
@@ -403,6 +423,30 @@ export default function FleetScreen() {
                   }
                 />
               ))
+            )}
+          </View>
+        ) : (
+          <View style={{ marginTop: spacing.md }}>
+            {jobStats && (
+              <View style={s.statsRow}>
+                <View style={s.statBox}>
+                  <Text style={s.statNum}>{jobStats.active}</Text>
+                  <Text style={s.statLabel}>{t("fleet.jobsActiveLabel")}</Text>
+                </View>
+                <View style={s.statBox}>
+                  <Text style={s.statNum}>{jobStats.completed}</Text>
+                  <Text style={s.statLabel}>{t("fleet.jobsDoneLabel")}</Text>
+                </View>
+                <View style={[s.statBox, { marginRight: 0 }]}>
+                  <Text style={s.statNum}>€{jobStats.completed_earnings.toFixed(0)}</Text>
+                  <Text style={s.statLabel}>{t("fleet.jobsEarnedLabel")}</Text>
+                </View>
+              </View>
+            )}
+            {jobs.length === 0 ? (
+              <Text style={[s.muted, { textAlign: "center", marginTop: 24 }]}>{t("fleet.noJobs")}</Text>
+            ) : (
+              jobs.map((j) => <JobCard key={j.id} j={j} theme={theme} t={t} s={s} />)
             )}
           </View>
         )}
@@ -626,6 +670,36 @@ function VehicleCard({ v, theme, t, s, onAssign, onUnassign, onToggleStatus, onD
         <TouchableOpacity style={s.actionBtn} onPress={onDelete} testID={`delete-${v.id}`}>
           <Text style={[s.actionText, { color: theme.error }]}>{t("fleet.delete")}</Text>
         </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function JobCard({ j, theme, t, s }: any) {
+  const done = j.status === "delivered";
+  const cancelled = j.status === "cancelled" || j.status === "canceled" || j.status === "failed";
+  const color = done ? theme.success : cancelled ? theme.error : theme.primary;
+  const label = String(j.status || "").replace(/_/g, " ");
+  return (
+    <View style={[s.itemCard, shadows.sm]}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.itemTitle}>{j.order_number || j.id?.slice(0, 8)}</Text>
+          <Text style={s.muted} numberOfLines={1}>
+            {(j.pickup || "—")} → {(j.dropoff || "—")}
+          </Text>
+        </View>
+        <View style={[s.statusPill, { backgroundColor: `${color}20` }]}>
+          <Text style={[s.statusPillText, { color }]}>{label}</Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", marginTop: 10 }}>
+        <Ionicons name="person-outline" size={14} color={theme.textSecondary} />
+        <Text style={[s.muted, { marginLeft: 4, flex: 1 }]} numberOfLines={1}>
+          {j.driver_name ? t("fleet.jobBy", { name: j.driver_name }) : t("fleet.jobUnassigned")}
+          {j.vehicle_reg ? ` · ${j.vehicle_reg}` : ""}
+        </Text>
+        <Text style={[s.itemTitle, { marginRight: 0 }]}>€{Number(j.earnings || 0).toFixed(2)}</Text>
       </View>
     </View>
   );
@@ -890,4 +964,14 @@ const makeStyles = (theme: any) =>
     typeChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
     typeChipText: { fontSize: 13, fontWeight: "700", color: theme.textSecondary },
     typeChipTextActive: { color: "#fff" },
+    statsRow: { flexDirection: "row", marginBottom: 14 },
+    statBox: {
+      flex: 1, backgroundColor: theme.surface, borderRadius: radius.md,
+      paddingVertical: 14, marginRight: 8, alignItems: "center",
+      borderWidth: 1, borderColor: theme.border,
+    },
+    statNum: { fontSize: 18, fontWeight: "800", color: theme.textPrimary },
+    statLabel: { fontSize: 11, color: theme.textSecondary, fontWeight: "600", marginTop: 2 },
+    statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
+    statusPillText: { fontSize: 11, fontWeight: "800", textTransform: "capitalize" },
   });

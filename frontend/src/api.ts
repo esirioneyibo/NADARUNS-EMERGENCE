@@ -491,4 +491,7 @@ export const api = {
     request<{ vehicle: FleetVehicle }>(`/company/vehicles/${id}/unassign`, { method: "POST" }),
   deleteCompanyVehicle: (id: string) =>
     request<{ success: boolean }>(`/company/vehicles/${id}`, { method: "DELETE" }),
+
+  getCompanyJobs: (status?: string) =>
+    request<CompanyJobsResponse>(`/company/jobs${status ? `?status=${status}` : ""}`),
 };

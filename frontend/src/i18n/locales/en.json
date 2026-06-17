@@ -795,6 +795,13 @@
     "modeHint": "How drivers get jobs. Default: drivers accept available jobs themselves.",
     "required": "Please fill the required fields",
     "added": "Added successfully",
-    "settings": "Company settings"
+    "settings": "Company settings",
+    "tabJobs": "Jobs",
+    "noJobs": "No company jobs yet. Jobs your drivers accept will appear here.",
+    "jobsActiveLabel": "Active",
+    "jobsDoneLabel": "Completed",
+    "jobsEarnedLabel": "Earned",
+    "jobUnassigned": "Unassigned",
+    "jobBy": "by {{name}}"
   }
 }

@@ -227,6 +227,27 @@ export interface CompanyInfo {
   vehicle_count?: number;
 }
 
+export interface CompanyJob {
+  id: string;
+  order_number?: string;
+  status: string;
+  pickup?: string | null;
+  dropoff?: string | null;
+  earnings: number;
+  distance_km?: number | null;
+  driver_id?: string | null;
+  driver_name?: string | null;
+  vehicle_id?: string | null;
+  vehicle_reg?: string | null;
+  created_at?: string;
+  completed_at?: string | null;
+}
+
+export interface CompanyJobsResponse {
+  jobs: CompanyJob[];
+  stats: { total: number; active: number; completed: number; completed_earnings: number };
+}
+
 export interface DriverPerformance {
   status: "offline" | "online" | "busy" | string;
   is_online: boolean;
