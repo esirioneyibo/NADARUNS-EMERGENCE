@@ -170,6 +170,61 @@ export interface Driver {
   acceptance_rate: number;
   completion_rate?: number;
   notifications: NotificationPrefs;
+  company_id?: string | null;
+  company_role?: "owner" | "driver" | null;
+}
+
+export type JobAcceptanceMode = "self_accept" | "owner_assign" | "hybrid";
+
+export interface Company {
+  id: string;
+  company_name: string;
+  owner_driver_id: string;
+  business_id?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  status: "active" | "suspended";
+  job_acceptance_mode: JobAcceptanceMode;
+  created_at: string;
+}
+
+export interface FleetDriver {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  avatar?: string;
+  vehicle_type?: string;
+  company_role: "owner" | "driver";
+  is_suspended: boolean;
+  is_online: boolean;
+  rating: number;
+  deliveries_today: number;
+  created_at?: string;
+}
+
+export interface FleetVehicle {
+  id: string;
+  company_id: string;
+  registration_number: string;
+  vehicle_type: string;
+  capacity_kg?: number | null;
+  max_weight_kg?: number | null;
+  length_cm?: number | null;
+  width_cm?: number | null;
+  height_cm?: number | null;
+  status: "active" | "disabled";
+  assigned_driver_id?: string | null;
+  assigned_driver_name?: string | null;
+  created_at?: string;
+}
+
+export interface CompanyInfo {
+  company: Company | null;
+  role: "owner" | "driver" | null;
+  driver_count?: number;
+  vehicle_count?: number;
 }
 
 export interface DriverPerformance {

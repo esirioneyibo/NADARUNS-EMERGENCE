@@ -574,6 +574,8 @@ class Driver(BaseModel):
     completion_rate: float = 98.0
     notifications: NotificationPrefs = Field(default_factory=NotificationPrefs)
     is_suspended: bool = False
+    company_id: Optional[str] = None        # Fleet: company this driver belongs to (None = independent)
+    company_role: Optional[str] = None       # Fleet: "owner" | "driver" (None = independent)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -653,6 +655,91 @@ class KYCSubmitRequest(BaseModel):
     license_front: str  # base64 data URI
     license_back: str
     selfie: str
+
+
+# ===================== Fleet / Company Models =====================
+
+JOB_ACCEPTANCE_MODES = {"self_accept", "owner_assign", "hybrid"}
+
+
+class Company(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    company_name: str
+    owner_driver_id: str
+    business_id: Optional[str] = None       # Y-tunnus / VAT id (optional)
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    status: Literal["active", "suspended"] = "active"
+    job_acceptance_mode: Literal["self_accept", "owner_assign", "hybrid"] = "self_accept"
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class CompanyCreate(BaseModel):
+    company_name: str = Field(min_length=2, max_length=120)
+    business_id: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+
+
+class CompanyUpdate(BaseModel):
+    company_name: Optional[str] = None
+    business_id: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    job_acceptance_mode: Optional[Literal["self_accept", "owner_assign", "hybrid"]] = None
+
+
+class FleetDriverInvite(BaseModel):
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(default="", max_length=80)
+    email: str
+    phone: Optional[str] = None
+    password: str = Field(min_length=6, max_length=128)
+    license_class: Optional[str] = None
+    vehicle_type: Optional[str] = "cargo_van"
+
+
+class FleetVehicle(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    company_id: str
+    registration_number: str
+    vehicle_type: str = "cargo_van"
+    capacity_kg: Optional[int] = None
+    max_weight_kg: Optional[int] = None
+    length_cm: Optional[float] = None
+    width_cm: Optional[float] = None
+    height_cm: Optional[float] = None
+    status: Literal["active", "disabled"] = "active"
+    assigned_driver_id: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class FleetVehicleCreate(BaseModel):
+    registration_number: str = Field(min_length=1, max_length=40)
+    vehicle_type: str = "cargo_van"
+    capacity_kg: Optional[int] = None
+    max_weight_kg: Optional[int] = None
+    length_cm: Optional[float] = None
+    width_cm: Optional[float] = None
+    height_cm: Optional[float] = None
+
+
+class FleetVehicleUpdate(BaseModel):
+    registration_number: Optional[str] = None
+    vehicle_type: Optional[str] = None
+    capacity_kg: Optional[int] = None
+    max_weight_kg: Optional[int] = None
+    length_cm: Optional[float] = None
+    width_cm: Optional[float] = None
+    height_cm: Optional[float] = None
+    status: Optional[Literal["active", "disabled"]] = None
+
+
+class AssignDriverRequest(BaseModel):
+    driver_id: str
 
 
 # ===================== Transaction & Wallet Models =====================
@@ -1149,6 +1236,16 @@ async def create_database_indexes():
         # Payment lookups on orders
         await db.orders.create_index("stripe_payment_intent_id")
         await db.orders.create_index("payment_status")
+
+        # Fleet / company collections
+        await db.companies.create_index("id", unique=True)
+        await db.companies.create_index("owner_driver_id")
+        await db.companies.create_index("status")
+        await db.drivers.create_index("company_id")
+        await db.fleet_vehicles.create_index("id", unique=True)
+        await db.fleet_vehicles.create_index("company_id")
+        await db.fleet_vehicles.create_index("assigned_driver_id")
+        await db.fleet_vehicles.create_index([("company_id", 1), ("registration_number", 1)], unique=True)
 
         logger.info("Database indexes created successfully")
     except Exception as e:
@@ -7057,6 +7154,292 @@ async def admin_update_stripe_settings(body: StripeSettingsBody, user: dict = De
     )
     await _persist_stripe_settings(user.get("id"))
     return payments.get_status()
+
+
+# ===================== Fleet / Company Management (Phase 1) =====================
+
+async def _get_driver_doc(credentials: HTTPAuthorizationCredentials) -> dict:
+    """Return the full authenticated driver document (403 for non-drivers)."""
+    user = await get_current_user(credentials)
+    if user["type"] != "driver":
+        raise HTTPException(403, "Driver access required")
+    return user["driver"]
+
+
+async def _require_company_owner(credentials: HTTPAuthorizationCredentials):
+    """Return (driver_doc, company_doc), ensuring the driver OWNS a company."""
+    driver = await _get_driver_doc(credentials)
+    company_id = driver.get("company_id")
+    if not company_id or driver.get("company_role") != "owner":
+        raise HTTPException(403, "Company owner access required")
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(404, "Company not found")
+    return driver, company
+
+
+def _public_driver(d: dict) -> dict:
+    """Driver fields safe to expose to a company owner (never finances/hash)."""
+    return {
+        "id": d.get("id"),
+        "name": d.get("name"),
+        "email": d.get("email"),
+        "phone": d.get("phone"),
+        "avatar": d.get("avatar"),
+        "vehicle_type": d.get("vehicle_type"),
+        "company_role": d.get("company_role"),
+        "is_suspended": d.get("is_suspended", False),
+        "is_online": d.get("is_online", False),
+        "rating": d.get("rating", 5.0),
+        "deliveries_today": d.get("deliveries_today", 0),
+        "created_at": d.get("created_at"),
+    }
+
+
+@api_router.post("/company")
+async def create_company(body: CompanyCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """An existing driver creates a company and becomes its owner."""
+    driver = await _get_driver_doc(credentials)
+    if driver.get("company_id"):
+        raise HTTPException(400, "You already belong to a company")
+    company = Company(
+        company_name=body.company_name.strip(),
+        owner_driver_id=driver["id"],
+        business_id=body.business_id,
+        phone=body.phone,
+        email=body.email,
+        address=body.address,
+    )
+    await db.companies.insert_one(company.model_dump())
+    await db.drivers.update_one(
+        {"id": driver["id"]},
+        {"$set": {"company_id": company.id, "company_role": "owner"}},
+    )
+    logger.info(f"Driver {driver['id']} created company {company.id} ({company.company_name})")
+    return {"company": company.model_dump(), "role": "owner"}
+
+
+@api_router.get("/company/me")
+async def get_my_company(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Return the company the current driver belongs to (or null = independent)."""
+    driver = await _get_driver_doc(credentials)
+    company_id = driver.get("company_id")
+    if not company_id:
+        return {"company": None, "role": None}
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        await db.drivers.update_one(
+            {"id": driver["id"]}, {"$set": {"company_id": None, "company_role": None}}
+        )
+        return {"company": None, "role": None}
+    driver_count = await db.drivers.count_documents({"company_id": company_id})
+    vehicle_count = await db.fleet_vehicles.count_documents({"company_id": company_id})
+    return {
+        "company": company,
+        "role": driver.get("company_role"),
+        "driver_count": driver_count,
+        "vehicle_count": vehicle_count,
+    }
+
+
+@api_router.patch("/company")
+async def update_company(body: CompanyUpdate, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Owner updates company profile / job-acceptance mode."""
+    driver, company = await _require_company_owner(credentials)
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "company_name" in updates:
+        updates["company_name"] = updates["company_name"].strip()
+    if updates:
+        await db.companies.update_one({"id": company["id"]}, {"$set": updates})
+    fresh = await db.companies.find_one({"id": company["id"]}, {"_id": 0})
+    return {"company": fresh}
+
+
+# ---- Drivers tab ----
+
+@api_router.get("/company/drivers")
+async def list_company_drivers(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    driver, company = await _require_company_owner(credentials)
+    drivers = [_public_driver(d) async for d in db.drivers.find({"company_id": company["id"]}, {"_id": 0})]
+    drivers.sort(key=lambda d: (d.get("company_role") != "owner", (d.get("name") or "").lower()))
+    return {"drivers": drivers}
+
+
+@api_router.post("/company/drivers")
+async def invite_company_driver(body: FleetDriverInvite, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Owner creates a new driver account that belongs to the company."""
+    driver, company = await _require_company_owner(credentials)
+    email = body.email.strip()
+    if not email:
+        raise HTTPException(400, "Email is required")
+    existing = await db.drivers.find_one({"email": email})
+    if existing:
+        raise HTTPException(400, "A driver with this email already exists")
+    vehicle_type = body.vehicle_type if body.vehicle_type in VEHICLE_TYPES else "cargo_van"
+    vinfo = VEHICLE_TYPES[vehicle_type]
+    new_id = str(uuid.uuid4())
+    full_name = (body.first_name.strip() + " " + (body.last_name or "").strip()).strip()
+    new_driver = Driver(
+        id=new_id,
+        name=full_name,
+        rating=5.0,
+        avatar="https://api.dicebear.com/7.x/avataaars/png?seed=" + new_id,
+        vehicle=f"{vinfo['name']} • —",
+        vehicle_type=vehicle_type,
+        vehicle_capacity_kg=vinfo["max_weight_kg"],
+        plate="",
+        email=email,
+        phone=body.phone or "",
+        password_hash=hash_password(body.password),
+        company_id=company["id"],
+        company_role="driver",
+    )
+    await db.drivers.insert_one(new_driver.model_dump())
+    await db.kyc_status.insert_one({
+        "driver_id": new_id, "license_front": None, "license_back": None,
+        "selfie": None, "overall_status": "incomplete", "submitted_at": None, "reviewed_at": None,
+    })
+    logger.info(f"Company {company['id']} added driver {email} ({new_id})")
+    return {"driver": _public_driver(new_driver.model_dump())}
+
+
+async def _get_company_driver(company_id: str, driver_id: str) -> dict:
+    target = await db.drivers.find_one({"id": driver_id, "company_id": company_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(404, "Driver not found in your company")
+    return target
+
+
+@api_router.patch("/company/drivers/{driver_id}/suspend")
+async def suspend_company_driver(driver_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    owner, company = await _require_company_owner(credentials)
+    target = await _get_company_driver(company["id"], driver_id)
+    if target.get("company_role") == "owner":
+        raise HTTPException(400, "The company owner cannot be suspended")
+    await db.drivers.update_one({"id": driver_id}, {"$set": {"is_suspended": True, "is_online": False}})
+    return {"success": True}
+
+
+@api_router.patch("/company/drivers/{driver_id}/activate")
+async def activate_company_driver(driver_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    owner, company = await _require_company_owner(credentials)
+    await _get_company_driver(company["id"], driver_id)
+    await db.drivers.update_one({"id": driver_id}, {"$set": {"is_suspended": False}})
+    return {"success": True}
+
+
+@api_router.delete("/company/drivers/{driver_id}")
+async def remove_company_driver(driver_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Detach a driver from the company (account is kept → becomes independent)."""
+    owner, company = await _require_company_owner(credentials)
+    target = await _get_company_driver(company["id"], driver_id)
+    if target.get("company_role") == "owner":
+        raise HTTPException(400, "The company owner cannot be removed")
+    await db.drivers.update_one({"id": driver_id}, {"$set": {"company_id": None, "company_role": None}})
+    await db.fleet_vehicles.update_many(
+        {"company_id": company["id"], "assigned_driver_id": driver_id},
+        {"$set": {"assigned_driver_id": None}},
+    )
+    return {"success": True}
+
+
+# ---- Vehicles tab ----
+
+@api_router.get("/company/vehicles")
+async def list_company_vehicles(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    driver, company = await _require_company_owner(credentials)
+    vehicles = [v async for v in db.fleet_vehicles.find({"company_id": company["id"]}, {"_id": 0})]
+    assigned_ids = [v["assigned_driver_id"] for v in vehicles if v.get("assigned_driver_id")]
+    names: dict = {}
+    if assigned_ids:
+        async for d in db.drivers.find({"id": {"$in": assigned_ids}}, {"_id": 0, "id": 1, "name": 1}):
+            names[d["id"]] = d["name"]
+    for v in vehicles:
+        v["assigned_driver_name"] = names.get(v.get("assigned_driver_id"))
+    vehicles.sort(key=lambda v: (v.get("registration_number") or ""))
+    return {"vehicles": vehicles}
+
+
+@api_router.post("/company/vehicles")
+async def add_company_vehicle(body: FleetVehicleCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    driver, company = await _require_company_owner(credentials)
+    reg = body.registration_number.strip().upper()
+    if not reg:
+        raise HTTPException(400, "Registration number is required")
+    dup = await db.fleet_vehicles.find_one({"company_id": company["id"], "registration_number": reg})
+    if dup:
+        raise HTTPException(400, "A vehicle with this registration already exists")
+    vtype = body.vehicle_type if body.vehicle_type in VEHICLE_TYPES else "cargo_van"
+    vinfo = VEHICLE_TYPES[vtype]
+    vehicle = FleetVehicle(
+        company_id=company["id"],
+        registration_number=reg,
+        vehicle_type=vtype,
+        capacity_kg=body.capacity_kg or vinfo["max_weight_kg"],
+        max_weight_kg=body.max_weight_kg or vinfo["max_weight_kg"],
+        length_cm=body.length_cm,
+        width_cm=body.width_cm,
+        height_cm=body.height_cm,
+    )
+    await db.fleet_vehicles.insert_one(vehicle.model_dump())
+    return {"vehicle": vehicle.model_dump()}
+
+
+async def _get_company_vehicle(company_id: str, vehicle_id: str) -> dict:
+    v = await db.fleet_vehicles.find_one({"id": vehicle_id, "company_id": company_id}, {"_id": 0})
+    if not v:
+        raise HTTPException(404, "Vehicle not found in your company")
+    return v
+
+
+@api_router.patch("/company/vehicles/{vehicle_id}")
+async def update_company_vehicle(vehicle_id: str, body: FleetVehicleUpdate, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    driver, company = await _require_company_owner(credentials)
+    await _get_company_vehicle(company["id"], vehicle_id)
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "registration_number" in updates:
+        updates["registration_number"] = updates["registration_number"].strip().upper()
+        dup = await db.fleet_vehicles.find_one({
+            "company_id": company["id"],
+            "registration_number": updates["registration_number"],
+            "id": {"$ne": vehicle_id},
+        })
+        if dup:
+            raise HTTPException(400, "A vehicle with this registration already exists")
+    if "vehicle_type" in updates and updates["vehicle_type"] not in VEHICLE_TYPES:
+        updates.pop("vehicle_type")
+    if updates:
+        await db.fleet_vehicles.update_one({"id": vehicle_id}, {"$set": updates})
+    fresh = await db.fleet_vehicles.find_one({"id": vehicle_id}, {"_id": 0})
+    return {"vehicle": fresh}
+
+
+@api_router.post("/company/vehicles/{vehicle_id}/assign")
+async def assign_vehicle_driver(vehicle_id: str, body: AssignDriverRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    driver, company = await _require_company_owner(credentials)
+    await _get_company_vehicle(company["id"], vehicle_id)
+    await _get_company_driver(company["id"], body.driver_id)
+    await db.fleet_vehicles.update_one({"id": vehicle_id}, {"$set": {"assigned_driver_id": body.driver_id}})
+    fresh = await db.fleet_vehicles.find_one({"id": vehicle_id}, {"_id": 0})
+    return {"vehicle": fresh}
+
+
+@api_router.post("/company/vehicles/{vehicle_id}/unassign")
+async def unassign_vehicle_driver(vehicle_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    driver, company = await _require_company_owner(credentials)
+    await _get_company_vehicle(company["id"], vehicle_id)
+    await db.fleet_vehicles.update_one({"id": vehicle_id}, {"$set": {"assigned_driver_id": None}})
+    fresh = await db.fleet_vehicles.find_one({"id": vehicle_id}, {"_id": 0})
+    return {"vehicle": fresh}
+
+
+@api_router.delete("/company/vehicles/{vehicle_id}")
+async def delete_company_vehicle(vehicle_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    driver, company = await _require_company_owner(credentials)
+    res = await db.fleet_vehicles.delete_one({"id": vehicle_id, "company_id": company["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Vehicle not found in your company")
+    return {"success": True}
 
 
 # ===================== Lifecycle =====================

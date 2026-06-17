@@ -1,0 +1,893 @@
+import React, { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+
+import { api } from "../src/api";
+import { CompanyInfo, FleetDriver, FleetVehicle, JobAcceptanceMode } from "../src/types";
+import { radius, shadows, spacing } from "../src/theme";
+import { useTheme } from "../src/contexts/ThemeContext";
+
+const VEHICLE_TYPE_OPTIONS = [
+  { id: "cargo_van", label: "Cargo Van" },
+  { id: "box_truck", label: "Box Truck" },
+  { id: "flatbed_truck", label: "Flatbed Truck" },
+  { id: "refrigerated", label: "Refrigerated" },
+  { id: "semi_truck", label: "Semi Truck" },
+  { id: "trailer_truck", label: "Trailer Truck" },
+  { id: "container_truck", label: "Container Truck" },
+  { id: "tanker", label: "Tanker" },
+  { id: "crane_truck", label: "Crane Truck" },
+  { id: "hazmat", label: "Hazmat" },
+  { id: "other", label: "Other" },
+];
+
+export default function FleetScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const { t } = useTranslation();
+  const s = makeStyles(theme);
+
+  const [loading, setLoading] = useState(true);
+  const [info, setInfo] = useState<CompanyInfo | null>(null);
+  const [tab, setTab] = useState<"drivers" | "vehicles">("drivers");
+  const [drivers, setDrivers] = useState<FleetDriver[]>([]);
+  const [vehicles, setVehicles] = useState<FleetVehicle[]>([]);
+  const [banner, setBanner] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
+
+  // Create company form
+  const [coName, setCoName] = useState("");
+  const [coPhone, setCoPhone] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  // Modals
+  const [showAddDriver, setShowAddDriver] = useState(false);
+  const [showAddVehicle, setShowAddVehicle] = useState(false);
+  const [assignFor, setAssignFor] = useState<FleetVehicle | null>(null);
+  const [confirm, setConfirm] = useState<{ msg: string; onYes: () => void } | null>(null);
+
+  const flash = (msg: string, type: "ok" | "err" = "ok") => {
+    setBanner({ msg, type });
+    setTimeout(() => setBanner(null), 2600);
+  };
+
+  const load = useCallback(async () => {
+    try {
+      const ci = await api.getMyCompany();
+      setInfo(ci);
+      if (ci.company && ci.role === "owner") {
+        const [d, v] = await Promise.all([api.getCompanyDrivers(), api.getCompanyVehicles()]);
+        setDrivers(d.drivers);
+        setVehicles(v.vehicles);
+      }
+    } catch (e: any) {
+      flash(e?.message || "Failed to load", "err");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      load();
+    }, [load])
+  );
+
+  const refreshOwnerData = async () => {
+    const [d, v, ci] = await Promise.all([
+      api.getCompanyDrivers(),
+      api.getCompanyVehicles(),
+      api.getMyCompany(),
+    ]);
+    setDrivers(d.drivers);
+    setVehicles(v.vehicles);
+    setInfo(ci);
+  };
+
+  const onCreateCompany = async () => {
+    if (coName.trim().length < 2) return flash(t("fleet.required"), "err");
+    setCreating(true);
+    try {
+      await api.createCompany({ company_name: coName.trim(), phone: coPhone.trim() || undefined });
+      setCoName("");
+      setCoPhone("");
+      setLoading(true);
+      await load();
+      flash(t("fleet.added"));
+    } catch (e: any) {
+      flash(e?.message || "Failed", "err");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const setMode = async (mode: JobAcceptanceMode) => {
+    if (info?.company?.job_acceptance_mode === mode) return;
+    try {
+      const r = await api.updateCompany({ job_acceptance_mode: mode });
+      setInfo((prev) => (prev ? { ...prev, company: r.company } : prev));
+    } catch (e: any) {
+      flash(e?.message || "Failed", "err");
+    }
+  };
+
+  // -------- render helpers --------
+  const Header = (
+    <View style={[s.header, { paddingTop: insets.top + 8 }]}>
+      <TouchableOpacity onPress={() => router.back()} style={s.backBtn} testID="fleet-back">
+        <Ionicons name="chevron-back" size={24} color={theme.textPrimary} />
+      </TouchableOpacity>
+      <View style={{ flex: 1 }}>
+        <Text style={s.headerTitle}>{t("fleet.title")}</Text>
+      </View>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={[s.screen, s.center]}>
+        {Header}
+        <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 80 }} />
+        <Text style={s.muted}>{t("fleet.loading")}</Text>
+      </View>
+    );
+  }
+
+  // No company -> create
+  if (!info?.company) {
+    return (
+      <KeyboardAvoidingView
+        style={s.screen}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        {Header}
+        {banner && <Banner banner={banner} theme={theme} />}
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }}>
+          <View style={[s.card, shadows.sm, { alignItems: "center", paddingVertical: spacing.xl }]}>
+            <View style={s.iconCircle}>
+              <Ionicons name="business" size={34} color={theme.primary} />
+            </View>
+            <Text style={s.bigTitle}>{t("fleet.createTitle")}</Text>
+            <Text style={[s.muted, { textAlign: "center", marginTop: 6 }]}>
+              {t("fleet.createSubtitle")}
+            </Text>
+          </View>
+
+          <View style={[s.card, shadows.sm, { marginTop: spacing.md }]}>
+            <Field
+              theme={theme}
+              label={t("fleet.companyName")}
+              placeholder={t("fleet.companyNamePh")}
+              value={coName}
+              onChangeText={setCoName}
+              testID="company-name-input"
+            />
+            <Field
+              theme={theme}
+              label={t("fleet.phone")}
+              value={coPhone}
+              onChangeText={setCoPhone}
+              keyboardType="phone-pad"
+              testID="company-phone-input"
+            />
+            <TouchableOpacity
+              style={[s.primaryBtn, creating && { opacity: 0.6 }]}
+              onPress={onCreateCompany}
+              disabled={creating}
+              testID="create-company-btn"
+            >
+              {creating ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={s.primaryBtnText}>{t("fleet.createBtn")}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // Member (non-owner) view
+  if (info.role !== "owner") {
+    return (
+      <View style={s.screen}>
+        {Header}
+        <View style={{ padding: spacing.lg }}>
+          <View style={[s.card, shadows.sm, { alignItems: "center", paddingVertical: spacing.xl }]}>
+            <View style={s.iconCircle}>
+              <Ionicons name="people" size={32} color={theme.primary} />
+            </View>
+            <Text style={s.bigTitle}>{t("fleet.memberTitle")}</Text>
+            <Text style={[s.muted, { textAlign: "center", marginTop: 8 }]}>
+              {t("fleet.memberBody", { name: info.company.company_name })}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Owner view
+  const company = info.company;
+  return (
+    <View style={s.screen}>
+      {Header}
+      {banner && <Banner banner={banner} theme={theme} />}
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 80 }}>
+        {/* Company summary */}
+        <View style={[s.card, shadows.sm]}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View style={s.iconCircleSm}>
+              <Ionicons name="business" size={20} color={theme.primary} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={s.coName}>{company.company_name}</Text>
+              <Text style={s.muted}>
+                {info.driver_count ?? drivers.length} · {info.vehicle_count ?? vehicles.length} ·{" "}
+                {t("fleet.owner")}
+              </Text>
+            </View>
+          </View>
+
+          {/* Job acceptance mode */}
+          <Text style={s.sectionLabel}>{t("fleet.acceptanceMode")}</Text>
+          <View style={s.modeRow}>
+            {(["self_accept", "owner_assign", "hybrid"] as JobAcceptanceMode[]).map((m) => {
+              const active = company.job_acceptance_mode === m;
+              const label =
+                m === "self_accept"
+                  ? t("fleet.modeSelfAccept")
+                  : m === "owner_assign"
+                  ? t("fleet.modeOwnerAssign")
+                  : t("fleet.modeHybrid");
+              return (
+                <TouchableOpacity
+                  key={m}
+                  style={[s.modeChip, active && s.modeChipActive]}
+                  onPress={() => setMode(m)}
+                  testID={`mode-${m}`}
+                >
+                  <Text style={[s.modeChipText, active && s.modeChipTextActive]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={[s.muted, { marginTop: 6, fontSize: 12 }]}>{t("fleet.modeHint")}</Text>
+        </View>
+
+        {/* Tabs */}
+        <View style={s.tabs}>
+          <TouchableOpacity
+            style={[s.tab, tab === "drivers" && s.tabActive]}
+            onPress={() => setTab("drivers")}
+            testID="tab-drivers"
+          >
+            <Text style={[s.tabText, tab === "drivers" && s.tabTextActive]}>
+              {t("fleet.tabDrivers")} ({drivers.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.tab, tab === "vehicles" && s.tabActive]}
+            onPress={() => setTab("vehicles")}
+            testID="tab-vehicles"
+          >
+            <Text style={[s.tabText, tab === "vehicles" && s.tabTextActive]}>
+              {t("fleet.tabVehicles")} ({vehicles.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {tab === "drivers" ? (
+          <View style={{ marginTop: spacing.md }}>
+            <TouchableOpacity
+              style={[s.addBtn]}
+              onPress={() => setShowAddDriver(true)}
+              testID="add-driver-btn"
+            >
+              <Ionicons name="person-add" size={18} color={theme.primary} />
+              <Text style={s.addBtnText}>{t("fleet.addDriver")}</Text>
+            </TouchableOpacity>
+
+            {drivers.length === 0 ? (
+              <Text style={[s.muted, { textAlign: "center", marginTop: 24 }]}>
+                {t("fleet.noDrivers")}
+              </Text>
+            ) : (
+              drivers.map((d) => (
+                <DriverCard
+                  key={d.id}
+                  d={d}
+                  theme={theme}
+                  t={t}
+                  s={s}
+                  onSuspend={async () => {
+                    try {
+                      if (d.is_suspended) {
+                        await api.activateCompanyDriver(d.id);
+                      } else {
+                        await api.suspendCompanyDriver(d.id);
+                      }
+                      await refreshOwnerData();
+                    } catch (e: any) {
+                      flash(e?.message || "Failed", "err");
+                    }
+                  }}
+                  onRemove={() =>
+                    setConfirm({
+                      msg: t("fleet.removeDriverConfirm", { name: d.name }),
+                      onYes: async () => {
+                        try {
+                          await api.removeCompanyDriver(d.id);
+                          await refreshOwnerData();
+                          flash(t("fleet.added"));
+                        } catch (e: any) {
+                          flash(e?.message || "Failed", "err");
+                        }
+                      },
+                    })
+                  }
+                />
+              ))
+            )}
+          </View>
+        ) : (
+          <View style={{ marginTop: spacing.md }}>
+            <TouchableOpacity
+              style={[s.addBtn]}
+              onPress={() => setShowAddVehicle(true)}
+              testID="add-vehicle-btn"
+            >
+              <Ionicons name="car" size={18} color={theme.primary} />
+              <Text style={s.addBtnText}>{t("fleet.addVehicle")}</Text>
+            </TouchableOpacity>
+
+            {vehicles.length === 0 ? (
+              <Text style={[s.muted, { textAlign: "center", marginTop: 24 }]}>
+                {t("fleet.noVehicles")}
+              </Text>
+            ) : (
+              vehicles.map((v) => (
+                <VehicleCard
+                  key={v.id}
+                  v={v}
+                  theme={theme}
+                  t={t}
+                  s={s}
+                  onAssign={() => setAssignFor(v)}
+                  onUnassign={async () => {
+                    try {
+                      await api.unassignVehicleDriver(v.id);
+                      await refreshOwnerData();
+                    } catch (e: any) {
+                      flash(e?.message || "Failed", "err");
+                    }
+                  }}
+                  onToggleStatus={async () => {
+                    try {
+                      await api.updateCompanyVehicle(v.id, {
+                        status: v.status === "active" ? "disabled" : "active",
+                      });
+                      await refreshOwnerData();
+                    } catch (e: any) {
+                      flash(e?.message || "Failed", "err");
+                    }
+                  }}
+                  onDelete={() =>
+                    setConfirm({
+                      msg: t("fleet.deleteVehicleConfirm", { reg: v.registration_number }),
+                      onYes: async () => {
+                        try {
+                          await api.deleteCompanyVehicle(v.id);
+                          await refreshOwnerData();
+                        } catch (e: any) {
+                          flash(e?.message || "Failed", "err");
+                        }
+                      },
+                    })
+                  }
+                />
+              ))
+            )}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Add Driver modal */}
+      <AddDriverModal
+        visible={showAddDriver}
+        theme={theme}
+        t={t}
+        s={s}
+        onClose={() => setShowAddDriver(false)}
+        onDone={async () => {
+          setShowAddDriver(false);
+          await refreshOwnerData();
+          flash(t("fleet.added"));
+        }}
+        onError={(m) => flash(m, "err")}
+      />
+
+      {/* Add Vehicle modal */}
+      <AddVehicleModal
+        visible={showAddVehicle}
+        theme={theme}
+        t={t}
+        s={s}
+        onClose={() => setShowAddVehicle(false)}
+        onDone={async () => {
+          setShowAddVehicle(false);
+          await refreshOwnerData();
+          flash(t("fleet.added"));
+        }}
+        onError={(m) => flash(m, "err")}
+      />
+
+      {/* Assign driver modal */}
+      <Modal visible={!!assignFor} transparent animationType="slide" onRequestClose={() => setAssignFor(null)}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { backgroundColor: theme.surface }]}>
+            <Text style={s.modalTitle}>{t("fleet.pickDriver")}</Text>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {drivers.map((d) => (
+                <TouchableOpacity
+                  key={d.id}
+                  style={s.pickRow}
+                  testID={`assign-pick-${d.id}`}
+                  onPress={async () => {
+                    const vid = assignFor!.id;
+                    setAssignFor(null);
+                    try {
+                      await api.assignVehicleDriver(vid, d.id);
+                      await refreshOwnerData();
+                    } catch (e: any) {
+                      flash(e?.message || "Failed", "err");
+                    }
+                  }}
+                >
+                  <Ionicons name="person-circle-outline" size={22} color={theme.textSecondary} />
+                  <Text style={s.pickText}>{d.name}</Text>
+                  {d.company_role === "owner" && (
+                    <Text style={s.ownerTag}>{t("fleet.owner")}</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={s.ghostBtn} onPress={() => setAssignFor(null)}>
+              <Text style={s.ghostBtnText}>{t("fleet.cancel")}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confirm modal */}
+      <Modal visible={!!confirm} transparent animationType="fade" onRequestClose={() => setConfirm(null)}>
+        <View style={s.modalOverlay}>
+          <View style={[s.confirmCard, { backgroundColor: theme.surface }]}>
+            <Text style={s.confirmText}>{confirm?.msg}</Text>
+            <View style={{ flexDirection: "row", marginTop: 18 }}>
+              <TouchableOpacity style={[s.ghostBtn, { flex: 1, marginRight: 8 }]} onPress={() => setConfirm(null)}>
+                <Text style={s.ghostBtnText}>{t("fleet.cancel")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.dangerBtn, { flex: 1 }]}
+                testID="confirm-yes"
+                onPress={() => {
+                  const fn = confirm?.onYes;
+                  setConfirm(null);
+                  fn?.();
+                }}
+              >
+                <Text style={s.dangerBtnText}>{t("fleet.remove")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+// ---------------- sub-components ----------------
+
+function Banner({ banner, theme }: any) {
+  return (
+    <View
+      style={{
+        marginHorizontal: spacing.lg,
+        marginTop: 8,
+        backgroundColor: banner.type === "ok" ? theme.success : theme.error,
+        borderRadius: radius.md,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+      }}
+    >
+      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>{banner.msg}</Text>
+    </View>
+  );
+}
+
+function Field({ theme, label, ...props }: any) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text
+        style={{
+          fontSize: 11,
+          color: theme.textSecondary,
+          fontWeight: "700",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </Text>
+      <TextInput
+        style={{
+          backgroundColor: theme.background,
+          borderRadius: radius.md,
+          borderWidth: 1,
+          borderColor: theme.border,
+          paddingHorizontal: 12,
+          paddingVertical: 12,
+          fontSize: 15,
+          color: theme.textPrimary,
+        }}
+        placeholderTextColor={theme.textSecondary}
+        {...props}
+      />
+    </View>
+  );
+}
+
+function DriverCard({ d, theme, t, s, onSuspend, onRemove }: any) {
+  const isOwner = d.company_role === "owner";
+  return (
+    <View style={[s.itemCard, shadows.sm]}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View style={[s.avatar, { backgroundColor: theme.primaryLight }]}>
+          <Ionicons name="person" size={20} color={theme.primary} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+            <Text style={s.itemTitle}>{d.name}</Text>
+            {isOwner && <Text style={s.ownerTag}>{t("fleet.owner")}</Text>}
+            {d.is_suspended && (
+              <Text style={[s.ownerTag, { backgroundColor: `${theme.error}20`, color: theme.error }]}>
+                {t("fleet.suspended")}
+              </Text>
+            )}
+          </View>
+          <Text style={s.muted}>{d.email}</Text>
+        </View>
+      </View>
+      {!isOwner && (
+        <View style={s.actionRow}>
+          <TouchableOpacity style={s.actionBtn} onPress={onSuspend} testID={`suspend-${d.id}`}>
+            <Text style={s.actionText}>
+              {d.is_suspended ? t("fleet.activate") : t("fleet.suspend")}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.actionBtn} onPress={onRemove} testID={`remove-${d.id}`}>
+            <Text style={[s.actionText, { color: theme.error }]}>{t("fleet.remove")}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function VehicleCard({ v, theme, t, s, onAssign, onUnassign, onToggleStatus, onDelete }: any) {
+  const disabled = v.status === "disabled";
+  return (
+    <View style={[s.itemCard, shadows.sm, disabled && { opacity: 0.6 }]}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View style={[s.avatar, { backgroundColor: theme.primaryLight }]}>
+          <Ionicons name="car" size={20} color={theme.primary} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={s.itemTitle}>{v.registration_number}</Text>
+          <Text style={s.muted}>
+            {v.vehicle_type} ·{" "}
+            {v.assigned_driver_name
+              ? t("fleet.assignedTo", { name: v.assigned_driver_name })
+              : t("fleet.unassigned")}
+          </Text>
+        </View>
+      </View>
+      <View style={s.actionRow}>
+        {v.assigned_driver_id ? (
+          <TouchableOpacity style={s.actionBtn} onPress={onUnassign} testID={`unassign-${v.id}`}>
+            <Text style={s.actionText}>{t("fleet.unassign")}</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={s.actionBtn} onPress={onAssign} testID={`assign-${v.id}`}>
+            <Text style={s.actionText}>{t("fleet.assignDriver")}</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={s.actionBtn} onPress={onToggleStatus} testID={`toggle-${v.id}`}>
+          <Text style={s.actionText}>{disabled ? t("fleet.enable") : t("fleet.disable")}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={s.actionBtn} onPress={onDelete} testID={`delete-${v.id}`}>
+          <Text style={[s.actionText, { color: theme.error }]}>{t("fleet.delete")}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function VehicleTypePicker({ theme, t, value, onChange, s }: any) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text
+        style={{
+          fontSize: 11,
+          color: theme.textSecondary,
+          fontWeight: "700",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          marginBottom: 6,
+        }}
+      >
+        {t("fleet.vehicleType")}
+      </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {VEHICLE_TYPE_OPTIONS.map((o) => {
+          const active = value === o.id;
+          return (
+            <TouchableOpacity
+              key={o.id}
+              style={[s.typeChip, active && s.typeChipActive]}
+              onPress={() => onChange(o.id)}
+            >
+              <Text style={[s.typeChipText, active && s.typeChipTextActive]}>{o.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+function AddDriverModal({ visible, theme, t, s, onClose, onDone, onError }: any) {
+  const [first, setFirst] = useState("");
+  const [last, setLast] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [vType, setVType] = useState("cargo_van");
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => {
+    setFirst(""); setLast(""); setEmail(""); setPhone(""); setPassword(""); setVType("cargo_van");
+  };
+
+  const submit = async () => {
+    if (!first.trim() || !email.trim() || password.length < 6) return onError(t("fleet.required"));
+    setSaving(true);
+    try {
+      await api.addCompanyDriver({
+        first_name: first.trim(),
+        last_name: last.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
+        password,
+        vehicle_type: vType,
+      });
+      reset();
+      onDone();
+    } catch (e: any) {
+      onError(e?.message || "Failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={s.modalOverlay}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={[s.modalSheet, { backgroundColor: theme.surface }]}>
+          <Text style={s.modalTitle}>{t("fleet.addDriver")}</Text>
+          <ScrollView style={{ maxHeight: 440 }} keyboardShouldPersistTaps="handled">
+            <Field theme={theme} label={t("fleet.firstName")} value={first} onChangeText={setFirst} testID="d-first" />
+            <Field theme={theme} label={t("fleet.lastName")} value={last} onChangeText={setLast} testID="d-last" />
+            <Field theme={theme} label={t("fleet.email")} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" testID="d-email" />
+            <Field theme={theme} label={t("fleet.phone")} value={phone} onChangeText={setPhone} keyboardType="phone-pad" testID="d-phone" />
+            <Field theme={theme} label={t("fleet.password")} value={password} onChangeText={setPassword} secureTextEntry testID="d-password" />
+            <VehicleTypePicker theme={theme} t={t} value={vType} onChange={setVType} s={s} />
+          </ScrollView>
+          <View style={{ flexDirection: "row", marginTop: 8 }}>
+            <TouchableOpacity style={[s.ghostBtn, { flex: 1, marginRight: 8 }]} onPress={onClose}>
+              <Text style={s.ghostBtnText}>{t("fleet.cancel")}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.primaryBtn, { flex: 1, marginTop: 0 }, saving && { opacity: 0.6 }]} onPress={submit} disabled={saving} testID="d-save">
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>{t("fleet.save")}</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function AddVehicleModal({ visible, theme, t, s, onClose, onDone, onError }: any) {
+  const [reg, setReg] = useState("");
+  const [vType, setVType] = useState("cargo_van");
+  const [cap, setCap] = useState("");
+  const [maxW, setMaxW] = useState("");
+  const [len, setLen] = useState("");
+  const [wid, setWid] = useState("");
+  const [hei, setHei] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => {
+    setReg(""); setVType("cargo_van"); setCap(""); setMaxW(""); setLen(""); setWid(""); setHei("");
+  };
+
+  const num = (x: string) => (x.trim() ? Number(x) : undefined);
+
+  const submit = async () => {
+    if (!reg.trim()) return onError(t("fleet.required"));
+    setSaving(true);
+    try {
+      await api.addCompanyVehicle({
+        registration_number: reg.trim(),
+        vehicle_type: vType,
+        capacity_kg: num(cap),
+        max_weight_kg: num(maxW),
+        length_cm: num(len),
+        width_cm: num(wid),
+        height_cm: num(hei),
+      });
+      reset();
+      onDone();
+    } catch (e: any) {
+      onError(e?.message || "Failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={s.modalOverlay}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={[s.modalSheet, { backgroundColor: theme.surface }]}>
+          <Text style={s.modalTitle}>{t("fleet.addVehicle")}</Text>
+          <ScrollView style={{ maxHeight: 440 }} keyboardShouldPersistTaps="handled">
+            <Field theme={theme} label={t("fleet.registration")} placeholder={t("fleet.registrationPh")} value={reg} onChangeText={setReg} autoCapitalize="characters" testID="v-reg" />
+            <VehicleTypePicker theme={theme} t={t} value={vType} onChange={setVType} s={s} />
+            <Field theme={theme} label={t("fleet.capacity")} value={cap} onChangeText={setCap} keyboardType="numeric" testID="v-cap" />
+            <Field theme={theme} label={t("fleet.maxWeight")} value={maxW} onChangeText={setMaxW} keyboardType="numeric" testID="v-maxw" />
+            <Field theme={theme} label={t("fleet.length")} value={len} onChangeText={setLen} keyboardType="numeric" testID="v-len" />
+            <Field theme={theme} label={t("fleet.width")} value={wid} onChangeText={setWid} keyboardType="numeric" testID="v-wid" />
+            <Field theme={theme} label={t("fleet.height")} value={hei} onChangeText={setHei} keyboardType="numeric" testID="v-hei" />
+          </ScrollView>
+          <View style={{ flexDirection: "row", marginTop: 8 }}>
+            <TouchableOpacity style={[s.ghostBtn, { flex: 1, marginRight: 8 }]} onPress={onClose}>
+              <Text style={s.ghostBtnText}>{t("fleet.cancel")}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.primaryBtn, { flex: 1, marginTop: 0 }, saving && { opacity: 0.6 }]} onPress={submit} disabled={saving} testID="v-save">
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>{t("fleet.save")}</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ---------------- styles ----------------
+const makeStyles = (theme: any) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.background },
+    center: { alignItems: "center" },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: spacing.md,
+      paddingBottom: 12,
+      backgroundColor: theme.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+    },
+    backBtn: { padding: 4, marginRight: 4 },
+    headerTitle: { fontSize: 20, fontWeight: "800", color: theme.textPrimary },
+    card: {
+      backgroundColor: theme.surface,
+      borderRadius: radius.lg,
+      padding: spacing.lg,
+    },
+    iconCircle: {
+      width: 64, height: 64, borderRadius: 32,
+      backgroundColor: theme.primaryLight,
+      alignItems: "center", justifyContent: "center", marginBottom: 10,
+    },
+    iconCircleSm: {
+      width: 40, height: 40, borderRadius: 20,
+      backgroundColor: theme.primaryLight,
+      alignItems: "center", justifyContent: "center",
+    },
+    bigTitle: { fontSize: 18, fontWeight: "800", color: theme.textPrimary },
+    coName: { fontSize: 16, fontWeight: "800", color: theme.textPrimary },
+    muted: { fontSize: 13, color: theme.textSecondary },
+    sectionLabel: {
+      fontSize: 11, color: theme.textSecondary, fontWeight: "700",
+      textTransform: "uppercase", letterSpacing: 0.6, marginTop: 18, marginBottom: 8,
+    },
+    modeRow: { flexDirection: "row", flexWrap: "wrap" },
+    modeChip: {
+      paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill,
+      borderWidth: 1, borderColor: theme.border, marginRight: 8, marginBottom: 8,
+    },
+    modeChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+    modeChipText: { fontSize: 12, fontWeight: "700", color: theme.textSecondary },
+    modeChipTextActive: { color: "#fff" },
+    tabs: {
+      flexDirection: "row", marginTop: spacing.lg,
+      backgroundColor: theme.surface, borderRadius: radius.pill, padding: 4,
+      borderWidth: 1, borderColor: theme.border,
+    },
+    tab: { flex: 1, paddingVertical: 10, borderRadius: radius.pill, alignItems: "center" },
+    tabActive: { backgroundColor: theme.primary },
+    tabText: { fontSize: 14, fontWeight: "700", color: theme.textSecondary },
+    tabTextActive: { color: "#fff" },
+    addBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      backgroundColor: theme.primaryLight, borderRadius: radius.md, paddingVertical: 12, marginBottom: 12,
+    },
+    addBtnText: { color: theme.primary, fontWeight: "800", marginLeft: 8, fontSize: 14 },
+    itemCard: { backgroundColor: theme.surface, borderRadius: radius.lg, padding: spacing.md, marginBottom: 12 },
+    avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+    itemTitle: { fontSize: 15, fontWeight: "800", color: theme.textPrimary, marginRight: 8 },
+    ownerTag: {
+      fontSize: 10, fontWeight: "800", color: theme.primary, backgroundColor: theme.primaryLight,
+      paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill, overflow: "hidden", marginRight: 6,
+    },
+    actionRow: { flexDirection: "row", marginTop: 12, borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10 },
+    actionBtn: { marginRight: 18 },
+    actionText: { fontSize: 13, fontWeight: "700", color: theme.primary },
+    primaryBtn: {
+      backgroundColor: theme.primary, borderRadius: radius.md, paddingVertical: 14,
+      alignItems: "center", justifyContent: "center", marginTop: 6,
+    },
+    primaryBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+    ghostBtn: {
+      borderRadius: radius.md, paddingVertical: 14, alignItems: "center",
+      justifyContent: "center", borderWidth: 1, borderColor: theme.border,
+    },
+    ghostBtnText: { color: theme.textSecondary, fontWeight: "700" },
+    dangerBtn: { backgroundColor: theme.error, borderRadius: radius.md, paddingVertical: 14, alignItems: "center", justifyContent: "center" },
+    dangerBtnText: { color: "#fff", fontWeight: "800" },
+    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+    modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, paddingBottom: 32 },
+    modalTitle: { fontSize: 18, fontWeight: "800", color: theme.textPrimary, marginBottom: 16 },
+    confirmCard: { margin: spacing.lg, borderRadius: radius.lg, padding: spacing.lg, alignSelf: "stretch" },
+    confirmText: { fontSize: 15, color: theme.textPrimary, lineHeight: 22 },
+    pickRow: { flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
+    pickText: { fontSize: 15, color: theme.textPrimary, fontWeight: "600", marginLeft: 10, flex: 1 },
+    typeChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border, marginRight: 8 },
+    typeChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+    typeChipText: { fontSize: 13, fontWeight: "700", color: theme.textSecondary },
+    typeChipTextActive: { color: "#fff" },
+  });

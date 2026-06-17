@@ -1,0 +1,50 @@
+{
+  "summary": "Phase 1 Fleet/Company management thoroughly tested end-to-end. BACKEND: 22/22 pytest tests passed (test_iter34_fleet_phase1.py). Verified company lifecycle (POST /api/company, GET /api/company/me with driver_count/vehicle_count, PATCH /api/company job_acceptance_mode=hybrid/owner_assign/invalid), Drivers tab (create/list/duplicate-email->400/login as new driver/suspend+activate/cannot-suspend-owner/cannot-remove-owner/detach via DELETE), Vehicles tab (create/list/duplicate-reg->400/PATCH status=disabled/assign+unassign driver with assigned_driver_name in list/DELETE), Authorization (non-owner driver gets 403 on GET /company/drivers, GET /company/vehicles, POST /company/drivers, PATCH /company, POST /company/vehicles), Backward compatibility (independent driver gets {company:null,role:null}), No-auth returns 401/403. FRONTEND: Logged in as demo driver, navigated Settings -> 'Fleet' (link-fleet) -> /fleet. Owner view rendered correctly: company name, summary (X·Y·Owner), JOB ACCEPTANCE MODE chips (Driver self-accept / Owner assignment only / Hybrid) tap-to-update working, Drivers (N) / Vehicles (M) tabs functional. Add Driver modal created 'E2E Driver' with email/password and it appeared in list with Owner tag on demo.driver. Add Vehicle modal created vehicle 'E2E#####' and it appeared with Assign driver / Disable / Delete actions. 'Added successfully' toast banner shown. Localization: switched to Suomi, /fleet rendered as 'Kalusto', 'TYÖN HYVÄKSYNTÄTAPA', 'Kuljettaja hyväksyy itse', 'Vain omistaja määrää', 'Hybridi', 'Kuljettajat (2)', 'Ajoneuvot (1)', 'Lisää kuljettaja', 'Omistaja' tag, 'Jäädytä'/'Poista' actions, remove confirm shows 'Poistetaanko E2E Driver yrityksestäsi? Tili pysyy aktiivisena itsenäisenä kuljettajana.' with 'Peruuta'/'Poista' buttons. No raw i18n keys (fleet.addDriver / fleet.title etc.) leaked in either language.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Bottom tab bar (driver layout)", "issues": ["Tab label 'fleet' remains lowercase English in both languages while sibling labels translate ('Etusivu', 'Historia', 'Lompakko', 'Profiili'). Likely a missing/raw i18n key in /app/frontend/app/_layout.tsx for the fleet tab. Visible in screenshot /tmp/08_fleet_fi.png."]}
+    ],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Pre-existing deprecation warning '\"shadow*\" style props are deprecated. Use \"boxShadow\".' surfaces project-wide (already flagged in iter33)."},
+      {"component": "props.pointerEvents", "issue": "Pre-existing deprecation warning 'props.pointerEvents is deprecated. Use style.pointerEvents' (already flagged in iter33)."},
+      {"component": "expo-router REPLACE warning", "issue": "Console error 'The action REPLACE with payload {\"name\":\"driver-home\"} was not handled by any navigator' after login. Pre-existing, navigation still succeeds (URL becomes /driver-home)."},
+      {"component": "ws/driver/<id> WebSocket", "issue": "wss://.../ws/driver/<id> handshake fails with 502 in preview env. Pre-existing infra issue (not introduced by Phase 1)."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter34_fleet_phase1.py",
+    "/app/test_reports/pytest/iter34_fleet.xml",
+    "/tmp/02_fleet.png",
+    "/tmp/03_mode_hybrid.png",
+    "/tmp/04_driver_added.png",
+    "/tmp/05_vehicle_added.png",
+    "/tmp/07_settings_fi.png",
+    "/tmp/08_fleet_fi.png",
+    "/tmp/09_remove_confirm.png"
+  ],
+  "action_items": [
+    "(MINOR) Localize the bottom-tab label for /fleet (currently raw 'fleet') in /app/frontend/app/_layout.tsx so it shows 'Kalusto' in FI and e.g. 'Fleet' (Title-Case) in EN, matching the other tabs.",
+    "(NON-BLOCKING / Pre-existing) Address shadow* and props.pointerEvents deprecation warnings project-wide."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 7481 lines — far above the 700-line guideline. Phase-1 fleet endpoints are well-encapsulated at the bottom but the file as a whole really needs splitting into routers per domain (auth/driver/shipper/orders/fleet/wallet/admin).",
+    "Fleet authorization helper _require_company_owner is correct and used uniformly; non-owner 403 path verified via tests.",
+    "FleetDriverInvite stores password as bcrypt hash and assigns company_id+company_role='driver' on driver document — matches the spec (no token change required).",
+    "PATCH /api/company validates job_acceptance_mode via Literal -> 422 on invalid value (test confirmed). No further validation needed.",
+    "fleet.tsx (894 lines) is approaching the 700-line guideline; the Add Driver / Add Vehicle modals and DriverCard / VehicleCard could be extracted into /app/frontend/src/components/fleet/ for maintainability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter34_fleet_phase1.py (new)",
+    "/app/test_reports/pytest/iter34_fleet.xml (new)",
+    "/app/test_reports/iteration_34.json (new)"
+  ],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "100% of fleet flows verified"},
+  "seed_data_creation": "Created (and cleaned up via DELETE) a temporary fleet driver test_driver_<uuid>@nadafleet.test and a vehicle TEST<6hex>. Created (and left in DB) one E2E driver e2e_driver_<ts>@nada.test plus one E2E##### vehicle from the Playwright run – safe to ignore, both belong to the demo driver's company.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Demo driver (demo.driver@nadaruns.com / demo1234) already owns company 'TEST_NadaFleet' (created during this run; was created by earlier curl smoke as 'Nordic Transport Oy' but reseeded to TEST_NadaFleet). Currently has job_acceptance_mode='hybrid' after final PATCH. To reset to self_accept manually if needed: PATCH /api/company {job_acceptance_mode: 'self_accept'} with the demo driver's JWT. The E2E driver added via Playwright still belongs to the company; remove via DELETE /api/company/drivers/<id> with owner JWT if you need a clean slate. Backend test file: /app/backend/tests/test_iter34_fleet_phase1.py (use EXPO_PUBLIC_BACKEND_URL env var). Fleet UI testIDs: fleet-back, company-name-input, create-company-btn, mode-self_accept, mode-owner_assign, mode-hybrid, tab-drivers, tab-vehicles, add-driver-btn, add-vehicle-btn, d-first/d-last/d-email/d-phone/d-password/d-save, v-reg/v-cap/v-maxw/v-len/v-wid/v-hei/v-save, assign-pick-<id>, suspend-<id>, remove-<id>, unassign-<id>, assign-<id>, toggle-<id>, delete-<id>, confirm-yes, confirm-no.",
+  "rca_of_issue": "No defects. One minor cosmetic gap: bottom-nav 'fleet' tab label is not localized; trace to /app/frontend/app/_layout.tsx where the fleet Tabs.Screen options.title is likely hardcoded instead of using t('fleet.title')."
+}

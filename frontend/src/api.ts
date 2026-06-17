@@ -2,7 +2,7 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet, PaymentSummary, DriverWallet, WithdrawalItem } from "./types";
+import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet, PaymentSummary, DriverWallet, WithdrawalItem, Company, CompanyInfo, FleetDriver, FleetVehicle, JobAcceptanceMode } from "./types";
 
 // Get BASE URL from environment with multiple fallback options
 // Priority: 1. EXPO_PUBLIC_BACKEND_URL env var, 2. Extra config, 3. Hardcoded production URL
@@ -434,4 +434,61 @@ export const api = {
       driver_location: { lat: number; lng: number } | null;
       location_updated_at: string | null;
     }>(`/orders/${orderId}/driver-location`),
+
+  // ---- Fleet / Company management (Phase 1) ----
+  getMyCompany: () => request<CompanyInfo>("/company/me"),
+  createCompany: (body: {
+    company_name: string;
+    business_id?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+  }) => request<{ company: Company; role: string }>("/company", { method: "POST", body: JSON.stringify(body) }),
+  updateCompany: (body: Partial<{
+    company_name: string;
+    business_id: string;
+    phone: string;
+    email: string;
+    address: string;
+    job_acceptance_mode: JobAcceptanceMode;
+  }>) => request<{ company: Company }>("/company", { method: "PATCH", body: JSON.stringify(body) }),
+
+  getCompanyDrivers: () => request<{ drivers: FleetDriver[] }>("/company/drivers"),
+  addCompanyDriver: (body: {
+    first_name: string;
+    last_name?: string;
+    email: string;
+    phone?: string;
+    password: string;
+    license_class?: string;
+    vehicle_type?: string;
+  }) => request<{ driver: FleetDriver }>("/company/drivers", { method: "POST", body: JSON.stringify(body) }),
+  suspendCompanyDriver: (id: string) =>
+    request<{ success: boolean }>(`/company/drivers/${id}/suspend`, { method: "PATCH" }),
+  activateCompanyDriver: (id: string) =>
+    request<{ success: boolean }>(`/company/drivers/${id}/activate`, { method: "PATCH" }),
+  removeCompanyDriver: (id: string) =>
+    request<{ success: boolean }>(`/company/drivers/${id}`, { method: "DELETE" }),
+
+  getCompanyVehicles: () => request<{ vehicles: FleetVehicle[] }>("/company/vehicles"),
+  addCompanyVehicle: (body: {
+    registration_number: string;
+    vehicle_type: string;
+    capacity_kg?: number;
+    max_weight_kg?: number;
+    length_cm?: number;
+    width_cm?: number;
+    height_cm?: number;
+  }) => request<{ vehicle: FleetVehicle }>("/company/vehicles", { method: "POST", body: JSON.stringify(body) }),
+  updateCompanyVehicle: (id: string, body: Partial<{
+    registration_number: string;
+    vehicle_type: string;
+    status: "active" | "disabled";
+  }>) => request<{ vehicle: FleetVehicle }>(`/company/vehicles/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  assignVehicleDriver: (id: string, driver_id: string) =>
+    request<{ vehicle: FleetVehicle }>(`/company/vehicles/${id}/assign`, { method: "POST", body: JSON.stringify({ driver_id }) }),
+  unassignVehicleDriver: (id: string) =>
+    request<{ vehicle: FleetVehicle }>(`/company/vehicles/${id}/unassign`, { method: "POST" }),
+  deleteCompanyVehicle: (id: string) =>
+    request<{ success: boolean }>(`/company/vehicles/${id}`, { method: "DELETE" }),
 };

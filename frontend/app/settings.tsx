@@ -358,6 +358,19 @@ export default function SettingsScreen() {
           />
         </Animated.View>
 
+        {/* Fleet */}
+        <SectionTitle title={t("fleet.title")} theme={theme} />
+        <Animated.View entering={FadeInUp.delay(280)} style={[styles.card, shadows.sm]}>
+          <LinkRow
+            icon="business-outline"
+            label={t("fleet.title")}
+            badge={t("fleet.subtitle")}
+            testID="link-fleet"
+            onPress={() => router.push("/fleet")}
+            theme={theme}
+          />
+        </Animated.View>
+
         {/* Documents & More */}
         <SectionTitle title={t("settings.documents")} theme={theme} />
         <Animated.View entering={FadeInUp.delay(300)} style={[styles.card, shadows.sm]}>
