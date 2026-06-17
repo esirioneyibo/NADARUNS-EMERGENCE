@@ -77,6 +77,14 @@ All frontend iter3 testIDs (otp-modal, otp-digit-*, wallet-screen, wallet-balanc
   - Frontend: new `app/shipper-payment-methods.tsx` (list, add-card redirect, set-default, delete) linked from shipper-settings. `api.ts` methods added. Verified end-to-end.
 - **P3 DONE — shipper-tracking.tsx i18n** (English + Finnish): added `tracking` + `paymentMethods` blocks to en/fi locales; all status/payment labels + UI strings + alerts translated. Verified bilingual render, no raw-key leakage.
 
+## Fleet Management — Phase 2: Job acceptance & visibility (Jun 2026)
+- **Order audit fields** added: `assigned_company_id`, `assigned_driver_id`, `assigned_vehicle_id` (set on accept).
+- **Self-accept enforcement**: when a company driver accepts a job, the order records company/driver/vehicle (vehicle = the active fleet vehicle assigned to that driver, else null). Suspended driver/company → 403.
+- **Job acceptance mode enforced**: `owner_assign` blocks driver self-accept (403); `self_accept`/`hybrid` allow it. New `POST /api/company/jobs/{order_id}/assign {driver_id, vehicle_id?}` lets the owner assign a pending order to a company driver.
+- **Company job visibility**: `GET /api/company/jobs?status=` (owner) → all company jobs with driver_name/vehicle_reg + stats {total, active, completed, completed_earnings}.
+- **Frontend**: Fleet screen gains a **Jobs** tab (stats row + JobCards). Localized EN+FI.
+- **Verified**: testing_agent iter35 — 8/8 backend pytest + frontend Jobs tab + EN/FI, no defects.
+
 ## Fleet Management — Phase 1: Foundation (Jun 2026)
 Upgraded from single-driver to a company/fleet model (backward compatible — solo drivers unaffected; `company_id`/`company_role` are null for them).
 - **Account model**: any existing driver creates a Company (`POST /api/company`) and becomes `owner`. No separate login. Invited drivers log in via the normal driver login with their own email/password.
