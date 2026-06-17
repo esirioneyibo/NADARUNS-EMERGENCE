@@ -18,6 +18,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
+import { useTranslation } from "react-i18next";
 
 import { api, getAuthToken } from "../src/api";
 import { calculatePrice, haversineKm } from "../src/utils/pricing";
@@ -182,6 +183,34 @@ export default function ShipperCreateScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { t } = useTranslation();
+
+  // Translation resolvers for module-scope data (labels fall back to English).
+  const tVehName = (v: { id: string; name: string }) => t(`shipperCreate.vehicle.${v.id}.name`, { defaultValue: v.name });
+  const tVehCap = (v: { id: string; capacity: string }) => t(`shipperCreate.vehicle.${v.id}.cap`, { defaultValue: v.capacity });
+  const tCat = (c: string) => t(`shipperCreate.cat.${c}`, { defaultValue: c });
+  const tCargo = (c: { id: string; name: string }) => t(`shipperCreate.cargo.${c.id}`, { defaultValue: c.name });
+  const tReq = (r: { id: string; name: string }) => t(`shipperCreate.req.${r.id}`, { defaultValue: r.name });
+  const tStep = (s: { id: number; label: string }) =>
+    t(`shipperCreate.steps.${["", "pickup", "dropoff", "package", "price", "when", "review"][s.id] || ""}`, { defaultValue: s.label });
+  const tSlot = (slot: { id: string; label: string; sub: string }) => {
+    const map: Record<string, string> = {
+      asap: "asap", "1h": "in1h", "2h": "in2h", evening: "evening",
+      tmrw_am: "tmrwAm", tmrw_pm: "tmrwPm", custom: "custom",
+    };
+    const k = map[slot.id];
+    return {
+      label: k ? t(`shipperCreate.schedule.${k}`, { defaultValue: slot.label }) : slot.label,
+      sub:
+        slot.id === "asap" ? t("shipperCreate.schedule.asapSub", { defaultValue: slot.sub })
+        : slot.id === "custom" ? t("shipperCreate.schedule.customSub", { defaultValue: slot.sub })
+        : slot.sub,
+    };
+  };
+  const tDay = (d: { id: string; label: string }) =>
+    d.label === "Today" ? t("shipperCreate.schedule.today", { defaultValue: "Today" })
+    : d.label === "Tomorrow" ? t("shipperCreate.schedule.tomorrow", { defaultValue: "Tomorrow" })
+    : d.label;
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);

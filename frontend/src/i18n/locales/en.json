@@ -520,5 +520,143 @@
     "cancelledMsg": "Your shipment has been cancelled.",
     "cancelError": "Failed to cancel shipment",
     "couldNotPay": "Could not start payment"
+  },
+  "shipperCreate": {
+    "steps": {
+      "pickup": "Pickup",
+      "dropoff": "Dropoff",
+      "package": "Package",
+      "price": "Price",
+      "when": "When",
+      "review": "Review"
+    },
+    "cat": {
+      "Medium Vehicles": "Medium Vehicles",
+      "Heavy Vehicles": "Heavy Vehicles",
+      "Specialized": "Specialized",
+      "Other": "Other"
+    },
+    "vehicle": {
+      "cargo_van": {
+        "name": "Cargo Van",
+        "cap": "Up to 1,500 kg"
+      },
+      "box_truck": {
+        "name": "Box Truck",
+        "cap": "Up to 5,000 kg"
+      },
+      "flatbed_truck": {
+        "name": "Flatbed",
+        "cap": "Up to 8,000 kg"
+      },
+      "semi_truck": {
+        "name": "Semi-Truck",
+        "cap": "Up to 20,000 kg"
+      },
+      "trailer_truck": {
+        "name": "Trailer Truck",
+        "cap": "Up to 25,000 kg"
+      },
+      "container_truck": {
+        "name": "Container",
+        "cap": "Up to 30,000 kg"
+      },
+      "tanker": {
+        "name": "Tanker",
+        "cap": "Up to 35,000 kg"
+      },
+      "refrigerated": {
+        "name": "Refrigerated",
+        "cap": "Up to 15,000 kg"
+      },
+      "crane_truck": {
+        "name": "Crane Truck",
+        "cap": "Up to 12,000 kg"
+      },
+      "hazmat": {
+        "name": "Hazmat",
+        "cap": "Up to 18,000 kg"
+      },
+      "other": {
+        "name": "Other",
+        "cap": "Custom"
+      }
+    },
+    "cargo": {
+      "general": "General",
+      "fragile": "Fragile",
+      "perishable": "Perishable",
+      "hazardous": "Hazardous",
+      "liquid": "Liquid",
+      "oversized": "Oversized"
+    },
+    "req": {
+      "tail_lift": "Tail lift",
+      "forklift": "Forklift",
+      "straps": "Straps",
+      "refrigeration": "Refrigeration",
+      "hazmat_certified": "Hazmat cert.",
+      "covered_transport": "Covered"
+    },
+    "schedule": {
+      "asap": "As soon as possible",
+      "asapSub": "Driver assigned immediately",
+      "in1h": "In 1 hour",
+      "in2h": "In 2 hours",
+      "evening": "This evening",
+      "tmrwAm": "Tomorrow morning",
+      "tmrwPm": "Tomorrow afternoon",
+      "custom": "Pick a date & time",
+      "customSub": "Choose an exact day and time",
+      "today": "Today",
+      "tomorrow": "Tomorrow"
+    },
+    "validation": {
+      "pickupAddr": "Please select or enter the pickup address.",
+      "pickupContact": "Please add the pickup contact name.",
+      "dropoffAddr": "Please select or enter the dropoff address.",
+      "recipient": "Please add the recipient name.",
+      "weight": "Please enter the cargo weight in kg.",
+      "describe": "Please briefly describe the cargo.",
+      "signIn": "Please sign in to create shipments."
+    },
+    "errors": {
+      "createFailed": "Failed to create shipment",
+      "paymentFailed": "Could not start payment. You can pay later from tracking.",
+      "invoiceFailed": "Could not create invoice. Please try again.",
+      "cardDeclined": "That card was declined. Try another card or use the card form."
+    },
+    "ui": {
+      "typeAddrManually": "Or type address manually...",
+      "whoHandsOver": "Who hands over the cargo?",
+      "pickupNotePh": "E.g., 'Loading dock B', 'Ask for warehouse manager'",
+      "whoReceives": "Who receives the cargo?",
+      "dropoffNotePh": "E.g., 'Leave at reception', 'Call on arrival'",
+      "whatsInside": "What's inside? (e.g., '5 pallets of electronics')",
+      "hideExtra": "Hide extra details",
+      "addExtra": "Add dimensions & handling needs",
+      "express": "Express",
+      "priority": "Priority",
+      "emergency": "Emergency",
+      "weightWarning": "Cargo weight is close to the vehicle's capacity.",
+      "hazmatWarning": "Hazardous cargo — consider requiring hazmat certification.",
+      "selectPickup": "Select Pickup Location",
+      "selectDropoff": "Select Dropoff Location"
+    },
+    "modal": {
+      "created": "Shipment created!",
+      "createdLive": "Order {{num}} is live for drivers.",
+      "howSettle": "How would you like to settle payment?",
+      "totalDue": "Total due",
+      "payNow": "Pay now",
+      "payNowSub": "Secure card payment via Stripe",
+      "payDifferent": "Pay with a different card",
+      "payWith": "Pay with {{brand}} ···· {{last4}}",
+      "instant": "Instant · one tap",
+      "instantDefault": "Instant · one tap · default card",
+      "acceptInvoice": "Accept invoice",
+      "acceptInvoiceSub": "Net-14 terms · PDF invoice emailed",
+      "decideLater": "Decide later"
+    }
   }
 }

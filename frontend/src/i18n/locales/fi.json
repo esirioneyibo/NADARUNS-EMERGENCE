@@ -520,5 +520,143 @@
     "cancelledMsg": "Lähetyksesi on peruutettu.",
     "cancelError": "Lähetyksen peruutus epäonnistui",
     "couldNotPay": "Maksua ei voitu aloittaa"
+  },
+  "shipperCreate": {
+    "steps": {
+      "pickup": "Nouto",
+      "dropoff": "Toimitus",
+      "package": "Paketti",
+      "price": "Hinta",
+      "when": "Milloin",
+      "review": "Tarkista"
+    },
+    "cat": {
+      "Medium Vehicles": "Keskikokoiset ajoneuvot",
+      "Heavy Vehicles": "Raskaat ajoneuvot",
+      "Specialized": "Erikoisajoneuvot",
+      "Other": "Muu"
+    },
+    "vehicle": {
+      "cargo_van": {
+        "name": "Pakettiauto",
+        "cap": "Enintään 1 500 kg"
+      },
+      "box_truck": {
+        "name": "Kuorma-auto",
+        "cap": "Enintään 5 000 kg"
+      },
+      "flatbed_truck": {
+        "name": "Lava-auto",
+        "cap": "Enintään 8 000 kg"
+      },
+      "semi_truck": {
+        "name": "Puoliperävaunu",
+        "cap": "Enintään 20 000 kg"
+      },
+      "trailer_truck": {
+        "name": "Perävaunurekka",
+        "cap": "Enintään 25 000 kg"
+      },
+      "container_truck": {
+        "name": "Kontti",
+        "cap": "Enintään 30 000 kg"
+      },
+      "tanker": {
+        "name": "Säiliöauto",
+        "cap": "Enintään 35 000 kg"
+      },
+      "refrigerated": {
+        "name": "Kylmäkuljetus",
+        "cap": "Enintään 15 000 kg"
+      },
+      "crane_truck": {
+        "name": "Nosturiauto",
+        "cap": "Enintään 12 000 kg"
+      },
+      "hazmat": {
+        "name": "Vaaralliset aineet",
+        "cap": "Enintään 18 000 kg"
+      },
+      "other": {
+        "name": "Muu",
+        "cap": "Mukautettu"
+      }
+    },
+    "cargo": {
+      "general": "Yleinen",
+      "fragile": "Särkyvä",
+      "perishable": "Pilaantuva",
+      "hazardous": "Vaarallinen",
+      "liquid": "Neste",
+      "oversized": "Ylisuuri"
+    },
+    "req": {
+      "tail_lift": "Takalaitanostin",
+      "forklift": "Trukki",
+      "straps": "Liinat",
+      "refrigeration": "Kylmäsäilytys",
+      "hazmat_certified": "ADR-sertifikaatti",
+      "covered_transport": "Katettu"
+    },
+    "schedule": {
+      "asap": "Mahdollisimman pian",
+      "asapSub": "Kuljettaja määritetään heti",
+      "in1h": "1 tunnin kuluttua",
+      "in2h": "2 tunnin kuluttua",
+      "evening": "Tänä iltana",
+      "tmrwAm": "Huomenna aamulla",
+      "tmrwPm": "Huomenna iltapäivällä",
+      "custom": "Valitse päivä ja aika",
+      "customSub": "Valitse tarkka päivä ja aika",
+      "today": "Tänään",
+      "tomorrow": "Huomenna"
+    },
+    "validation": {
+      "pickupAddr": "Valitse tai syötä noutoosoite.",
+      "pickupContact": "Lisää noudon yhteyshenkilön nimi.",
+      "dropoffAddr": "Valitse tai syötä toimitusosoite.",
+      "recipient": "Lisää vastaanottajan nimi.",
+      "weight": "Syötä lastin paino kilogrammoina.",
+      "describe": "Kuvaile lasti lyhyesti.",
+      "signIn": "Kirjaudu sisään luodaksesi lähetyksiä."
+    },
+    "errors": {
+      "createFailed": "Lähetyksen luonti epäonnistui",
+      "paymentFailed": "Maksua ei voitu aloittaa. Voit maksaa myöhemmin seurannasta.",
+      "invoiceFailed": "Laskua ei voitu luoda. Yritä uudelleen.",
+      "cardDeclined": "Kortti hylättiin. Kokeile toista korttia tai käytä korttilomaketta."
+    },
+    "ui": {
+      "typeAddrManually": "Tai kirjoita osoite manuaalisesti...",
+      "whoHandsOver": "Kuka luovuttaa lastin?",
+      "pickupNotePh": "Esim. 'Lastauslaituri B', 'Kysy varastopäällikköä'",
+      "whoReceives": "Kuka vastaanottaa lastin?",
+      "dropoffNotePh": "Esim. 'Jätä vastaanottoon', 'Soita saapuessasi'",
+      "whatsInside": "Mitä sisällä on? (esim. '5 lavaa elektroniikkaa')",
+      "hideExtra": "Piilota lisätiedot",
+      "addExtra": "Lisää mitat ja käsittelytarpeet",
+      "express": "Pika",
+      "priority": "Kiireellinen",
+      "emergency": "Hätä",
+      "weightWarning": "Lastin paino on lähellä ajoneuvon kapasiteettia.",
+      "hazmatWarning": "Vaarallinen lasti — harkitse ADR-sertifikaatin vaatimista.",
+      "selectPickup": "Valitse noutopaikka",
+      "selectDropoff": "Valitse toimituspaikka"
+    },
+    "modal": {
+      "created": "Lähetys luotu!",
+      "createdLive": "Tilaus {{num}} on kuljettajien näkyvissä.",
+      "howSettle": "Miten haluat maksaa?",
+      "totalDue": "Maksettavaa yhteensä",
+      "payNow": "Maksa nyt",
+      "payNowSub": "Turvallinen korttimaksu Stripen kautta",
+      "payDifferent": "Maksa toisella kortilla",
+      "payWith": "Maksa kortilla {{brand}} ···· {{last4}}",
+      "instant": "Heti · yhdellä napautuksella",
+      "instantDefault": "Heti · yhdellä napautuksella · oletuskortti",
+      "acceptInvoice": "Hyväksy lasku",
+      "acceptInvoiceSub": "Maksuaika 14 pv · PDF-lasku sähköpostiin",
+      "decideLater": "Päätä myöhemmin"
+    }
   }
 }

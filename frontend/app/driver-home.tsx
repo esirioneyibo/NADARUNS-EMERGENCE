@@ -32,6 +32,12 @@ import { useDriverLocation } from "../src/hooks/useWebSocket";
 import JobMarker from "../src/components/JobMarker";
 import JobDetailSheet from "../src/components/JobDetailSheet";
 
+// Show ALL available jobs nationwide, sorted nearest-first. A small radius hides
+// jobs when the marketplace is still building liquidity (and when drivers test
+// from outside the seeded service area), so we use an effectively-unlimited
+// radius and rely on distance sorting instead of hard filtering.
+const AVAILABLE_JOBS_RADIUS_KM = 100000;
+
 // Helper to get greeting based on time of day
 function getGreeting() {
   const hour = new Date().getHours();
@@ -188,7 +194,7 @@ export default function HomeScreen() {
         api.getDriver(), 
         api.getPending(), 
         api.getActive(),
-        api.getAvailableOrders(driverCoordsRef.current ?? undefined),
+        api.getAvailableOrders(driverCoordsRef.current ?? undefined, AVAILABLE_JOBS_RADIUS_KM),
       ]);
       setDriver(d);
       setPending(p);
@@ -251,7 +257,7 @@ export default function HomeScreen() {
         const [p, a, available] = await Promise.all([
           api.getPending(), 
           api.getActive(),
-          api.getAvailableOrders(driverCoordsRef.current ?? undefined),
+          api.getAvailableOrders(driverCoordsRef.current ?? undefined, AVAILABLE_JOBS_RADIUS_KM),
         ]);
         setPending(p);
         setActive(a);
