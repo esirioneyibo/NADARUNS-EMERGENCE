@@ -77,6 +77,17 @@ All frontend iter3 testIDs (otp-modal, otp-digit-*, wallet-screen, wallet-balanc
   - Frontend: new `app/shipper-payment-methods.tsx` (list, add-card redirect, set-default, delete) linked from shipper-settings. `api.ts` methods added. Verified end-to-end.
 - **P3 DONE — shipper-tracking.tsx i18n** (English + Finnish): added `tracking` + `paymentMethods` blocks to en/fi locales; all status/payment labels + UI strings + alerts translated. Verified bilingual render, no raw-key leakage.
 
+## Finnish Road-Freight Pricing — chargeable weight (Jun 2026)
+Pricing now follows the Finnish road-transport model (Logistiikan Maailma). The WEIGHT component is charged on the **chargeable freight weight (rahdituspaino)** = the GREATEST of:
+- actual weight (kg)
+- volumetric weight = volume m³ × **333 kg/m³**
+- pallet weight = pallets × **925 kg** (FIN pallet)
+- loading-meter weight = loading-m × **1850 kg** (≈ 2 FIN pallets)
+…multiplied by a per-vehicle **€/kg freight rate** (`FREIGHT_KG_RATES` in `services/pricing.py`). Distance €/km, urgency, special-vehicle multipliers, and 8% fuel surcharge unchanged.
+- Backend: `pricing.chargeable_weight()` + `calculate_price(..., volume_m3, pallets, loading_meters)`; new request fields `cargo_volume_m3`/`pallet_count`/`loading_meters` on `/api/shipper/quote` + `/api/shipper/shipments`; new response fields `freight_fee`, `chargeable_weight`, `chargeable_basis`, `actual_weight_kg`.
+- Frontend: `src/utils/pricing.ts` mirrors it; `shipper-create.tsx` Advanced section adds **Pallets** + **Loading-meters** inputs, computes volume from L×W×H, and the breakdown shows `Freight weight (X kg · basis)`. Localized EN+FI. Verified frontend iteration_33 (6/6, EN+FI, no key leakage).
+- NOTE: Google Directions billing was enabled by the user — `/api/shipper/quote` + create now return real road distances (status OK), resolving the prior "routing configuration error".
+
 ## Roadmap / Backlog
 - **P3 (remaining) — i18n Batch C** for any other untranslated Expo screens + the Next.js web admin.
 - **Refactor**: split `server.py` (~7000 lines) into routers/models; split `shipper-create.tsx` (~2069 lines) into per-step components; add testIDs to shipper-create inputs.
