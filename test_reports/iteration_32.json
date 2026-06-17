@@ -1,0 +1,25 @@
+{
+  "summary": "Verified one-tap 'Pay with saved card' feature end-to-end on /shipper-create. Logged in as demo.shipper, completed all 6 wizard steps (Pickup, Dropoff, Package, Price, When, Review), tapped 'Confirm & Create'. The 'pay-choice-modal' appeared and rendered (in correct order, top to bottom): GREEN saved-card button (testID 'pay-saved-card-pm_1TjL5KBshPuHCHhJ2KPAaZlA', label 'Pay with Visa ···· 4242 · Instant · one tap', backgroundColor rgb(22,163,74) = #16A34A), 'pay-now-button' (relabeled to 'Pay with a different card'), 'accept-invoice-button', and 'pay-later-button'. Tapping the green saved-card button called POST /api/payments/orders/{id}/pay-with-saved-card which returned 200 with payment_status='authorized', and the app navigated to /shipper-home where it showed the success banner 'Job SHP-1466 created & payment successful!'. No error banner shown. Backend was verified up-front (seed-demo + login + GET /api/shipper/payment-methods returned the Visa 4242 PM).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/shipper-home (after one-tap pay)", "issues": ["Minor cosmetic: URL after router.replace shows '?paid=&order=&oid=' because shipper-home clears the params via router.setParams immediately after consuming them. Functional outcome is correct (banner 'Job ... created & payment successful!' is shown). Not a bug, just noting for verification of the 'redirect with ?paid=1' acceptance criteria — the paid=1 value is consumed before being read by anything external."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/tmp/m1.png (modal with green saved-card button)", "/tmp/m2.png (shipper-home with payment success banner)"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "shipper-create.tsx is 2154 lines — exceeds the 700-line guideline. Consider splitting into smaller modules (e.g., extract the PaymentChoiceModal into its own component, extract per-step renderers).",
+    "Console deprecation warnings observed (non-blocking): 'shadow*' style props are deprecated (use boxShadow), props.pointerEvents is deprecated (use style.pointerEvents). These come from theme/shadows utility and various TouchableOpacity usages."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (pre-verified by main agent + curl smoke test)", "frontend": "100% (one-tap saved-card flow verified end-to-end; modal renders all 4 required testIDs in correct order with correct color)"},
+  "seed_data_creation": "Called POST /api/seed-demo before testing to ensure demo shipper account and saved Visa 4242 exist.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login button on /shipper-login has no testID; use page.get_by_text('Sign In', exact=True).click(force=True). The address manual-text TextInput placeholder is 'Or type address manually...' and exists on both Step 1 (Pickup) and Step 2 (Dropoff). When no map coords are picked, both pickup and dropoff fall back to Helsinki center (60.1699, 24.9384) and the quote returns a small base price (~€23.76). After a successful one-tap pay, shipper-home clears query params via router.setParams so the URL ends with '?paid=&order=&oid=' even though paid=1 was originally consumed.",
+  "rca_of_issue": "N/A — feature works as specified."
+}

@@ -338,3 +338,31 @@ def detach_payment_method(payment_method_id: str) -> None:
 def retrieve_payment_method(payment_method_id: str) -> stripe.PaymentMethod:
     return stripe.PaymentMethod.retrieve(payment_method_id)
 
+
+def create_offsession_authorization(
+    *,
+    customer_id: str,
+    payment_method_id: str,
+    amount_eur: float,
+    metadata: dict | None = None,
+) -> stripe.PaymentIntent:
+    """Authorize a saved card OFF-SESSION with MANUAL capture.
+
+    Creates and confirms a PaymentIntent in a single call. A successful
+    authorization returns status ``requires_capture`` (funds held, captured
+    later on delivery). May raise ``stripe.error.CardError`` for declines or
+    when the issuer demands SCA (decline code ``authentication_required``).
+    """
+    md = {k: str(v) for k, v in (metadata or {}).items() if v is not None}
+    return stripe.PaymentIntent.create(
+        amount=to_cents(amount_eur),
+        currency="eur",
+        customer=customer_id,
+        payment_method=payment_method_id,
+        payment_method_types=["card"],
+        capture_method="manual",
+        off_session=True,
+        confirm=True,
+        metadata=md,
+    )
+

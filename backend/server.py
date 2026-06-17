@@ -6322,6 +6322,71 @@ async def create_payment_checkout(
     return {"url": session.url, "session_id": session.id, "payment_status": "pending"}
 
 
+class PayWithCardBody(BaseModel):
+    payment_method_id: str
+
+
+@api_router.post("/payments/orders/{order_id}/pay-with-saved-card")
+async def pay_order_with_saved_card(
+    order_id: str,
+    body: PayWithCardBody,
+    shipper: dict = Depends(get_current_shipper),
+):
+    """One-tap: authorize an order's payment off-session using a saved card.
+
+    Mirrors the hosted-Checkout flow but skips the redirect — the saved card is
+    authorized immediately (manual capture), publishing the order to the driver
+    marketplace. Funds are captured on delivery like every other payment.
+    """
+    if not payments.is_configured():
+        raise HTTPException(503, "Payments are not configured")
+
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.get("shipper_id") != shipper.get("id"):
+        raise HTTPException(403, "Not your order")
+    if order.get("payment_status") in ("authorized", "captured"):
+        raise HTTPException(400, f"Payment already {order.get('payment_status')}")
+
+    amount = float(order.get("price_quote") or order.get("payment_amount") or 0)
+    if amount <= 0:
+        raise HTTPException(400, "Order has no payable amount")
+
+    # Validates the card belongs to this shipper's Stripe customer.
+    customer_id = await _assert_pm_owned(shipper, body.payment_method_id)
+
+    try:
+        intent = payments.create_offsession_authorization(
+            customer_id=customer_id,
+            payment_method_id=body.payment_method_id,
+            amount_eur=amount,
+            metadata={
+                "order_id": order_id,
+                "shipper_id": order.get("shipper_id"),
+                "driver_id": order.get("driver_id"),
+            },
+        )
+    except payments.stripe.error.CardError as e:
+        err = e.error
+        code = getattr(err, "code", None)
+        msg = getattr(err, "user_message", None) or getattr(err, "message", None) or "Your card was declined."
+        if code == "authentication_required":
+            msg = "This card needs 3D Secure authentication. Please pay with the card form instead."
+        logger.warning(f"Saved-card auth declined for order {order_id}: {code} / {msg}")
+        raise HTTPException(402, msg)
+    except Exception as exc:
+        logger.error(f"Saved-card authorization failed for {order_id}: {exc}")
+        raise HTTPException(502, "Could not charge the saved card. Please try again.")
+
+    if getattr(intent, "status", "") not in ("requires_capture", "succeeded"):
+        raise HTTPException(402, "Card could not be authorized. Please try another card.")
+
+    await _apply_intent_to_order(order, intent)
+    fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return _payment_summary(fresh)
+
+
 @api_router.post("/payments/orders/{order_id}/authorize-test")
 async def authorize_payment_test(
     order_id: str,

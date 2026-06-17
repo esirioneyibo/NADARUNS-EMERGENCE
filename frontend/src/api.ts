@@ -380,6 +380,11 @@ export const api = {
     request<any>(`/shipper/payment-methods/${pmId}/default`, { method: "POST" }),
   deletePaymentMethod: (pmId: string) =>
     request<any>(`/shipper/payment-methods/${pmId}`, { method: "DELETE" }),
+  payWithSavedCard: (orderId: string, paymentMethodId: string) =>
+    request<PaymentSummary>(`/payments/orders/${orderId}/pay-with-saved-card`, {
+      method: "POST",
+      body: JSON.stringify({ payment_method_id: paymentMethodId }),
+    }),
   authorizePaymentTest: (orderId: string) =>
     request<PaymentSummary>(`/payments/orders/${orderId}/authorize-test`, { method: "POST" }),
 

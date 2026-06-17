@@ -187,7 +187,8 @@ export default function ShipperCreateScreen() {
   const [loading, setLoading] = useState(false);
   // Pay Now / Accept Invoice choice modal (shown after a shipment is created)
   const [payChoice, setPayChoice] = useState<{ orderId: string; orderNum: string; total: number } | null>(null);
-  const [payBusy, setPayBusy] = useState<null | "pay" | "invoice">(null);
+  const [payBusy, setPayBusy] = useState<null | "pay" | "invoice" | "saved">(null);
+  const [savedCards, setSavedCards] = useState<Array<{ id: string; brand: string; last4: string; is_default: boolean }>>([]);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -634,6 +635,43 @@ export default function ShipperCreateScreen() {
       );
     } catch (e: any) {
       showBanner(e?.message || "Could not create invoice. Please try again.", "error", false);
+    } finally {
+      setPayBusy(null);
+    }
+  };
+
+  // Load the shipper's saved cards whenever the pay/invoice sheet opens so we
+  // can offer one-tap "pay with saved card" (off-session charge, no redirect).
+  useEffect(() => {
+    if (!payChoice) {
+      setSavedCards([]);
+      return;
+    }
+    let alive = true;
+    api
+      .getPaymentMethods()
+      .then((r) => alive && setSavedCards(r.payment_methods || []))
+      .catch(() => alive && setSavedCards([]));
+    return () => {
+      alive = false;
+    };
+  }, [payChoice]);
+
+  const handlePayWithSavedCard = async (pmId: string) => {
+    if (!payChoice) return;
+    const { orderId, orderNum } = payChoice;
+    setPayBusy("saved");
+    try {
+      await api.payWithSavedCard(orderId, pmId);
+      setPayChoice(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      router.replace(`/shipper-home?paid=1&order=${encodeURIComponent(orderNum)}&oid=${orderId}`);
+    } catch (e: any) {
+      showBanner(
+        e?.message || "That card was declined. Try another card or use the card form.",
+        "error",
+        false,
+      );
     } finally {
       setPayBusy(null);
     }
@@ -1582,23 +1620,58 @@ export default function ShipperCreateScreen() {
               <Text style={styles.payTotalValue}>€{(payChoice?.total ?? 0).toFixed(2)}</Text>
             </View>
 
+            {/* One-tap: pay with a saved card (off-session charge, no redirect) */}
+            {savedCards.map((c) => (
+              <TouchableOpacity
+                key={c.id}
+                style={[styles.savedCardRow, payBusy && styles.payOptionDisabled]}
+                onPress={() => handlePayWithSavedCard(c.id)}
+                disabled={!!payBusy}
+                testID={`pay-saved-card-${c.id}`}
+              >
+                {payBusy === "saved" ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="flash" size={20} color="#fff" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.payOptionPrimaryTitle}>
+                        Pay with {c.brand.charAt(0).toUpperCase() + c.brand.slice(1)} ···· {c.last4}
+                      </Text>
+                      <Text style={styles.payOptionPrimarySub}>
+                        Instant · one tap{c.is_default ? " · default card" : ""}
+                      </Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={18} color="#fff" />
+                  </>
+                )}
+              </TouchableOpacity>
+            ))}
+
             {/* Option A — Pay Now */}
             <TouchableOpacity
-              style={[styles.payOptionPrimary, payBusy && styles.payOptionDisabled]}
+              style={[
+                savedCards.length > 0 ? styles.payOptionSecondary : styles.payOptionPrimary,
+                payBusy && styles.payOptionDisabled,
+              ]}
               onPress={handlePayNow}
               disabled={!!payBusy}
               testID="pay-now-button"
             >
               {payBusy === "pay" ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={savedCards.length > 0 ? ACCENT : "#fff"} />
               ) : (
                 <>
-                  <Ionicons name="card" size={20} color="#fff" />
+                  <Ionicons name="card" size={20} color={savedCards.length > 0 ? ACCENT : "#fff"} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.payOptionPrimaryTitle}>Pay now</Text>
-                    <Text style={styles.payOptionPrimarySub}>Secure card payment via Stripe</Text>
+                    <Text style={savedCards.length > 0 ? styles.payOptionSecondaryTitle : styles.payOptionPrimaryTitle}>
+                      {savedCards.length > 0 ? "Pay with a different card" : "Pay now"}
+                    </Text>
+                    <Text style={savedCards.length > 0 ? styles.payOptionSecondarySub : styles.payOptionPrimarySub}>
+                      Secure card payment via Stripe
+                    </Text>
                   </View>
-                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                  <Ionicons name="arrow-forward" size={18} color={savedCards.length > 0 ? ACCENT : "#fff"} />
                 </>
               )}
             </TouchableOpacity>
@@ -2041,6 +2114,17 @@ const createStyles = (theme: any) =>
       alignItems: "center",
       gap: 12,
       backgroundColor: ACCENT,
+      borderRadius: radius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 16,
+      minHeight: 64,
+      ...shadows.sm,
+    },
+    savedCardRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: "#16A34A",
       borderRadius: radius.lg,
       paddingHorizontal: spacing.lg,
       paddingVertical: 16,
