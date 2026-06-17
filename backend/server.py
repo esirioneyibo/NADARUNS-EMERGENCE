@@ -1491,7 +1491,8 @@ async def get_available_orders(
         # Make sure pending orders carry a GeoJSON pickup_location for $geoNear.
         try:
             await db.orders.update_many(
-                {"status": "pending", "pickup_location": {"$exists": False},
+                {"status": "pending",
+                 "$or": [{"pickup_location": {"$exists": False}}, {"pickup_location": None}],
                  "pickup.lat": {"$type": "number"}, "pickup.lng": {"$type": "number"}},
                 [{"$set": {"pickup_location": {"type": "Point", "coordinates": ["$pickup.lng", "$pickup.lat"]}}}],
             )
@@ -6988,7 +6989,7 @@ async def backfill_pickup_locations():
     """Populate GeoJSON pickup_location on orders that predate the 2dsphere index."""
     try:
         res = await db.orders.update_many(
-            {"pickup_location": {"$exists": False},
+            {"$or": [{"pickup_location": {"$exists": False}}, {"pickup_location": None}],
              "pickup.lat": {"$type": "number"}, "pickup.lng": {"$type": "number"}},
             [{"$set": {"pickup_location": {"type": "Point", "coordinates": ["$pickup.lng", "$pickup.lat"]}}}],
         )

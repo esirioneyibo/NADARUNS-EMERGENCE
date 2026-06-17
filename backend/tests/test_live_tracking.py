@@ -60,9 +60,17 @@ def shipper_token(http):
 
 
 @pytest.fixture(scope="session")
-def driver_token(http):
+def admin_token(http):
+    r = http.post(f"{API}/auth/admin-login", json={"email": "admin@nadaruns.com", "password": "admin123"}, timeout=15)
+    assert r.status_code == 200, f"admin login failed: {r.text}"
+    return r.json()["token"]
+
+
+@pytest.fixture(scope="session")
+def driver_token(http, admin_token):
     """A fresh driver registered for this suite so we don't clash with the
-    demo driver who may have an in-flight order (real users hit the demo accounts)."""
+    demo driver who may have an in-flight order (real users hit the demo accounts).
+    The driver's KYC is admin-approved so it can accept jobs (KYC gating is enforced)."""
     email = f"TEST_tracker_{uuid.uuid4().hex[:8]}@nadaruns.com"
     reg = http.post(
         f"{API}/auth/driver-register",
@@ -79,6 +87,12 @@ def driver_token(http):
     if not token:
         r = http.post(f"{API}/auth/login", json={"email": email, "password": "trackerpass123"}, timeout=15)
         token = r.json()["token"]
+    # Resolve driver id and admin-approve KYC so the driver can accept jobs.
+    me = http.get(f"{API}/driver/me", headers={"Authorization": f"Bearer {token}"}, timeout=15)
+    assert me.status_code == 200, me.text
+    driver_id = me.json()["id"]
+    http.post(f"{API}/admin/kyc/{driver_id}/approve",
+              headers={"Authorization": f"Bearer {admin_token}"}, timeout=15)
     # bring driver online so accept is allowed (the backend may require this)
     http.post(f"{API}/driver/toggle-online", headers={"Authorization": f"Bearer {token}"}, timeout=15)
     return token

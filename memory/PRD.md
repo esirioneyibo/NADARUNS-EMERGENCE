@@ -53,6 +53,11 @@ All frontend iter3 testIDs (otp-modal, otp-digit-*, wallet-screen, wallet-balanc
 - React-native-maps requires an EAS dev build for iOS/Android — Expo Go cannot bundle the native Google Maps SDK. Web preview always shows the SVG map.
 - Expo's auto-link emits a non-blocking PluginError for react-native-maps in dev logs (no app.plugin.js export). Bundle still builds successfully.
 
+## Test-suite hardening + geo bug fix (Feb 2026)
+- **FIXED real production bug**: the driver map-based "nearby jobs" feed (`GET /api/orders/available?lat&lng&radius_km`) returned **0 jobs** even when jobs existed. Root cause: every order is written with `pickup_location: null` (model default), but both backfills only matched `{$exists: false}`, so the GeoJSON Point was never populated and `$geoNear` matched nothing. Updated both backfills (lazy in `get_available_orders` + startup `backfill_pickup_locations`) to also match `pickup_location: null`. Drivers now correctly see nearby jobs sorted by distance.
+- **Test suite green-up** (was 15 failed + 7 errors → 0 real failures): deleted obsolete single-driver-prototype suite `test_driver_api.py` (replaced by `test_p0_state_machine`/`test_pricing`); authenticated the stale wallet & driver-settings tests (`test_otp_and_wallet`, `test_settings_and_route`) and updated assertions to the current contract; added admin KYC-approval to fresh-driver fixtures in `test_p0_state_machine` + `test_live_tracking` (KYC gating is enforced on accept); fixed `test_pricing` to use routable cached Helsinki→Espoo coords (Google Directions key is unbilled in preview → remote coords 500 by design — pricing intentionally never falls back to straight-line).
+- Note: running all 255 integration tests sequentially can show 1–3 transient failures from shared demo-account state contention + tunnel ConnectTimeouts; they pass per-file in isolation.
+
 ## Recent Work (Feb 2026 — Forked session)
 **Shipper payment settlement + Admin order/invoice management.**
 - **Shipper "Pay Now / Accept Invoice" modal** (`/app/frontend/app/shipper-create.tsx`): after a shipment is created, a bottom-sheet `<Modal>` (testID `pay-choice-modal`) offers Option A `pay-now-button` (Stripe checkout) and Option B `accept-invoice-button` (Net-14 invoice + PDF), plus `pay-later-button`. Verified end-to-end (iteration_30).

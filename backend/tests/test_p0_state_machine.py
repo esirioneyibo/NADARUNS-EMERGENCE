@@ -71,8 +71,15 @@ def shipper_token(http):
 
 
 @pytest.fixture(scope="session")
-def second_driver_token(http):
-    """Register a second driver for race-condition tests."""
+def admin_token(http):
+    r = http.post(f"{API}/auth/admin-login", json={"email": "admin@nadaruns.com", "password": "admin123"}, timeout=15)
+    assert r.status_code == 200, f"admin login failed: {r.text}"
+    return r.json()["token"]
+
+
+@pytest.fixture(scope="session")
+def second_driver_token(http, admin_token):
+    """Register a second driver for race-condition tests (KYC admin-approved)."""
     email = f"TEST_driver2_{uuid.uuid4().hex[:8]}@nadaruns.com"
     reg = http.post(
         f"{API}/auth/driver-register",
@@ -92,6 +99,11 @@ def second_driver_token(http):
         r = http.post(f"{API}/auth/login", json={"email": email, "password": "secondpass123"}, timeout=15)
         assert r.status_code == 200, r.text
         token = r.json()["token"]
+    # Admin-approve KYC so this driver may accept jobs (KYC gating is enforced).
+    me = http.get(f"{API}/driver/me", headers={"Authorization": f"Bearer {token}"}, timeout=15)
+    assert me.status_code == 200, me.text
+    http.post(f"{API}/admin/kyc/{me.json()['id']}/approve",
+              headers={"Authorization": f"Bearer {admin_token}"}, timeout=15)
     return token
 
 

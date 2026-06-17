@@ -265,28 +265,23 @@ class TestAvailableAndNoReseed:
         assert len(data) <= 50
 
     def test_complete_delivery_does_not_seed_replacement(self, shipper_token, driver_token):
-        # Pickup at a globally-unique remote spot (near North Pole) so the
-        # proximity pool is guaranteed to be empty before our test order.
-        REMOTE = (85.0, 25.0)
-        REMOTE_DROP = (85.01, 25.05)
-        params = {"lat": REMOTE[0], "lng": REMOTE[1], "radius_km": 5}
+        # Use routable Helsinki->Espoo coords (pricing requires a real cached road
+        # route; arbitrary remote coords would 502/500 by design). We instead guard
+        # the auto-reseed regression by tracking order-id deltas in the nearby pool.
+        params = {"lat": HELSINKI[0], "lng": HELSINKI[1], "radius_km": 100}
         before = requests.get(f"{BASE_URL}/api/orders/available", params=params, timeout=20).json()
         before_ids = {o["id"] for o in before}
-        before_count = len(before)
-        assert before_count == 0, f"expected empty remote pool, got {before_count}"
 
-        # Create a fresh pending order with pickup at the remote spot
-        c = _create_shipment(shipper_token, offer=0, pickup=REMOTE, dropoff=REMOTE_DROP)
+        # Create a fresh pending order (Helsinki -> Espoo).
+        c = _create_shipment(shipper_token, offer=0)
         assert c.status_code == 200, c.text
         order_id = c.json()["order_id"]
 
-        # Mid-state: pool of 1 (just our order)
+        # It shows up as pending in the nearby pool.
         mid = requests.get(f"{BASE_URL}/api/orders/available", params=params, timeout=20).json()
-        mid_ids = {o["id"] for o in mid}
-        assert order_id in mid_ids
-        assert len(mid) == 1, f"expected pool of 1, got {len(mid)}"
+        assert order_id in {o["id"] for o in mid}
 
-        # Accept with the driver and advance to delivered
+        # Accept with the driver and advance to delivered.
         h = {"Authorization": f"Bearer {driver_token}"}
         ra = requests.post(f"{BASE_URL}/api/orders/{order_id}/accept", headers=h, timeout=20)
         assert ra.status_code == 200, ra.text
@@ -302,15 +297,13 @@ class TestAvailableAndNoReseed:
             )
             assert rr.status_code == 200, f"advance to {target} failed: {rr.status_code} {rr.text}"
 
-        # CRITICAL: after delivery, the remote pool must be empty again — no reseed.
+        # CRITICAL: after delivery the delivered order is no longer pending and NO
+        # replacement order was auto-seeded (the old prototype's reseed behavior).
         after = requests.get(f"{BASE_URL}/api/orders/available", params=params, timeout=20).json()
         after_ids = {o["id"] for o in after}
         assert order_id not in after_ids, "delivered order still appears as pending"
         new_ids = after_ids - before_ids
-        assert new_ids == set(), f"unexpected new pending orders after delivery: {new_ids}"
-        assert len(after) == 0, (
-            f"pool grew from 0 to {len(after)} after delivery — re-seed bug?"
-        )
+        assert new_ids == set(), f"unexpected new pending orders after delivery — re-seed bug? {new_ids}"
 
 
 # ---------- driver performance ----------

@@ -11,6 +11,11 @@ API = f"{BASE}/api"
 def s():
     sess = requests.Session()
     sess.headers.update({"Content-Type": "application/json"})
+    # Driver profile + settings endpoints are scoped per authenticated driver.
+    r = sess.post(f"{API}/auth/login",
+                  json={"email": "demo.driver@nadaruns.com", "password": "demo1234"}, timeout=20)
+    assert r.status_code == 200, f"driver login failed: {r.text}"
+    sess.headers.update({"Authorization": f"Bearer {r.json()['token']}"})
     return sess
 
 
@@ -28,7 +33,7 @@ class TestDriverNewFields:
             assert k in d["notifications"], f"missing notifications.{k}"
             assert isinstance(d["notifications"][k], bool)
         # Seeded values present (post-migration)
-        assert d["vehicle_type"] in ("bicycle", "scooter", "car", "motorbike")
+        assert isinstance(d["vehicle_type"], str) and d["vehicle_type"]
         assert d["email"] != ""
         assert d["phone"] != ""
         assert d["plate"] != ""
@@ -53,16 +58,18 @@ class TestDriverPatch:
 
     def test_patch_vehicle_combo(self, s):
         original = s.get(f"{API}/driver/me").json()
-        payload = {"vehicle_type": "car", "plate": "ABC-123", "vehicle": "Car • ABC-123"}
+        payload = {"vehicle_type": "refrigerated", "plate": "ABC-123", "vehicle": "Refrigerated • ABC-123"}
         r = s.patch(f"{API}/driver/me", json=payload)
         assert r.status_code == 200
         d = r.json()
-        assert d["vehicle_type"] == "car"
+        assert d["vehicle_type"] == "refrigerated"
         assert d["plate"] == "ABC-123"
-        assert d["vehicle"] == "Car • ABC-123"
+        # The backend derives the display string from the vehicle-type label; it
+        # always reflects the plate.
+        assert "ABC-123" in d["vehicle"]
         # Verify persistence
         again = s.get(f"{API}/driver/me").json()
-        assert again["vehicle_type"] == "car"
+        assert again["vehicle_type"] == "refrigerated"
         assert again["plate"] == "ABC-123"
         # restore
         s.patch(f"{API}/driver/me", json={
