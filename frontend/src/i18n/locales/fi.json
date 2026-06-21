@@ -802,6 +802,25 @@
     "jobsDoneLabel": "Valmiit",
     "jobsEarnedLabel": "Ansaittu",
     "jobUnassigned": "Ei kuljettajaa",
-    "jobBy": "kuljettaja {{name}}"
+    "jobBy": "kuljettaja {{name}}",
+    "tabWallet": "Lompakko",
+    "walletAvailable": "Käytettävissä",
+    "walletPending": "Odottaa",
+    "walletTotalEarned": "Ansaittu yhteensä",
+    "walletWithdrawn": "Nostettu",
+    "requestPayout": "Pyydä maksua",
+    "payoutAmount": "Summa (€)",
+    "payoutAccount": "Maksutili / IBAN (valinnainen)",
+    "payoutSubmit": "Lähetä pyyntö",
+    "payoutHistory": "Maksuhistoria",
+    "recentTxns": "Viimeisimmät ansiot",
+    "noTxns": "Ei vielä ansioita.",
+    "noPayouts": "Ei vielä maksupyyntöjä.",
+    "payoutPending": "Odottaa",
+    "payoutApproved": "Hyväksytty",
+    "payoutPaid": "Maksettu",
+    "payoutRejected": "Hylätty",
+    "insufficientBalance": "Summa ylittää käytettävissä olevan saldon",
+    "earningsBelongToCompany": "Valmiit työsi ja ansiosi kuuluvat yrityksen lompakkoon. Alla olevat luvut ovat vain oma suorituksesi."
   }
 }

@@ -1,0 +1,43 @@
+{
+  "summary": "Phases 3-5 (Company Wallet + Payouts + Admin Fleet) verified end-to-end. BACKEND: 9/9 pytest passed (test_iter36_fleet_wallet_payouts.py). Verified (P3) earnings split: as demo driver in self_accept mode, accepted a seeded pending order and advanced it through the state machine to 'delivered'. Wallet available_balance AND total_earnings both increased by exactly net = order.earnings+tip; an 'earning' txn for that order_id is created with non-null gross_amount/platform_fee/company_earnings (company_earnings == net). (P4) Payout lifecycle: POST /api/company/payouts moves available->pending and returns status=pending with a 'PO-XXXXXXXX' reference; admin GET /api/admin/fleet/payouts shows it; /approve -> approved; /pay {reference} -> paid AND wallet pending decreases / total_withdrawn increases by exactly the amount; reference persists. Reject path on a fresh payout refunds pending -> available. Validation: payout amount > available_balance -> 400. (P5) Admin Fleet dashboard: GET /api/admin/fleet/companies returns owner_name, driver_count, vehicle_count, available_balance, total_earnings, status (and ?search=Nord matches case-insensitively); GET /api/admin/fleet/companies/{id} returns {company,wallet,drivers,vehicles,payouts,stats:{completed_jobs,active_jobs}}; /suspend then /activate flips company.status. Driver JWT on /api/admin/fleet/companies and /payouts -> 403; no auth -> 403. FRONTEND: Logged in as demo driver -> /fleet -> 4th tab 'Wallet' (testID=tab-wallet) renders 4 balance boxes (Available/Pending/Total earned/Withdrawn), 'Request payout' button (enabled because available > 0), 'PAYOUT HISTORY' list (showing existing pre-seeded Paid/Rejected and the new Pending entry), and the RECENT EARNINGS list. PayoutModal (testIDs payout-amount, payout-account, payout-submit): submitting amount > available shows the red 'Amount exceeds available balance' banner; submitting amount=1.50 (<=available) creates a payout, modal closes, wallet refreshes (available_balance dropped by 1.50, pending_balance went up by 1.50) and the new 'PO-XXXXXX' shows as Pending in Payout history. FI localization on Wallet tab: 'Lompakko', 'Käytettävissä', 'Odottaa', 'Ansaittu yhteensä', 'Nostettu', 'Pyydä maksua' all render — no raw i18n keys leaked (fleet.tabWallet / walletAvailable / walletPending / requestPayout / walletWithdrawn all absent from DOM in either language).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Pre-existing console warning '\"shadow*\" style props are deprecated. Use \"boxShadow\".' (carried over since iter33). Reference: project-wide."},
+      {"component": "props.pointerEvents", "issue": "Pre-existing console warning 'props.pointerEvents is deprecated. Use style.pointerEvents'. Reference: project-wide."},
+      {"component": "expo-router REPLACE warning", "issue": "Pre-existing console error 'The action REPLACE with payload {\"name\":\"driver-home\"} was not handled by any navigator.' after login. Navigation still succeeds. Reference: /app/frontend/app/login.tsx redirect."},
+      {"component": "ws/driver WebSocket", "issue": "Pre-existing infra: wss://.../ws/driver/<id> handshake fails 502 in preview env. Not introduced by Phase 3-5."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter36_fleet_wallet_payouts.py",
+    "/app/test_reports/pytest/iter36_fleet_wallet.xml",
+    "/tmp/p3_wallet_en.png",
+    "/tmp/p3_wallet_modal_err.png",
+    "/tmp/p3_wallet_after_payout.png",
+    "/tmp/p3_wallet_fi.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 7940 lines — splitting into routers per domain (auth/driver/shipper/orders/fleet/wallet/admin) is overdue (carried-over comment from iter34/35).",
+    "_credit_company_wallet_on_delivery handles solo drivers correctly (no company_id -> returns silently). Calculation: net = earnings+tip, fee = max(0, gross - earnings) where gross falls back through price_quote -> total_price -> payment_amount -> net. Reasonable, but if all gross sources are missing, gross collapses to net and platform_fee becomes 0 — fine for the demo seed but worth documenting.",
+    "POST /api/company/payouts validates amount>0 and amount<=available; reference format PO-<8hex uppercase>. Solid. Could add a per-day rate-limit later.",
+    "POST /api/admin/fleet/payouts/{id}/pay accepts 'approved' OR 'pending' — handy shortcut, matches the manual-ledger spec. /reject correctly returns funds available_balance += amount and decrements pending_balance. /approve doesn't move money, only flips status — correct.",
+    "Admin endpoints all use Depends(get_admin_user) -> driver tokens are rejected via 403 (test confirmed).",
+    "fleet.tsx is now ~1150 lines after adding Wallet tab — re-iterating earlier suggestion to extract DriverCard / VehicleCard / JobCard / PayoutRow / PayoutModal / Add* modals into /app/frontend/src/components/fleet/."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter36_fleet_wallet_payouts.py (new)",
+    "/app/test_reports/pytest/iter36_fleet_wallet.xml (new)",
+    "/app/test_reports/iteration_36.json (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% of Phase 3-5 driver-side flows (EN + FI) verified"},
+  "seed_data_creation": "Used the existing demo company 'Nordic Transport Oy' (owner=demo.driver). This run delivered 1 new pending order (credited ~€10.50 net to the wallet), created+approved+paid 1 payout (€5.00 with reference BANKREF-TEST-001), and created+rejected 1 small payout (~€2.00) to verify the reject path. Then created 1 additional €1.50 'PO-468F9110' Pending payout from the UI to exercise the modal flow (left in pending state in the DB).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Test file: /app/backend/tests/test_iter36_fleet_wallet_payouts.py (use EXPO_PUBLIC_BACKEND_URL env var). Admin login: POST /api/auth/admin-login {email,password} returns token. Wallet flow testIDs (in /app/frontend/app/fleet.tsx): tab-wallet, request-payout-btn, payout-amount, payout-account, payout-submit. Admin web UI in /app/web is NOT served in this preview env — admin endpoints are exercised via API only. Demo company 'Nordic Transport Oy' currently has 1 'Pending' payout PO-468F9110 (€1.50) left over from this run if cleanup is desired (admin /reject or /pay it).",
+  "rca_of_issue": "No defects found in Phases 3-5."
+}

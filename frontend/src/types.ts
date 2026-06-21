@@ -248,6 +248,45 @@ export interface CompanyJobsResponse {
   stats: { total: number; active: number; completed: number; completed_earnings: number };
 }
 
+export interface CompanyWallet {
+  company_id: string;
+  available_balance: number;
+  pending_balance: number;
+  total_earnings: number;
+  total_withdrawn: number;
+  currency: string;
+}
+
+export interface CompanyWalletTxn {
+  id: string;
+  type: "earning" | "payout" | "payout_reversal";
+  amount: number;
+  gross_amount?: number | null;
+  platform_fee?: number | null;
+  company_earnings?: number | null;
+  order_number?: string | null;
+  note?: string | null;
+  created_at: string;
+}
+
+export interface CompanyPayout {
+  id: string;
+  amount: number;
+  currency: string;
+  method: string;
+  status: "pending" | "approved" | "paid" | "rejected";
+  reference?: string | null;
+  note?: string | null;
+  created_at: string;
+  paid_at?: string | null;
+}
+
+export interface CompanyWalletResponse {
+  wallet: CompanyWallet;
+  transactions: CompanyWalletTxn[];
+  payouts: CompanyPayout[];
+}
+
 export interface DriverPerformance {
   status: "offline" | "online" | "busy" | string;
   is_online: boolean;

@@ -802,6 +802,25 @@
     "jobsDoneLabel": "Completed",
     "jobsEarnedLabel": "Earned",
     "jobUnassigned": "Unassigned",
-    "jobBy": "by {{name}}"
+    "jobBy": "by {{name}}",
+    "tabWallet": "Wallet",
+    "walletAvailable": "Available",
+    "walletPending": "Pending",
+    "walletTotalEarned": "Total earned",
+    "walletWithdrawn": "Withdrawn",
+    "requestPayout": "Request payout",
+    "payoutAmount": "Amount (€)",
+    "payoutAccount": "Payout account / IBAN (optional)",
+    "payoutSubmit": "Submit request",
+    "payoutHistory": "Payout history",
+    "recentTxns": "Recent earnings",
+    "noTxns": "No earnings yet.",
+    "noPayouts": "No payout requests yet.",
+    "payoutPending": "Pending",
+    "payoutApproved": "Approved",
+    "payoutPaid": "Paid",
+    "payoutRejected": "Rejected",
+    "insufficientBalance": "Amount exceeds available balance",
+    "earningsBelongToCompany": "Your completed jobs and earnings belong to your company wallet. The figures below are your personal performance only."
   }
 }

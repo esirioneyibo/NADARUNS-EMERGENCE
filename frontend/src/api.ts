@@ -494,4 +494,8 @@ export const api = {
 
   getCompanyJobs: (status?: string) =>
     request<CompanyJobsResponse>(`/company/jobs${status ? `?status=${status}` : ""}`),
+
+  getCompanyWallet: () => request<CompanyWalletResponse>("/company/wallet"),
+  requestCompanyPayout: (body: { amount: number; method?: string; account_details?: string }) =>
+    request<{ payout: CompanyPayout }>("/company/payouts", { method: "POST", body: JSON.stringify(body) }),
 };

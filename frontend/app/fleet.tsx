@@ -17,7 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 
 import { api } from "../src/api";
-import { CompanyInfo, CompanyJob, FleetDriver, FleetVehicle, JobAcceptanceMode } from "../src/types";
+import { CompanyInfo, CompanyJob, CompanyPayout, CompanyWallet, CompanyWalletTxn, FleetDriver, FleetVehicle, JobAcceptanceMode } from "../src/types";
 import { radius, shadows, spacing } from "../src/theme";
 import { useTheme } from "../src/contexts/ThemeContext";
 
@@ -44,11 +44,15 @@ export default function FleetScreen() {
 
   const [loading, setLoading] = useState(true);
   const [info, setInfo] = useState<CompanyInfo | null>(null);
-  const [tab, setTab] = useState<"drivers" | "vehicles" | "jobs">("drivers");
+  const [tab, setTab] = useState<"drivers" | "vehicles" | "jobs" | "wallet">("drivers");
   const [drivers, setDrivers] = useState<FleetDriver[]>([]);
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([]);
   const [jobs, setJobs] = useState<CompanyJob[]>([]);
   const [jobStats, setJobStats] = useState<{ active: number; completed: number; completed_earnings: number } | null>(null);
+  const [wallet, setWallet] = useState<CompanyWallet | null>(null);
+  const [walletTxns, setWalletTxns] = useState<CompanyWalletTxn[]>([]);
+  const [walletPayouts, setWalletPayouts] = useState<CompanyPayout[]>([]);
+  const [showPayout, setShowPayout] = useState(false);
   const [banner, setBanner] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
 
   // Create company form
@@ -72,15 +76,19 @@ export default function FleetScreen() {
       const ci = await api.getMyCompany();
       setInfo(ci);
       if (ci.company && ci.role === "owner") {
-        const [d, v, j] = await Promise.all([
+        const [d, v, j, w] = await Promise.all([
           api.getCompanyDrivers(),
           api.getCompanyVehicles(),
           api.getCompanyJobs(),
+          api.getCompanyWallet(),
         ]);
         setDrivers(d.drivers);
         setVehicles(v.vehicles);
         setJobs(j.jobs);
         setJobStats(j.stats);
+        setWallet(w.wallet);
+        setWalletTxns(w.transactions);
+        setWalletPayouts(w.payouts);
       }
     } catch (e: any) {
       flash(e?.message || "Failed to load", "err");
@@ -97,17 +105,21 @@ export default function FleetScreen() {
   );
 
   const refreshOwnerData = async () => {
-    const [d, v, ci, j] = await Promise.all([
+    const [d, v, ci, j, w] = await Promise.all([
       api.getCompanyDrivers(),
       api.getCompanyVehicles(),
       api.getMyCompany(),
       api.getCompanyJobs(),
+      api.getCompanyWallet(),
     ]);
     setDrivers(d.drivers);
     setVehicles(v.vehicles);
     setInfo(ci);
     setJobs(j.jobs);
     setJobStats(j.stats);
+    setWallet(w.wallet);
+    setWalletTxns(w.transactions);
+    setWalletPayouts(w.payouts);
   };
 
   const onCreateCompany = async () => {
@@ -311,6 +323,15 @@ export default function FleetScreen() {
               {t("fleet.tabJobs")} ({jobs.length})
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.tab, tab === "wallet" && s.tabActive]}
+            onPress={() => setTab("wallet")}
+            testID="tab-wallet"
+          >
+            <Text style={[s.tabText, tab === "wallet" && s.tabTextActive]}>
+              {t("fleet.tabWallet")}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {tab === "drivers" ? (
@@ -425,7 +446,7 @@ export default function FleetScreen() {
               ))
             )}
           </View>
-        ) : (
+        ) : tab === "jobs" ? (
           <View style={{ marginTop: spacing.md }}>
             {jobStats && (
               <View style={s.statsRow}>
@@ -447,6 +468,61 @@ export default function FleetScreen() {
               <Text style={[s.muted, { textAlign: "center", marginTop: 24 }]}>{t("fleet.noJobs")}</Text>
             ) : (
               jobs.map((j) => <JobCard key={j.id} j={j} theme={theme} t={t} s={s} />)
+            )}
+          </View>
+        ) : (
+          <View style={{ marginTop: spacing.md }}>
+            <View style={s.walletGrid}>
+              <View style={s.walletBox}>
+                <Text style={s.walletNum}>€{(wallet?.available_balance ?? 0).toFixed(2)}</Text>
+                <Text style={s.statLabel}>{t("fleet.walletAvailable")}</Text>
+              </View>
+              <View style={s.walletBox}>
+                <Text style={s.walletNum}>€{(wallet?.pending_balance ?? 0).toFixed(2)}</Text>
+                <Text style={s.statLabel}>{t("fleet.walletPending")}</Text>
+              </View>
+              <View style={s.walletBox}>
+                <Text style={s.walletNum}>€{(wallet?.total_earnings ?? 0).toFixed(2)}</Text>
+                <Text style={s.statLabel}>{t("fleet.walletTotalEarned")}</Text>
+              </View>
+              <View style={s.walletBox}>
+                <Text style={s.walletNum}>€{(wallet?.total_withdrawn ?? 0).toFixed(2)}</Text>
+                <Text style={s.statLabel}>{t("fleet.walletWithdrawn")}</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[s.primaryBtn, (!wallet || wallet.available_balance <= 0) && { opacity: 0.5 }]}
+              disabled={!wallet || wallet.available_balance <= 0}
+              onPress={() => setShowPayout(true)}
+              testID="request-payout-btn"
+            >
+              <Text style={s.primaryBtnText}>{t("fleet.requestPayout")}</Text>
+            </TouchableOpacity>
+
+            <Text style={s.sectionLabel}>{t("fleet.payoutHistory")}</Text>
+            {walletPayouts.length === 0 ? (
+              <Text style={s.muted}>{t("fleet.noPayouts")}</Text>
+            ) : (
+              walletPayouts.map((p) => <PayoutRow key={p.id} p={p} theme={theme} t={t} s={s} />)
+            )}
+
+            <Text style={s.sectionLabel}>{t("fleet.recentTxns")}</Text>
+            {walletTxns.filter((x) => x.type === "earning").length === 0 ? (
+              <Text style={s.muted}>{t("fleet.noTxns")}</Text>
+            ) : (
+              walletTxns
+                .filter((x) => x.type === "earning")
+                .slice(0, 15)
+                .map((x) => (
+                  <View key={x.id} style={s.txnRow}>
+                    <Text style={[s.muted, { flex: 1 }]} numberOfLines={1}>
+                      {x.order_number || "—"}
+                    </Text>
+                    <Text style={{ color: theme.success, fontWeight: "800" }}>
+                      +€{x.amount.toFixed(2)}
+                    </Text>
+                  </View>
+                ))
             )}
           </View>
         )}
@@ -543,6 +619,21 @@ export default function FleetScreen() {
           </View>
         </View>
       </Modal>
+
+      <PayoutModal
+        visible={showPayout}
+        wallet={wallet}
+        theme={theme}
+        t={t}
+        s={s}
+        onClose={() => setShowPayout(false)}
+        onDone={async () => {
+          setShowPayout(false);
+          await refreshOwnerData();
+          flash(t("fleet.added"));
+        }}
+        onError={(m) => flash(m, "err")}
+      />
     </View>
   );
 }
@@ -871,6 +962,73 @@ function AddVehicleModal({ visible, theme, t, s, onClose, onDone, onError }: any
   );
 }
 
+function PayoutModal({ visible, wallet, theme, t, s, onClose, onDone, onError }: any) {
+  const [amount, setAmount] = useState("");
+  const [account, setAccount] = useState("");
+  const [saving, setSaving] = useState(false);
+  const submit = async () => {
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) return onError(t("fleet.required"));
+    if (wallet && amt > wallet.available_balance) return onError(t("fleet.insufficientBalance"));
+    setSaving(true);
+    try {
+      await api.requestCompanyPayout({ amount: amt, account_details: account.trim() || undefined });
+      setAmount("");
+      setAccount("");
+      onDone();
+    } catch (e: any) {
+      onError(e?.message || "Failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={[s.modalSheet, { backgroundColor: theme.surface }]}>
+          <Text style={s.modalTitle}>{t("fleet.requestPayout")}</Text>
+          <Text style={[s.muted, { marginBottom: 12 }]}>
+            {t("fleet.walletAvailable")}: €{(wallet?.available_balance ?? 0).toFixed(2)}
+          </Text>
+          <Field theme={theme} label={t("fleet.payoutAmount")} value={amount} onChangeText={setAmount} keyboardType="numeric" testID="payout-amount" />
+          <Field theme={theme} label={t("fleet.payoutAccount")} value={account} onChangeText={setAccount} testID="payout-account" />
+          <View style={{ flexDirection: "row", marginTop: 8 }}>
+            <TouchableOpacity style={[s.ghostBtn, { flex: 1, marginRight: 8 }]} onPress={onClose}>
+              <Text style={s.ghostBtnText}>{t("fleet.cancel")}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.primaryBtn, { flex: 1, marginTop: 0 }, saving && { opacity: 0.6 }]} onPress={submit} disabled={saving} testID="payout-submit">
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>{t("fleet.payoutSubmit")}</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function PayoutRow({ p, theme, t, s }: any) {
+  const map: any = {
+    pending: { c: theme.warning, l: t("fleet.payoutPending") },
+    approved: { c: theme.primary, l: t("fleet.payoutApproved") },
+    paid: { c: theme.success, l: t("fleet.payoutPaid") },
+    rejected: { c: theme.error, l: t("fleet.payoutRejected") },
+  };
+  const st = map[p.status] || map.pending;
+  return (
+    <View style={s.itemCard}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.itemTitle}>€{Number(p.amount).toFixed(2)}</Text>
+          <Text style={s.muted}>{p.reference || p.id?.slice(0, 8)}</Text>
+        </View>
+        <View style={[s.statusPill, { backgroundColor: `${st.c}20` }]}>
+          <Text style={[s.statusPillText, { color: st.c }]}>{st.l}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ---------------- styles ----------------
 const makeStyles = (theme: any) =>
   StyleSheet.create({
@@ -924,7 +1082,7 @@ const makeStyles = (theme: any) =>
     },
     tab: { flex: 1, paddingVertical: 10, borderRadius: radius.pill, alignItems: "center" },
     tabActive: { backgroundColor: theme.primary },
-    tabText: { fontSize: 14, fontWeight: "700", color: theme.textSecondary },
+    tabText: { fontSize: 12, fontWeight: "700", color: theme.textSecondary },
     tabTextActive: { color: "#fff" },
     addBtn: {
       flexDirection: "row", alignItems: "center", justifyContent: "center",
@@ -974,4 +1132,15 @@ const makeStyles = (theme: any) =>
     statLabel: { fontSize: 11, color: theme.textSecondary, fontWeight: "600", marginTop: 2 },
     statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
     statusPillText: { fontSize: 11, fontWeight: "800", textTransform: "capitalize" },
+    walletGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 14 },
+    walletBox: {
+      width: "48%", marginHorizontal: "1%", marginBottom: 8,
+      backgroundColor: theme.surface, borderRadius: radius.md, paddingVertical: 16,
+      alignItems: "center", borderWidth: 1, borderColor: theme.border,
+    },
+    walletNum: { fontSize: 18, fontWeight: "800", color: theme.textPrimary },
+    txnRow: {
+      flexDirection: "row", alignItems: "center", paddingVertical: 10,
+      borderBottomWidth: 1, borderBottomColor: theme.border,
+    },
   });

@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from "react";
-import { LayoutDashboard, Truck, Users, Package, Car, ShieldCheck, LogOut, BadgeEuro, FileText, Settings as SettingsIcon, MapPinned, Home } from "lucide-react";
+import { LayoutDashboard, Truck, Users, Package, Car, ShieldCheck, LogOut, BadgeEuro, FileText, Settings as SettingsIcon, MapPinned, Home, Building2 } from "lucide-react";
 import { adminApi, setToken, clearToken, hasToken } from "@/lib/adminApi";
 import Overview from "@/components/admin/Overview";
 import Drivers from "@/components/admin/Drivers";
@@ -13,8 +13,9 @@ import Financials from "@/components/admin/Financials";
 import Invoices from "@/components/admin/Invoices";
 import Settings from "@/components/admin/Settings";
 import DispatchMap from "@/components/admin/DispatchMap";
+import FleetCompanies from "@/components/admin/FleetCompanies";
 
-type Section = "overview" | "dispatch" | "drivers" | "shippers" | "orders" | "vehicles" | "kyc" | "financials" | "invoices" | "settings";
+type Section = "overview" | "dispatch" | "drivers" | "shippers" | "orders" | "vehicles" | "kyc" | "financials" | "invoices" | "fleet" | "settings";
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -46,12 +47,13 @@ export default function AdminPage() {
     { key: "vehicles", label: "Vehicles", icon: Car },
     { key: "financials", label: "Financials", icon: BadgeEuro },
     { key: "invoices", label: "Invoices", icon: FileText },
+    { key: "fleet", label: "Fleet Companies", icon: Building2 },
     { key: "kyc", label: "KYC", icon: ShieldCheck, count: pendingKyc || undefined },
     { key: "settings", label: "Settings", icon: SettingsIcon },
   ];
   const titles: Record<Section, string> = {
     overview: "Dashboard overview", dispatch: "Live dispatch map", drivers: "Drivers", shippers: "Shippers",
-    orders: "Orders & deliveries", vehicles: "Fleet & vehicles", financials: "Financials & payments", invoices: "Invoices & billing", kyc: "KYC verification", settings: "Settings",
+    orders: "Orders & deliveries", vehicles: "Fleet & vehicles", financials: "Financials & payments", invoices: "Invoices & billing", fleet: "Fleet companies", kyc: "KYC verification", settings: "Settings",
   };
   const logout = () => { clearToken(); setAuthed(false); };
 
@@ -93,6 +95,7 @@ export default function AdminPage() {
             {section === "vehicles" && <Vehicles />}
             {section === "financials" && <Financials notify={notify} />}
             {section === "invoices" && <Invoices notify={notify} />}
+            {section === "fleet" && <FleetCompanies notify={notify} />}
             {section === "kyc" && <Kyc notify={notify} />}
             {section === "settings" && <Settings notify={notify} />}
           </div>

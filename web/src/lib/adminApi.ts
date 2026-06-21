@@ -151,4 +151,18 @@ export const adminApi = {
 
   // Live dispatch map
   dispatchMap: () => req<any>("/admin/dispatch/map"),
+
+  // ---- Fleet (Phase 5) ----
+  fleetCompanies: (p?: Record<string, string | number | undefined>) =>
+    req<{ items: any[]; total: number }>(`/admin/fleet/companies${qs(p || {})}`),
+  fleetCompany: (id: string) => req<any>(`/admin/fleet/companies/${id}`),
+  suspendCompany: (id: string) => req<any>(`/admin/fleet/companies/${id}/suspend`, { method: "POST" }),
+  activateCompany: (id: string) => req<any>(`/admin/fleet/companies/${id}/activate`, { method: "POST" }),
+  fleetPayouts: (p?: Record<string, string | number | undefined>) =>
+    req<{ payouts: any[]; totals: any }>(`/admin/fleet/payouts${qs(p || {})}`),
+  approveCompanyPayout: (id: string) => req<any>(`/admin/fleet/payouts/${id}/approve`, { method: "POST" }),
+  payCompanyPayout: (id: string, reference?: string) =>
+    req<any>(`/admin/fleet/payouts/${id}/pay`, { method: "POST", body: JSON.stringify({ reference }) }),
+  rejectCompanyPayout: (id: string, reason?: string) =>
+    req<any>(`/admin/fleet/payouts/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
 };

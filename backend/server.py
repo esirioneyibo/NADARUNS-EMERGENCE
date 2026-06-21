@@ -751,6 +751,63 @@ class AssignJobRequest(BaseModel):
     vehicle_id: Optional[str] = None
 
 
+# ---- Phase 3/4: Company Wallet & Payouts ----
+
+class CompanyWallet(BaseModel):
+    company_id: str
+    available_balance: float = 0.0
+    pending_balance: float = 0.0
+    total_earnings: float = 0.0
+    total_withdrawn: float = 0.0
+    currency: str = "EUR"
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class CompanyWalletTxn(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    company_id: str
+    type: Literal["earning", "payout", "payout_reversal"] = "earning"
+    amount: float = 0.0
+    gross_amount: Optional[float] = None
+    platform_fee: Optional[float] = None
+    company_earnings: Optional[float] = None
+    order_id: Optional[str] = None
+    order_number: Optional[str] = None
+    driver_id: Optional[str] = None
+    note: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class CompanyPayout(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    company_id: str
+    company_name: Optional[str] = None
+    amount: float
+    currency: str = "EUR"
+    method: str = "bank_transfer"
+    account_details: Optional[str] = None
+    status: Literal["pending", "approved", "paid", "rejected"] = "pending"
+    reference: Optional[str] = None
+    note: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    reviewed_at: Optional[str] = None
+    paid_at: Optional[str] = None
+
+
+class CompanyPayoutCreate(BaseModel):
+    amount: float = Field(gt=0)
+    method: str = "bank_transfer"
+    account_details: Optional[str] = None
+
+
+class PayoutRefRequest(BaseModel):
+    reference: Optional[str] = None
+
+
+class PayoutReasonRequest(BaseModel):
+    reason: Optional[str] = None
+
+
 # ===================== Transaction & Wallet Models =====================
 
 class Transaction(BaseModel):
@@ -1255,6 +1312,13 @@ async def create_database_indexes():
         await db.fleet_vehicles.create_index("company_id")
         await db.fleet_vehicles.create_index("assigned_driver_id")
         await db.fleet_vehicles.create_index([("company_id", 1), ("registration_number", 1)], unique=True)
+
+        # Phase 3/4: company wallet & payouts
+        await db.company_wallets.create_index("company_id", unique=True)
+        await db.company_wallet_txns.create_index("company_id")
+        await db.company_payouts.create_index("company_id")
+        await db.company_payouts.create_index("status")
+        await db.orders.create_index("assigned_company_id")
 
         logger.info("Database indexes created successfully")
     except Exception as e:
@@ -1855,6 +1919,48 @@ async def reject_order(order_id: str, request: Request):
     return Order(**order)
 
 
+async def _get_or_create_company_wallet(company_id: str) -> dict:
+    w = await db.company_wallets.find_one({"company_id": company_id}, {"_id": 0})
+    if not w:
+        w = CompanyWallet(company_id=company_id).model_dump()
+        await db.company_wallets.insert_one(w)
+    return w
+
+
+async def _credit_company_wallet_on_delivery(order: dict):
+    """Phase 3: route a completed company job's net earnings into the company wallet.
+
+    Solo (non-company) drivers are unaffected — their personal stats stay as-is.
+    """
+    company_id = order.get("assigned_company_id")
+    if not company_id:
+        return
+    net = round(float(order.get("earnings") or 0) + float(order.get("tip") or 0), 2)
+    gross = float(
+        order.get("price_quote") or order.get("total_price") or order.get("payment_amount") or net
+    )
+    fee = round(max(0.0, gross - float(order.get("earnings") or 0)), 2)
+    await _get_or_create_company_wallet(company_id)
+    await db.company_wallets.update_one(
+        {"company_id": company_id},
+        {
+            "$inc": {"available_balance": net, "total_earnings": net},
+            "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
+        },
+    )
+    txn = CompanyWalletTxn(
+        company_id=company_id, type="earning", amount=net,
+        gross_amount=round(gross, 2), platform_fee=fee, company_earnings=net,
+        order_id=order.get("id"), order_number=order.get("order_number"),
+        driver_id=order.get("assigned_driver_id") or order.get("driver_id"),
+    )
+    await db.company_wallet_txns.insert_one(txn.model_dump())
+    await db.orders.update_one(
+        {"id": order.get("id")},
+        {"$set": {"gross_amount": round(gross, 2), "platform_fee": fee, "company_earnings": net}},
+    )
+
+
 @api_router.post("/orders/{order_id}/advance", response_model=Order)
 async def advance_order(order_id: str, body: AdvanceRequest, request: Request):
     """Advance an order through its lifecycle, validated by the state machine.
@@ -1890,6 +1996,11 @@ async def advance_order(order_id: str, body: AdvanceRequest, request: Request):
             {"id": credit_driver_id},
             {"$inc": {"earnings_today": order["earnings"] + order.get("tip", 0), "deliveries_today": 1}},
         )
+        # Phase 3: for company jobs, the net earnings belong to the COMPANY wallet.
+        try:
+            await _credit_company_wallet_on_delivery(order)
+        except Exception as exc:  # never block delivery on a wallet error
+            logger.warning(f"Company wallet credit failed for {order_id}: {exc}")
         # Note: we intentionally do NOT auto-seed a replacement pending order
         # here. The available-jobs pool should shrink as jobs are completed so
         # the "jobs nearby" counter reflects reality. Use POST
@@ -7578,6 +7689,215 @@ async def owner_assign_job(
     order.update(set_fields)
     asyncio.create_task(push_status_to_shipper(order, "accepted"))
     return {"success": True, "order_id": order_id, "driver_id": body.driver_id, "vehicle_id": vehicle_id}
+
+
+# ---- Company wallet & payouts (Phase 3/4, owner) ----
+
+@api_router.get("/company/wallet")
+async def get_company_wallet(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    driver, company = await _require_company_owner(credentials)
+    wallet = await _get_or_create_company_wallet(company["id"])
+    txns = [
+        t async for t in db.company_wallet_txns.find({"company_id": company["id"]}, {"_id": 0})
+        .sort("created_at", -1).limit(50)
+    ]
+    payouts = [
+        p async for p in db.company_payouts.find({"company_id": company["id"]}, {"_id": 0})
+        .sort("created_at", -1).limit(50)
+    ]
+    return {"wallet": wallet, "transactions": txns, "payouts": payouts}
+
+
+@api_router.post("/company/payouts")
+async def request_company_payout(
+    body: CompanyPayoutCreate,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    driver, company = await _require_company_owner(credentials)
+    wallet = await _get_or_create_company_wallet(company["id"])
+    amount = round(float(body.amount), 2)
+    if amount <= 0:
+        raise HTTPException(400, "Amount must be greater than zero")
+    if amount > round(float(wallet.get("available_balance", 0)), 2):
+        raise HTTPException(400, "Amount exceeds available balance")
+    payout = CompanyPayout(
+        company_id=company["id"],
+        company_name=company.get("company_name"),
+        amount=amount,
+        method=body.method or "bank_transfer",
+        account_details=body.account_details,
+        reference="PO-" + uuid.uuid4().hex[:8].upper(),
+    )
+    await db.company_payouts.insert_one(payout.model_dump())
+    # Move funds from available -> pending (locked while the request is processed).
+    await db.company_wallets.update_one(
+        {"company_id": company["id"]},
+        {"$inc": {"available_balance": -amount, "pending_balance": amount},
+         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"payout": payout.model_dump()}
+
+
+@api_router.get("/company/payouts")
+async def list_company_payouts(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    driver, company = await _require_company_owner(credentials)
+    payouts = [
+        p async for p in db.company_payouts.find({"company_id": company["id"]}, {"_id": 0})
+        .sort("created_at", -1).limit(100)
+    ]
+    return {"payouts": payouts}
+
+
+# ---- Admin Fleet dashboard (Phase 5) ----
+
+@api_router.get("/admin/fleet/companies")
+async def admin_list_companies(
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    user: dict = Depends(get_admin_user),
+):
+    query: dict = {}
+    if status:
+        query["status"] = status
+    if search:
+        query["company_name"] = {"$regex": re.escape(search), "$options": "i"}
+    companies = [c async for c in db.companies.find(query, {"_id": 0}).sort("created_at", -1).limit(200)]
+    out = []
+    for c in companies:
+        wallet = await db.company_wallets.find_one({"company_id": c["id"]}, {"_id": 0}) or {}
+        owner = await db.drivers.find_one({"id": c["owner_driver_id"]}, {"_id": 0, "name": 1, "email": 1})
+        out.append({
+            **c,
+            "owner_name": (owner or {}).get("name"),
+            "owner_email": (owner or {}).get("email"),
+            "driver_count": await db.drivers.count_documents({"company_id": c["id"]}),
+            "vehicle_count": await db.fleet_vehicles.count_documents({"company_id": c["id"]}),
+            "available_balance": round(float(wallet.get("available_balance", 0)), 2),
+            "pending_balance": round(float(wallet.get("pending_balance", 0)), 2),
+            "total_earnings": round(float(wallet.get("total_earnings", 0)), 2),
+            "total_withdrawn": round(float(wallet.get("total_withdrawn", 0)), 2),
+        })
+    return {"items": out, "total": len(out)}
+
+
+@api_router.get("/admin/fleet/companies/{company_id}")
+async def admin_company_detail(company_id: str, user: dict = Depends(get_admin_user)):
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(404, "Company not found")
+    wallet = await _get_or_create_company_wallet(company_id)
+    drivers = [_public_driver(d) async for d in db.drivers.find({"company_id": company_id}, {"_id": 0})]
+    drivers.sort(key=lambda d: (d.get("company_role") != "owner", (d.get("name") or "").lower()))
+    vehicles = [v async for v in db.fleet_vehicles.find({"company_id": company_id}, {"_id": 0})]
+    payouts = [
+        p async for p in db.company_payouts.find({"company_id": company_id}, {"_id": 0})
+        .sort("created_at", -1).limit(100)
+    ]
+    completed = await db.orders.count_documents({"assigned_company_id": company_id, "status": sm.DELIVERED})
+    active = await db.orders.count_documents({"assigned_company_id": company_id, "status": {"$in": list(sm.ACTIVE_STATES)}})
+    return {
+        "company": company, "wallet": wallet, "drivers": drivers, "vehicles": vehicles,
+        "payouts": payouts, "stats": {"completed_jobs": completed, "active_jobs": active},
+    }
+
+
+@api_router.post("/admin/fleet/companies/{company_id}/suspend")
+async def admin_suspend_company(company_id: str, user: dict = Depends(get_admin_user)):
+    res = await db.companies.update_one({"id": company_id}, {"$set": {"status": "suspended"}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Company not found")
+    return {"success": True}
+
+
+@api_router.post("/admin/fleet/companies/{company_id}/activate")
+async def admin_activate_company(company_id: str, user: dict = Depends(get_admin_user)):
+    res = await db.companies.update_one({"id": company_id}, {"$set": {"status": "active"}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Company not found")
+    return {"success": True}
+
+
+@api_router.get("/admin/fleet/payouts")
+async def admin_list_company_payouts(
+    status: Optional[str] = None,
+    user: dict = Depends(get_admin_user),
+):
+    query: dict = {}
+    if status:
+        query["status"] = status
+    payouts = [p async for p in db.company_payouts.find(query, {"_id": 0}).sort("created_at", -1).limit(300)]
+    totals = {
+        "pending": sum(1 for p in payouts if p["status"] == "pending"),
+        "approved": sum(1 for p in payouts if p["status"] == "approved"),
+        "paid_amount": round(sum(float(p["amount"]) for p in payouts if p["status"] == "paid"), 2),
+    }
+    return {"payouts": payouts, "totals": totals}
+
+
+async def _get_company_payout(payout_id: str) -> dict:
+    p = await db.company_payouts.find_one({"id": payout_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Payout not found")
+    return p
+
+
+@api_router.post("/admin/fleet/payouts/{payout_id}/approve")
+async def admin_approve_company_payout(payout_id: str, user: dict = Depends(get_admin_user)):
+    p = await _get_company_payout(payout_id)
+    if p["status"] != "pending":
+        raise HTTPException(400, f"Cannot approve a {p['status']} payout")
+    await db.company_payouts.update_one(
+        {"id": payout_id},
+        {"$set": {"status": "approved", "reviewed_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"success": True}
+
+
+@api_router.post("/admin/fleet/payouts/{payout_id}/pay")
+async def admin_pay_company_payout(
+    payout_id: str, body: PayoutRefRequest, user: dict = Depends(get_admin_user)
+):
+    p = await _get_company_payout(payout_id)
+    if p["status"] not in ("approved", "pending"):
+        raise HTTPException(400, f"Cannot pay a {p['status']} payout")
+    amount = round(float(p["amount"]), 2)
+    updates = {"status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}
+    if body.reference:
+        updates["reference"] = body.reference
+    await db.company_payouts.update_one({"id": payout_id}, {"$set": updates})
+    # Settle: remove from pending, add to total_withdrawn.
+    await db.company_wallets.update_one(
+        {"company_id": p["company_id"]},
+        {"$inc": {"pending_balance": -amount, "total_withdrawn": amount},
+         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await db.company_wallet_txns.insert_one(CompanyWalletTxn(
+        company_id=p["company_id"], type="payout", amount=-amount,
+        note=f"Payout {p.get('reference') or payout_id} paid",
+    ).model_dump())
+    return {"success": True}
+
+
+@api_router.post("/admin/fleet/payouts/{payout_id}/reject")
+async def admin_reject_company_payout(
+    payout_id: str, body: PayoutReasonRequest, user: dict = Depends(get_admin_user)
+):
+    p = await _get_company_payout(payout_id)
+    if p["status"] in ("paid", "rejected"):
+        raise HTTPException(400, f"Cannot reject a {p['status']} payout")
+    amount = round(float(p["amount"]), 2)
+    await db.company_payouts.update_one(
+        {"id": payout_id},
+        {"$set": {"status": "rejected", "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                  "note": body.reason}},
+    )
+    # Refund the locked funds back to available.
+    await db.company_wallets.update_one(
+        {"company_id": p["company_id"]},
+        {"$inc": {"pending_balance": -amount, "available_balance": amount},
+         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"success": True}
 
 
 # ===================== Lifecycle =====================

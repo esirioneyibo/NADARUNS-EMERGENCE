@@ -77,6 +77,13 @@ All frontend iter3 testIDs (otp-modal, otp-digit-*, wallet-screen, wallet-balanc
   - Frontend: new `app/shipper-payment-methods.tsx` (list, add-card redirect, set-default, delete) linked from shipper-settings. `api.ts` methods added. Verified end-to-end.
 - **P3 DONE — shipper-tracking.tsx i18n** (English + Finnish): added `tracking` + `paymentMethods` blocks to en/fi locales; all status/payment labels + UI strings + alerts translated. Verified bilingual render, no raw-key leakage.
 
+## Fleet Management — Phases 3-5: Wallet, Payouts, Admin (Jun 2026)
+**Phase 3 — Company Wallet & earnings split**: on delivery of a company job, net earnings (earnings+tip) route to the **company wallet** (`available_balance`/`total_earnings`); order stores `gross_amount`/`platform_fee`/`company_earnings`. Solo drivers unchanged. Driver personal stats (earnings_today/deliveries) still increment (informational). New `company_wallets` + `company_wallet_txns` collections. `GET /api/company/wallet` (owner) → wallet + txns + payouts.
+**Phase 4 — Payouts (admin-approved ledger, no Stripe transfers)**: `POST /api/company/payouts` (owner; moves available→pending, ref `PO-XXXX`). Admin: `GET /api/admin/fleet/payouts`, `/{id}/approve`, `/{id}/pay` (pending→withdrawn), `/{id}/reject` (refund to available). Statuses pending/approved/paid/rejected.
+**Phase 5 — Admin Fleet dashboard** (Next.js web): `GET /api/admin/fleet/companies` (+ search/status), `/{id}` detail, `/{id}/suspend|activate`. New `web/src/components/admin/FleetCompanies.tsx` (Companies list + detail with drivers/vehicles/wallet/payouts, and Payout-requests tab with approve/pay/reject). Wired into admin `page.tsx` ("Fleet Companies" nav).
+**Frontend (driver app)**: Fleet screen gains a **Wallet** tab (balances + request-payout modal + payout history + recent earnings). Localized EN+FI.
+**Verified**: full money flow curl-tested (deliver→wallet credit→payout→admin approve/pay→withdrawn). NOTE: admin web is not served in preview (deploy-time); backend admin endpoints curl-verified.
+
 ## Fleet Management — Phase 2: Job acceptance & visibility (Jun 2026)
 - **Order audit fields** added: `assigned_company_id`, `assigned_driver_id`, `assigned_vehicle_id` (set on accept).
 - **Self-accept enforcement**: when a company driver accepts a job, the order records company/driver/vehicle (vehicle = the active fleet vehicle assigned to that driver, else null). Suspended driver/company → 403.
