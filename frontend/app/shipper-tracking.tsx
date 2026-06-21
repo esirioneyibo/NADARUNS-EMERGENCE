@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
   Image,
+  Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -76,6 +77,8 @@ interface ShipmentDetails {
     timestamp: string;
     note?: string;
   }>;
+  pickup_photo?: string | null;
+  delivery_photo?: string | null;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string; description: string }> = {
@@ -111,6 +114,7 @@ export default function ShipperTrackingScreen() {
   const authRetryRef = useRef(0);
 
   const [shipment, setShipment] = useState<ShipmentDetails | null>(null);
+  const [proofUri, setProofUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -680,6 +684,37 @@ export default function ShipperTrackingScreen() {
           )}
         </Animated.View>
 
+        {/* Proof of Pickup & Delivery (POP / POD) */}
+        {(shipment.pickup_photo || shipment.delivery_photo) && (
+          <Animated.View entering={FadeInUp.delay(375)} style={[styles.card, shadows.sm]}>
+            <Text style={styles.cardTitle}>{t("tracking.proofTitle", { defaultValue: "Proof of Pickup & Delivery" })}</Text>
+            <View style={styles.proofRow}>
+              <View style={styles.proofCol}>
+                <Text style={styles.proofLabel}>{t("tracking.proofPickup", { defaultValue: "Pickup (POP)" })}</Text>
+                {shipment.pickup_photo ? (
+                  <TouchableOpacity testID="pop-photo" activeOpacity={0.85} onPress={() => setProofUri(shipment.pickup_photo!)}>
+                    <Image source={{ uri: shipment.pickup_photo }} style={styles.proofImg} />
+                    <View style={styles.proofExpand}><Ionicons name="expand-outline" size={14} color="#fff" /></View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.proofEmpty}><Ionicons name="image-outline" size={22} color={theme.textSecondary} /><Text style={styles.proofEmptyText}>{t("tracking.proofPending", { defaultValue: "Pending" })}</Text></View>
+                )}
+              </View>
+              <View style={styles.proofCol}>
+                <Text style={styles.proofLabel}>{t("tracking.proofDelivery", { defaultValue: "Delivery (POD)" })}</Text>
+                {shipment.delivery_photo ? (
+                  <TouchableOpacity testID="pod-photo" activeOpacity={0.85} onPress={() => setProofUri(shipment.delivery_photo!)}>
+                    <Image source={{ uri: shipment.delivery_photo }} style={styles.proofImg} />
+                    <View style={styles.proofExpand}><Ionicons name="expand-outline" size={14} color="#fff" /></View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.proofEmpty}><Ionicons name="image-outline" size={22} color={theme.textSecondary} /><Text style={styles.proofEmptyText}>{t("tracking.proofPending", { defaultValue: "Pending" })}</Text></View>
+                )}
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
         {/* Timeline */}
         {shipment.timeline && shipment.timeline.length > 0 && (
           <Animated.View entering={FadeInUp.delay(400)} style={[styles.card, shadows.sm]}>
@@ -721,6 +756,16 @@ export default function ShipperTrackingScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Fullscreen proof viewer */}
+      <Modal visible={!!proofUri} transparent animationType="fade" onRequestClose={() => setProofUri(null)}>
+        <View style={styles.proofModalBg}>
+          <TouchableOpacity style={styles.proofClose} onPress={() => setProofUri(null)} testID="proof-close">
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          {proofUri ? <Image source={{ uri: proofUri }} style={styles.proofFull} resizeMode="contain" /> : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1049,6 +1094,17 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.textPrimary,
     marginTop: 4,
   },
+
+  proofRow: { flexDirection: "row", gap: 12 },
+  proofCol: { flex: 1 },
+  proofLabel: { fontSize: 12, fontWeight: "700", color: theme.textSecondary, marginBottom: 6 },
+  proofImg: { width: "100%", height: 120, borderRadius: radius.md, backgroundColor: theme.surfaceAlt || "#E2E8F0" },
+  proofExpand: { position: "absolute", right: 8, bottom: 8, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 999, padding: 5 },
+  proofEmpty: { width: "100%", height: 120, borderRadius: radius.md, backgroundColor: theme.surfaceAlt || "#F1F5F9", alignItems: "center", justifyContent: "center", gap: 4, borderWidth: 1, borderColor: theme.border || "#E2E8F0", borderStyle: "dashed" },
+  proofEmptyText: { fontSize: 12, color: theme.textSecondary },
+  proofModalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", alignItems: "center", justifyContent: "center" },
+  proofClose: { position: "absolute", top: 50, right: 20, zIndex: 10, padding: 8 },
+  proofFull: { width: "100%", height: "80%" },
   
   timelineItem: {
     flexDirection: "row",

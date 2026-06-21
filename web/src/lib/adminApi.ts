@@ -116,6 +116,16 @@ export const adminApi = {
     req<{ invoice_fee: number; net_days: number }>("/admin/settings/invoicing", { method: "POST", body: JSON.stringify(body) }),
   invoicePdfUrl: (id: string) => `${API_BASE}/api/invoices/${id}/pdf?token=${getToken() || ""}`,
 
+  // Receipts (payment receipts + withdrawal invoices/receipts)
+  receipts: (p: { doc_type?: string; q?: string }) =>
+    req<{ receipts: any[]; totals: any }>(`/admin/receipts${qs(p)}`),
+  resendReceipt: (id: string) => req<any>(`/admin/receipts/${id}/resend`, { method: "POST" }),
+  receiptPdfUrl: (id: string) => `${API_BASE}/api/receipts/${id}/pdf?token=${getToken() || ""}`,
+
+  // Email logs (delivery audit trail)
+  emailLogs: (p: { category?: string; status?: string; q?: string; limit?: number }) =>
+    req<{ logs: any[]; totals: any }>(`/admin/email-logs${qs(p)}`),
+
   // Vehicles
   vehicles: (p: { search?: string; vehicle_type?: string }) =>
     req<{ items: any[]; total: number }>(`/admin/manage/vehicles${qs(p)}`),

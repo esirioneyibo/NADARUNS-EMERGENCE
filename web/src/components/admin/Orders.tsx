@@ -135,6 +135,32 @@ function OrderDrawer({ id, onClose, onChanged, notify }: { id: string | null; on
           <InfoRow label="Shipper" value={det.shipper ? det.shipper.company_name : "—"} />
         </div>
 
+        {(o.pickup_photo || o.delivery_photo) && (
+          <div className="adm-card">
+            <div className="adm-card-title">Proof of pickup &amp; delivery</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#64748B", marginBottom: 6 }}>Pickup (POP)</div>
+                {o.pickup_photo ? (
+                  <a href={o.pickup_photo} target="_blank" rel="noreferrer" data-testid="admin-pop-photo">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={o.pickup_photo} alt="Proof of pickup" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 10, border: "1px solid #E2E8F0" }} />
+                  </a>
+                ) : <div style={{ fontSize: 12, color: "#94A3B8" }}>Pending</div>}
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#64748B", marginBottom: 6 }}>Delivery (POD)</div>
+                {o.delivery_photo ? (
+                  <a href={o.delivery_photo} target="_blank" rel="noreferrer" data-testid="admin-pod-photo">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={o.delivery_photo} alt="Proof of delivery" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 10, border: "1px solid #E2E8F0" }} />
+                  </a>
+                ) : <div style={{ fontSize: 12, color: "#94A3B8" }}>Pending</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Lifecycle actions */}
         <div className="adm-card">
           <div className="adm-card-title">Order controls</div>

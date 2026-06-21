@@ -25,6 +25,8 @@ from services import audit
 from services import idempotency
 from services import pricing
 from services import payments
+from services import email_service
+from services import email_templates as email_tpl
 
 
 ROOT_DIR = Path(__file__).parent
@@ -51,6 +53,35 @@ security = HTTPBearer(auto_error=False)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+# ===================== Transactional Email =====================
+
+def send_email_bg(to_email: Optional[str], subject: str, html: str, *,
+                  to_name: Optional[str] = None, category: str = "general",
+                  related_id: Optional[str] = None, attachments: Optional[list] = None) -> None:
+    """Schedule a branded transactional email without blocking the response.
+
+    Fire-and-forget: a failure here must never break the API request. Every
+    send is persisted to ``email_logs`` by the service for an audit trail.
+    """
+    if not to_email:
+        return
+
+    async def _run():
+        try:
+            await email_service.send_email(
+                db, to_email, subject, html, to_name=to_name,
+                attachments=attachments, category=category, related_id=related_id,
+            )
+        except Exception as exc:
+            logger.warning(f"email dispatch failed ({category}): {exc}")
+
+    try:
+        asyncio.create_task(_run())
+    except RuntimeError:
+        # No running loop (e.g. called outside a request) — skip silently.
+        pass
 
 
 # ===================== Auth Helpers =====================
@@ -2698,6 +2729,32 @@ async def push_status_to_shipper(order: dict, event: str) -> None:
     except Exception as e:
         logger.warning(f"Status push failed (non-blocking): {e}")
 
+    # Branded transactional email to the shipper on key lifecycle transitions.
+    try:
+        shipper = await db.shippers.find_one(
+            {"id": shipper_id}, {"_id": 0, "email": 1, "contact_name": 1, "company_name": 1}
+        )
+        if shipper and shipper.get("email"):
+            name = shipper.get("contact_name") or shipper.get("company_name") or "there"
+            order_no = order.get("order_number", "")
+            if event == "accepted":
+                drv = None
+                if order.get("driver_id"):
+                    drv = await db.drivers.find_one(
+                        {"id": order["driver_id"]}, {"_id": 0, "name": 1, "vehicle": 1}
+                    )
+                subj, html = email_tpl.driver_assigned(name, {
+                    "order_number": order_no,
+                    "driver_name": (drv or {}).get("name", ""),
+                    "vehicle": (drv or {}).get("vehicle", ""),
+                })
+            else:
+                subj, html = email_tpl.shipment_status(name, order_no, title)
+            send_email_bg(shipper["email"], subj, html, to_name=name,
+                          category=f"shipment_{event}", related_id=order.get("id"))
+    except Exception as e:
+        logger.warning(f"Status email failed (non-blocking): {e}")
+
 
 async def notify_drivers_of_new_order(order: dict):
     """Notify online drivers about a new available order."""
@@ -3029,6 +3086,13 @@ async def change_password(
     new_hash = hash_password(body.new_password)
     await collection.update_one({"id": user["id"]}, {"$set": {"password_hash": new_hash}})
     logger.info(f"Password changed for {user_type}: {user['id']}")
+
+    disp_name = record.get("name") or record.get("company_name") or "there"
+    if record.get("email"):
+        subj, html = email_tpl.password_changed(disp_name)
+        send_email_bg(record["email"], subj, html, to_name=disp_name,
+                      category="password_changed", related_id=user["id"])
+
     return {"status": "ok", "message": "Password updated successfully"}
 
 @api_router.post("/driver/register", response_model=RegistrationResponse)
@@ -3095,7 +3159,11 @@ async def register_driver(registration: DriverRegistration):
     token = create_token(driver_id, "driver")
     
     logger.info(f"Registered new driver: {registration.email} ({driver_id})")
-    
+
+    subj, html = email_tpl.welcome(new_driver.name, "driver")
+    send_email_bg(new_driver.email, subj, html, to_name=new_driver.name,
+                  category="driver_welcome", related_id=driver_id)
+
     return RegistrationResponse(
         driver_id=driver_id,
         message="Registration successful! Please complete KYC verification to start delivering.",
@@ -3239,7 +3307,11 @@ async def simple_driver_register(registration: SimpleDriverRegistration):
     token = create_token(driver_id, "driver")
     
     logger.info(f"Registered new driver: {registration.email} ({driver_id})")
-    
+
+    subj, html = email_tpl.welcome(registration.name, "driver")
+    send_email_bg(registration.email, subj, html, to_name=registration.name,
+                  category="driver_welcome", related_id=driver_id)
+
     return {
         "driver_id": driver_id,
         "name": registration.name,
@@ -3281,7 +3353,11 @@ async def simple_shipper_register(registration: SimpleShipperRegistration):
     token = create_token(shipper_id, "shipper")
     
     logger.info(f"Registered new shipper: {registration.email} ({shipper_id})")
-    
+
+    subj, html = email_tpl.welcome(registration.business_name, "shipper")
+    send_email_bg(registration.email, subj, html, to_name=registration.business_name,
+                  category="shipper_welcome", related_id=shipper_id)
+
     return {
         "shipper_id": shipper_id,
         "business_name": registration.business_name,
@@ -3318,7 +3394,11 @@ async def register_shipper(registration: ShipperRegistration):
     token = create_token(shipper_id, "shipper")
     
     logger.info(f"Registered new shipper: {registration.email} ({shipper_id})")
-    
+
+    subj, html = email_tpl.welcome(registration.company_name, "shipper")
+    send_email_bg(registration.email, subj, html, to_name=registration.company_name,
+                  category="shipper_welcome", related_id=shipper_id)
+
     return {
         "shipper_id": shipper_id,
         "token": token,
@@ -3633,6 +3713,20 @@ async def create_shipment(
     )
     
     logger.info(f"Shipper {shipper_id} created shipment {order_id}")
+
+    if shipper.get("email"):
+        subj, html = email_tpl.order_created(
+            shipper.get("contact_name") or shipper.get("company_name") or "there",
+            {
+                "order_number": order_number,
+                "pickup": request.pickup_address,
+                "dropoff": request.dropoff_address,
+                "price": total_price,
+            },
+        )
+        send_email_bg(shipper["email"], subj, html,
+                      to_name=shipper.get("contact_name") or shipper.get("company_name"),
+                      category="order_created", related_id=order_id)
 
     # Audit trail: record order creation.
     await audit.record_event(
@@ -4424,7 +4518,13 @@ async def approve_kyc(driver_id: str, user: dict = Depends(get_admin_user)):
     )
     
     logger.info(f"Admin approved KYC for driver {driver_id}")
-    
+
+    drv = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "name": 1, "email": 1})
+    if drv and drv.get("email"):
+        subj, html = email_tpl.driver_approved(drv.get("name", "there"))
+        send_email_bg(drv["email"], subj, html, to_name=drv.get("name"),
+                      category="driver_approved", related_id=driver_id)
+
     return {"message": "KYC approved successfully"}
 
 
@@ -4455,7 +4555,13 @@ async def reject_kyc(driver_id: str, reason: str = "Documents not clear", user: 
     )
     
     logger.info(f"Admin rejected KYC for driver {driver_id}: {reason}")
-    
+
+    drv = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "name": 1, "email": 1})
+    if drv and drv.get("email"):
+        subj, html = email_tpl.driver_rejected(drv.get("name", "there"), reason)
+        send_email_bg(drv["email"], subj, html, to_name=drv.get("name"),
+                      category="driver_rejected", related_id=driver_id)
+
     return {"message": "KYC rejected"}
 
 
@@ -5290,6 +5396,340 @@ def _build_invoice_pdf(inv: dict) -> bytes:
     return bytes(out)
 
 
+# ===================== Receipts & Document PDFs =====================
+
+class Receipt(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    receipt_number: str
+    doc_type: Literal["payment_receipt", "withdrawal_invoice", "withdrawal_receipt"]
+    # Recipient snapshot
+    user_id: str
+    user_type: Literal["shipper", "driver"]
+    user_name: str = ""
+    user_email: str = ""
+    # References
+    order_id: Optional[str] = None
+    order_number: Optional[str] = None
+    withdrawal_id: Optional[str] = None
+    # Amounts
+    amount: float = 0.0
+    currency: str = "EUR"
+    method: Optional[str] = None
+    reference: Optional[str] = None
+    status: str = "issued"          # issued | paid | pending
+    issued_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    paid_at: Optional[str] = None
+    last_sent_at: Optional[str] = None
+
+
+async def _next_doc_number(prefix: str) -> str:
+    doc = await db.settings.find_one_and_update(
+        {"key": f"counter_{prefix.lower()}"},
+        {"$inc": {"seq": 1}}, upsert=True, return_document=True,
+    )
+    seq = (doc or {}).get("seq", 1)
+    return f"{prefix}-{datetime.now(timezone.utc).year}-{1000 + int(seq)}"
+
+
+def _build_doc_pdf(*, doc_title: str, ref_label: str, ref_value: str, issued: str,
+                   status: str, bill_to: list, rows: list, total_value: float,
+                   currency: str = "EUR", note: str = "") -> bytes:
+    """Generic branded PDF for receipts / withdrawal documents."""
+    from fpdf import FPDF
+
+    def s(v):
+        return str(v if v is not None else "")
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 22)
+    pdf.cell(0, 12, doc_title.upper(), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, f"{ref_label}: {s(ref_value)}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Issued: {s(issued)[:10]}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Status: {s(status).upper()}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, "From", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 5, f"{NADARUNS_COMPANY['name']}  ({NADARUNS_COMPANY['business_id']})", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, NADARUNS_COMPANY["address"], new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, f"{NADARUNS_COMPANY['email']}  |  {NADARUNS_COMPANY['phone']}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, "To", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    for line in bill_to:
+        if line:
+            pdf.cell(0, 5, s(line), new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    cur = s(currency or "EUR")
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(120, 7, "Item", border=1)
+    pdf.cell(0, 7, "Amount", border=1, new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.set_font("Helvetica", "", 10)
+    for label, amount in rows:
+        pdf.cell(120, 7, s(label), border=1)
+        pdf.cell(0, 7, f"{cur} {float(amount or 0):.2f}", border=1, new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(120, 8, "TOTAL", border=1)
+    pdf.cell(0, 8, f"{cur} {float(total_value or 0):.2f}", border=1, new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.ln(6)
+    if note:
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(pdf.epw, 5, note)
+    out = pdf.output()
+    return bytes(out)
+
+
+def _receipt_pdf(rec: dict) -> bytes:
+    titles = {
+        "payment_receipt": "Receipt",
+        "withdrawal_invoice": "Withdrawal Invoice",
+        "withdrawal_receipt": "Payout Receipt",
+    }
+    method = (rec.get("method") or "").replace("_", " ").title()
+    rows = [("Delivery payment" if rec["doc_type"] == "payment_receipt" else "Driver cash-out", rec.get("amount"))]
+    note_map = {
+        "payment_receipt": f"Thank you for your payment. Order {rec.get('order_number') or ''}.",
+        "withdrawal_invoice": "This document confirms your cash-out request. Funds are released after admin approval.",
+        "withdrawal_receipt": f"Your payout has been sent. Reference: {rec.get('reference') or '-'}.",
+    }
+    bill_to = [
+        rec.get("user_name"),
+        rec.get("user_email"),
+    ]
+    if method:
+        bill_to.append(f"Method: {method}")
+    if rec.get("reference"):
+        bill_to.append(f"Reference: {rec.get('reference')}")
+    return _build_doc_pdf(
+        doc_title=titles.get(rec["doc_type"], "Receipt"),
+        ref_label="Receipt #" if "receipt" in rec["doc_type"] else "Invoice #",
+        ref_value=rec.get("receipt_number", ""),
+        issued=rec.get("issued_at", ""),
+        status=rec.get("status", "issued"),
+        bill_to=bill_to,
+        rows=rows,
+        total_value=rec.get("amount", 0),
+        currency=rec.get("currency", "EUR"),
+        note=note_map.get(rec["doc_type"], ""),
+    )
+
+
+async def _send_receipt_email(rec: dict):
+    """Build the right template + PDF attachment and email the recipient."""
+    if not rec.get("user_email"):
+        return
+    pdf_bytes = _receipt_pdf(rec)
+    fname = f"{rec.get('receipt_number', 'document')}.pdf"
+    attachment = email_service.pdf_attachment(fname, pdf_bytes)
+    name = rec.get("user_name") or "there"
+    dt = rec["doc_type"]
+    if dt == "payment_receipt":
+        subj, html = email_tpl.payment_receipt(name, {
+            "receipt_number": rec.get("receipt_number"),
+            "order_number": rec.get("order_number"),
+            "shipment_id": rec.get("order_id"),
+            "amount": rec.get("amount"),
+            "paid_at": (rec.get("paid_at") or rec.get("issued_at") or "")[:19].replace("T", " "),
+        })
+    elif dt == "withdrawal_invoice":
+        subj, html = email_tpl.withdrawal_invoice(name, {
+            "invoice_number": rec.get("receipt_number"),
+            "amount": rec.get("amount"),
+            "method": rec.get("method"),
+            "date": (rec.get("issued_at") or "")[:10],
+        })
+    else:  # withdrawal_receipt
+        subj, html = email_tpl.withdrawal_receipt(name, {
+            "receipt_number": rec.get("receipt_number"),
+            "amount": rec.get("amount"),
+            "method": rec.get("method"),
+            "reference": rec.get("reference"),
+            "paid_at": (rec.get("paid_at") or rec.get("issued_at") or "")[:19].replace("T", " "),
+        })
+    send_email_bg(rec["user_email"], subj, html, to_name=name,
+                  category=dt, related_id=rec.get("id"), attachments=[attachment])
+
+
+async def _create_payment_receipt(order: dict) -> Optional[dict]:
+    """Idempotently create + email a payment receipt for a captured order."""
+    existing = await db.receipts.find_one(
+        {"order_id": order["id"], "doc_type": "payment_receipt"}, {"_id": 0}
+    )
+    if existing:
+        return existing
+    shipper = await db.shippers.find_one({"id": order.get("shipper_id")}, {"_id": 0}) or {}
+    now = datetime.now(timezone.utc).isoformat()
+    rec = Receipt(
+        receipt_number=await _next_doc_number("RCP"),
+        doc_type="payment_receipt",
+        user_id=order.get("shipper_id", ""),
+        user_type="shipper",
+        user_name=shipper.get("contact_name") or shipper.get("company_name") or "",
+        user_email=shipper.get("email", ""),
+        order_id=order["id"],
+        order_number=order.get("order_number"),
+        amount=round(float(order.get("payment_amount") or order.get("price_quote") or 0), 2),
+        status="paid",
+        paid_at=now,
+    ).model_dump()
+    await db.receipts.insert_one(rec)
+    rec.pop("_id", None)
+    await _send_receipt_email(rec)
+    await db.receipts.update_one({"id": rec["id"]}, {"$set": {"last_sent_at": now}})
+    logger.info(f"Payment receipt {rec['receipt_number']} created for order {order.get('order_number')}")
+    return rec
+
+
+async def _create_withdrawal_doc(wr: dict, doc_type: str) -> Optional[dict]:
+    """Create + email a withdrawal invoice (on request) or receipt (on payout)."""
+    existing = await db.receipts.find_one(
+        {"withdrawal_id": wr["id"], "doc_type": doc_type}, {"_id": 0}
+    )
+    if existing:
+        return existing
+    driver = await db.drivers.find_one({"id": wr.get("driver_id")}, {"_id": 0}) or {}
+    now = datetime.now(timezone.utc).isoformat()
+    prefix = "WRC" if doc_type == "withdrawal_receipt" else "WIN"
+    rec = Receipt(
+        receipt_number=await _next_doc_number(prefix),
+        doc_type=doc_type,
+        user_id=wr.get("driver_id", ""),
+        user_type="driver",
+        user_name=driver.get("name") or wr.get("driver_name") or "",
+        user_email=driver.get("email", ""),
+        withdrawal_id=wr["id"],
+        amount=round(float(wr.get("amount") or 0), 2),
+        method=wr.get("method"),
+        reference=wr.get("reference"),
+        status="paid" if doc_type == "withdrawal_receipt" else "pending",
+        paid_at=now if doc_type == "withdrawal_receipt" else None,
+    ).model_dump()
+    await db.receipts.insert_one(rec)
+    rec.pop("_id", None)
+    await _send_receipt_email(rec)
+    await db.receipts.update_one({"id": rec["id"]}, {"$set": {"last_sent_at": now}})
+    logger.info(f"{doc_type} {rec['receipt_number']} created for withdrawal {wr['id']}")
+    return rec
+
+
+async def _email_invoice_pdf(inv: dict):
+    """Build the invoice PDF and email it to the shipper."""
+    if not inv.get("shipper_email"):
+        return
+    pdf_bytes = _build_invoice_pdf(inv)
+    attachment = email_service.pdf_attachment(f"{inv['invoice_number']}.pdf", pdf_bytes)
+    name = inv.get("shipper_contact") or inv.get("shipper_company") or "there"
+    subj, html = email_tpl.payment_invoice(name, {
+        "invoice_number": inv.get("invoice_number"),
+        "order_number": inv.get("order_number"),
+        "shipment_id": inv.get("order_id"),
+        "amount": inv.get("total_amount"),
+        "date": (inv.get("issued_at") or "")[:10],
+    })
+    send_email_bg(inv["shipper_email"], subj, html, to_name=name,
+                  category="payment_invoice", related_id=inv.get("id"), attachments=[attachment])
+
+
+# ---------- Admin receipts management ----------
+
+@api_router.get("/admin/receipts")
+async def admin_list_receipts(
+    doc_type: Optional[str] = None, q: Optional[str] = None,
+    user: dict = Depends(get_admin_user),
+):
+    query: dict = {}
+    if doc_type and doc_type != "all":
+        query["doc_type"] = doc_type
+    if q:
+        rx = {"$regex": q, "$options": "i"}
+        query["$or"] = [
+            {"receipt_number": rx}, {"order_number": rx},
+            {"user_name": rx}, {"user_email": rx},
+        ]
+    rows = await db.receipts.find(query, {"_id": 0}).sort("issued_at", -1).to_list(500)
+    totals = {
+        "count": len(rows),
+        "payment_receipts": sum(1 for r in rows if r.get("doc_type") == "payment_receipt"),
+        "withdrawal_receipts": sum(1 for r in rows if r.get("doc_type") == "withdrawal_receipt"),
+        "withdrawal_invoices": sum(1 for r in rows if r.get("doc_type") == "withdrawal_invoice"),
+        "total_amount": round(sum(float(r.get("amount") or 0) for r in rows), 2),
+    }
+    return {"receipts": rows, "totals": totals}
+
+
+@api_router.get("/receipts/{receipt_id}/pdf")
+async def get_receipt_pdf(receipt_id: str, token: Optional[str] = None,
+                          credentials: HTTPAuthorizationCredentials = Depends(security)):
+    from fastapi.responses import Response
+    raw = credentials.credentials if credentials else token
+    if not raw:
+        raise HTTPException(401, "Authentication required")
+    payload = decode_token(raw)
+    rec = await db.receipts.find_one({"id": receipt_id}, {"_id": 0}) \
+        or await db.receipts.find_one({"receipt_number": receipt_id}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Receipt not found")
+    # Owners may view their own; admins view all.
+    if payload.get("type") != "admin" and rec.get("user_id") != payload.get("sub"):
+        raise HTTPException(403, "Not authorized")
+    pdf_bytes = _receipt_pdf(rec)
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={rec['receipt_number']}.pdf"},
+    )
+
+
+@api_router.post("/admin/receipts/{receipt_id}/resend")
+async def admin_resend_receipt(receipt_id: str, user: dict = Depends(get_admin_user)):
+    rec = await db.receipts.find_one({"id": receipt_id}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Receipt not found")
+    await _send_receipt_email(rec)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.receipts.update_one({"id": receipt_id}, {"$set": {"last_sent_at": now_iso}})
+    return {"ok": True, "last_sent_at": now_iso, "receipt_number": rec["receipt_number"]}
+
+
+@api_router.get("/shipper/receipts")
+async def shipper_list_receipts(shipper: dict = Depends(get_current_shipper)):
+    rows = await db.receipts.find(
+        {"user_id": shipper["id"], "user_type": "shipper"}, {"_id": 0}
+    ).sort("issued_at", -1).to_list(200)
+    return rows
+
+
+@api_router.get("/admin/email-logs")
+async def admin_list_email_logs(
+    category: Optional[str] = None, status: Optional[str] = None,
+    q: Optional[str] = None, limit: int = 200,
+    user: dict = Depends(get_admin_user),
+):
+    query: dict = {}
+    if category and category != "all":
+        query["category"] = category
+    if status and status != "all":
+        query["status"] = status
+    if q:
+        rx = {"$regex": q, "$options": "i"}
+        query["$or"] = [{"to_email": rx}, {"subject": rx}]
+    rows = await db.email_logs.find(query, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(500, limit)))
+    totals = {
+        "count": len(rows),
+        "sent": sum(1 for r in rows if r.get("status") == "sent"),
+        "failed": sum(1 for r in rows if r.get("status") == "failed"),
+        "dry_run": sum(1 for r in rows if r.get("status") == "dry_run"),
+    }
+    return {"logs": rows, "totals": totals}
+
+
+
 @api_router.post("/shipper/shipments/{order_id}/accept-invoice")
 async def shipper_accept_invoice(order_id: str, shipper: dict = Depends(get_current_shipper)):
     """Shipper chooses 'Accept Invoice' for an order -> generate a Net-14 invoice."""
@@ -5299,6 +5739,7 @@ async def shipper_accept_invoice(order_id: str, shipper: dict = Depends(get_curr
     if order.get("shipper_id") != shipper["id"]:
         raise HTTPException(403, "This order does not belong to you")
     invoice = await _create_invoice_for_order(order, shipper)
+    await _email_invoice_pdf(invoice)
     return invoice
 
 
@@ -5410,7 +5851,8 @@ async def admin_resend_invoice(invoice_id: str, user: dict = Depends(get_admin_u
         raise HTTPException(404, "Invoice not found")
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.invoices.update_one({"id": invoice_id}, {"$set": {"last_sent_at": now_iso}})
-    # Email delivery is not wired yet; this records the resend and notifies the shipper in-app.
+    # Email the invoice PDF to the shipper and record an in-app notice.
+    await _email_invoice_pdf(inv)
     try:
         await _notify_shipper_status(inv["shipper_id"], inv["order_id"],
                                      f"Invoice {inv['invoice_number']} has been re-sent. Amount due: EUR {inv.get('total_amount')}.")
@@ -6427,6 +6869,8 @@ async def _apply_intent_to_order(order: dict, intent) -> dict:
         if not order.get("captured_at"):
             updates["captured_at"] = now
         await _record_ledger(order, intent, "capture", "completed", csplit)
+        # Auto-generate + email a payment receipt (idempotent, non-blocking).
+        asyncio.create_task(_create_payment_receipt({**order, **updates}))
 
     await db.orders.update_one({"id": order_id}, {"$set": updates})
     order.update(updates)
@@ -6919,6 +7363,9 @@ async def wallet_withdraw(body: WithdrawalCreate, credentials: HTTPAuthorization
     )
     await db.withdrawal_requests.insert_one(wr.model_dump())
 
+    # Auto-generate + email a withdrawal invoice (idempotent, non-blocking).
+    asyncio.create_task(_create_withdrawal_doc(wr.model_dump(), "withdrawal_invoice"))
+
     await db.notifications.insert_one(Notification(
         recipient_id=driver_id,
         recipient_type="driver",
@@ -7102,6 +7549,9 @@ async def _process_withdrawal(withdrawal_id: str, new_status: str, admin_id: str
         recipient_id=wr["driver_id"], recipient_type="driver", type="payment",
         title=title, message=msg, data={"withdrawal_id": withdrawal_id},
     ).model_dump())
+    # On payout, auto-generate + email a payout receipt (idempotent, non-blocking).
+    if new_status == "paid":
+        asyncio.create_task(_create_withdrawal_doc(wr, "withdrawal_receipt"))
     return wr
 
 
