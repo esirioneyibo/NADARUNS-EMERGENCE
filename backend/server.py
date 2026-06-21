@@ -14,7 +14,7 @@ import bcrypt
 import json
 import asyncio
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal, Tuple, Dict, Set
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -5727,6 +5727,88 @@ async def admin_list_email_logs(
         "dry_run": sum(1 for r in rows if r.get("status") == "dry_run"),
     }
     return {"logs": rows, "totals": totals}
+
+
+# ---------- Admin email template preview / test-send ----------
+
+# Registry of every transactional template with realistic sample data so admins
+# can preview branding and trigger a real test send before go-live.
+def _email_template_registry() -> dict:
+    et = email_tpl
+    sample_order = {"order_number": "SHP-2645", "pickup": "Mannerheimintie 1, Helsinki",
+                    "dropoff": "Aleksanterinkatu 52, Helsinki", "price": 148.50,
+                    "driver_name": "Eero Virtanen", "vehicle": "Cargo van (FIN-204)"}
+    sample_inv = {"invoice_number": "NDR-2026-1013", "order_number": "SHP-2645",
+                  "shipment_id": "ord_123", "amount": 157.50, "date": "2026-06-21"}
+    sample_rcp = {"receipt_number": "RCP-2026-1001", "order_number": "SHP-2645",
+                  "shipment_id": "ord_123", "amount": 148.50, "paid_at": "2026-06-21 10:24"}
+    sample_win = {"invoice_number": "WIN-2026-1002", "amount": 320.00,
+                  "method": "bank_transfer", "date": "2026-06-21"}
+    sample_wrc = {"receipt_number": "WRC-2026-1002", "amount": 320.00, "method": "bank_transfer",
+                  "reference": "TXN-88421", "paid_at": "2026-06-21 14:02"}
+    name = "Aino Korhonen"
+    return {
+        "welcome_driver":       ("Driver welcome",        "driver_welcome",     lambda: et.welcome(name, "driver")),
+        "welcome_shipper":      ("Shipper welcome",       "shipper_welcome",    lambda: et.welcome("Demo Logistics Co", "shipper")),
+        "driver_reg_received":  ("Driver registration received", "driver_registration", lambda: et.driver_registration_received(name)),
+        "driver_approved":      ("Driver KYC approved",   "driver_approved",    lambda: et.driver_approved(name)),
+        "driver_rejected":      ("Driver KYC rejected",   "driver_rejected",    lambda: et.driver_rejected(name, "Driver licence photo was unclear.")),
+        "password_changed":     ("Password changed",      "password_changed",   lambda: et.password_changed(name)),
+        "password_reset":       ("Password reset",        "password_reset",     lambda: et.password_reset(name, "https://nadaruns.com/reset?token=sample")),
+        "order_created":        ("Order created",         "order_created",      lambda: et.order_created(name, sample_order)),
+        "driver_assigned":      ("Driver assigned",       "shipment_accepted",  lambda: et.driver_assigned(name, sample_order)),
+        "shipment_status":      ("Shipment status update","shipment_status",    lambda: et.shipment_status(name, sample_order["order_number"], "Arrived at pickup")),
+        "payment_invoice":      ("Payment invoice",       "payment_invoice",    lambda: et.payment_invoice(name, sample_inv)),
+        "payment_receipt":      ("Payment receipt",       "payment_receipt",    lambda: et.payment_receipt(name, sample_rcp)),
+        "withdrawal_invoice":   ("Withdrawal invoice",    "withdrawal_invoice", lambda: et.withdrawal_invoice(name, sample_win)),
+        "withdrawal_receipt":   ("Payout receipt",        "withdrawal_receipt", lambda: et.withdrawal_receipt(name, sample_wrc)),
+        "test_email":           ("Connectivity test",     "test",               lambda: et.test_email()),
+    }
+
+
+@api_router.get("/admin/email-templates")
+async def admin_list_email_templates(user: dict = Depends(get_admin_user)):
+    reg = _email_template_registry()
+    items = []
+    for key, (label, category, fn) in reg.items():
+        subject, _ = fn()
+        items.append({"key": key, "label": label, "category": category, "subject": subject})
+    return {"templates": items, "provider": email_service.EMAIL_PROVIDER,
+            "sender": email_service.SENDER_EMAIL, "dry_run": email_service.DRY_RUN,
+            "configured": email_service.is_configured()}
+
+
+@api_router.get("/admin/email-templates/{key}/preview")
+async def admin_preview_email_template(key: str, user: dict = Depends(get_admin_user)):
+    reg = _email_template_registry()
+    if key not in reg:
+        raise HTTPException(404, "Unknown template")
+    label, category, fn = reg[key]
+    subject, html = fn()
+    return {"key": key, "label": label, "category": category, "subject": subject, "html": html}
+
+
+class EmailTestSendRequest(BaseModel):
+    to_email: EmailStr
+
+
+@api_router.post("/admin/email-templates/{key}/test-send")
+async def admin_test_send_email_template(key: str, body: EmailTestSendRequest,
+                                         user: dict = Depends(get_admin_user)):
+    reg = _email_template_registry()
+    if key not in reg:
+        raise HTTPException(404, "Unknown template")
+    label, category, fn = reg[key]
+    subject, html = fn()
+    result = await email_service.send_email(
+        db, body.to_email, f"[TEST] {subject}", html, to_name="Admin Test",
+        category=f"test_{category}", related_id=None,
+    )
+    if result.get("status") == "failed":
+        raise HTTPException(502, f"Send failed: {result.get('error') or 'unknown error'}")
+    return {"ok": True, "status": result.get("status"), "to": body.to_email,
+            "provider_message_id": result.get("provider_message_id"), "template": key}
+
 
 
 

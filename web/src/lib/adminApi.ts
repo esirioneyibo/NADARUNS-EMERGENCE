@@ -126,6 +126,14 @@ export const adminApi = {
   emailLogs: (p: { category?: string; status?: string; q?: string; limit?: number }) =>
     req<{ logs: any[]; totals: any }>(`/admin/email-logs${qs(p)}`),
 
+  // Email templates (preview + test send)
+  emailTemplates: () =>
+    req<{ templates: any[]; provider: string; sender: string; dry_run: boolean; configured: boolean }>(`/admin/email-templates`),
+  emailTemplatePreview: (key: string) =>
+    req<{ key: string; label: string; category: string; subject: string; html: string }>(`/admin/email-templates/${key}/preview`),
+  emailTemplateTestSend: (key: string, to_email: string) =>
+    req<any>(`/admin/email-templates/${key}/test-send`, { method: "POST", body: JSON.stringify({ to_email }) }),
+
   // Vehicles
   vehicles: (p: { search?: string; vehicle_type?: string }) =>
     req<{ items: any[]; total: number }>(`/admin/manage/vehicles${qs(p)}`),

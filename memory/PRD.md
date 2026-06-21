@@ -139,3 +139,7 @@ Provider-agnostic transactional email + automated financial documents + delivery
 - **POP/POD visibility:** shipper `shipper-tracking.tsx` gains a "Proof of Pickup & Delivery" card (pickup_photo/delivery_photo, tap → fullscreen Modal). Backend already exposed these on shipper/admin order detail.
 - **Verified:** testing_agent iter37 — 21/21 backend pytest + frontend POP/POD card & fullscreen viewer, live Brevo sends confirmed. Note: EMAIL_DRY_RUN=false (real sends); set true to save quota during heavy testing.
 - **Remaining:** Task 4 — Driver Onboarding Form Redesign (individual vs fleet/company fields, tooltips, validation) — NOT STARTED.
+
+### Admin Email Templates preview/test-send (Jun 2026)
+New admin web tab `web/src/components/admin/EmailTemplates.tsx` (nav key `emails`) lists all 15 transactional templates with realistic sample data: provider/sender/configured + dry-run banner, sandboxed iframe HTML preview, subject, and a "Send test" box that emails the chosen template (subject prefixed `[TEST]`).
+Backend: `_email_template_registry()` + `GET /api/admin/email-templates`, `GET /api/admin/email-templates/{key}/preview`, `POST /api/admin/email-templates/{key}/test-send` (EmailStr validated → 422; unknown key → 404). Verified via curl (sent live Brevo test) + screenshot of the rendered tab.
