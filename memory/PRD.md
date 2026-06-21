@@ -129,3 +129,13 @@ Pricing now follows the Finnish road-transport model (Logistiikan Maailma). The 
 - **Business/Shipper app** (role-based login or sibling expo app)
 - **Admin web dashboard** (driver approval, live tracking, analytics)
 - **NadaRuns marketing site** (Expo Router web export)
+
+## Platform Enhancements — Email Infra + Invoices/Receipts + POP/POD (Jun 2026)
+Provider-agnostic transactional email + automated financial documents + delivery proof visibility.
+- **Email infrastructure (Brevo, LIVE):** `services/email_service.py` (httpx → Brevo, fire-and-forget, every send logged to `db.email_logs`) + `services/email_templates.py` (branded HTML). Configured in `backend/.env`: `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY`, sender `happysmiles@nadaruns.com`. `send_email_bg(...)` helper in `server.py` schedules non-blocking sends. Wired into: driver/shipper register (welcome), KYC approve/reject (driver_approved/rejected), order created (order_created), shipment lifecycle via `push_status_to_shipper` (driver_assigned + shipment_status), change-password (password_changed).
+- **Automated invoices & receipts:** new `Receipt` model + `db.receipts` collection + generic `_build_doc_pdf`/`_receipt_pdf` (fpdf2). Auto-generated + emailed (idempotent): payment receipt on order capture (`_create_payment_receipt`), withdrawal invoice on `/api/wallet/withdraw`, payout receipt when admin marks withdrawal paid (`_create_withdrawal_doc`). Shipper invoice PDF emailed on `/api/shipper/shipments/{id}/accept-invoice` (only on first creation) + admin resend. Doc numbers via `_next_doc_number` (RCP/WIN/WRC prefixes).
+- **New endpoints:** `GET /api/admin/receipts`, `GET /api/receipts/{id}/pdf` (owner/admin), `POST /api/admin/receipts/{id}/resend`, `GET /api/shipper/receipts`, `GET /api/admin/email-logs`.
+- **Admin web (Next.js):** new `Receipts` tab (`web/src/components/admin/Receipts.tsx`) with Receipts/documents table (PDF + resend) and an Email log tab; POP/POD images added to Orders drawer.
+- **POP/POD visibility:** shipper `shipper-tracking.tsx` gains a "Proof of Pickup & Delivery" card (pickup_photo/delivery_photo, tap → fullscreen Modal). Backend already exposed these on shipper/admin order detail.
+- **Verified:** testing_agent iter37 — 21/21 backend pytest + frontend POP/POD card & fullscreen viewer, live Brevo sends confirmed. Note: EMAIL_DRY_RUN=false (real sends); set true to save quota during heavy testing.
+- **Remaining:** Task 4 — Driver Onboarding Form Redesign (individual vs fleet/company fields, tooltips, validation) — NOT STARTED.

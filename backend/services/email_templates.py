@@ -181,8 +181,8 @@ def withdrawal_receipt(name: str, data: dict) -> tuple[str, str]:
             ("Paid on", data.get("paid_at", "")),
         ])
     )
-    return (f"Payment receipt {data.get('receipt_number','')}",
-            branded("Payment sent ✅", f"Hi {name},", body))
+    return (f"Payout receipt {data.get('receipt_number','')}",
+            branded("Payout sent ✅", f"Hi {name},", body))
 
 
 def shipment_assigned(name: str, order_no: str) -> tuple[str, str]:

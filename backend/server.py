@@ -5738,8 +5738,10 @@ async def shipper_accept_invoice(order_id: str, shipper: dict = Depends(get_curr
         raise HTTPException(404, "Order not found")
     if order.get("shipper_id") != shipper["id"]:
         raise HTTPException(403, "This order does not belong to you")
+    already = await db.invoices.find_one({"order_id": order_id}, {"_id": 0, "id": 1})
     invoice = await _create_invoice_for_order(order, shipper)
-    await _email_invoice_pdf(invoice)
+    if not already:
+        await _email_invoice_pdf(invoice)
     return invoice
 
 
