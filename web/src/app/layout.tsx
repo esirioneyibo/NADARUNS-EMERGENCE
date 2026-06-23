@@ -8,12 +8,12 @@ import ClientProviders from "@/components/ClientProviders";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "NadaRuns - Fast & Reliable Delivery",
-  description: "NadaRuns connects drivers with businesses for fast, reliable deliveries. Join as a driver to earn money or as a business to ship your products.",
-  keywords: "delivery, courier, driver, shipping, logistics, Helsinki, Finland",
+  title: "NadaRuns — Nopea ja luotettava toimitus",
+  description: "NadaRuns yhdistää kuljettajat ja yritykset nopeisiin, luotettaviin toimituksiin kaikkialla Suomessa. Ryhdy kuljettajaksi ansaitaksesi tai lähetä tuotteesi reaaliaikaisella seurannalla.",
+  keywords: "toimitus, kuljetus, kuljettaja, lähetys, logistiikka, Helsinki, Suomi, delivery, courier",
   openGraph: {
-    title: "NadaRuns - Fast & Reliable Delivery",
-    description: "Connect with drivers for fast deliveries or join as a driver to earn money on your schedule.",
+    title: "NadaRuns — Nopea ja luotettava toimitus",
+    description: "Löydä kuljettaja nopeisiin toimituksiin tai ryhdy kuljettajaksi ansaitaksesi omilla aikatauluillasi.",
     type: "website",
   },
 };

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { usePathname } from "next/navigation";
 
 export type Lang = "fi" | "en";
 
@@ -666,6 +667,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <LangContext.Provider value={{ lang, setLang, c: CONTENT[lang] as unknown as Content }}>
+      <SeoUpdater />
       {children}
     </LangContext.Provider>
   );
@@ -680,6 +682,65 @@ export function useLang(): Ctx {
 /** Returns the content dictionary for the active language. */
 export function useContent(): Content {
   return useLang().c;
+}
+
+// ---------------------------------------------------------------------------
+// Per-route, per-language SEO (document <title> + meta description). The static
+// server metadata is Finnish (default); this client updater keeps the head in
+// sync when the user toggles language or navigates between routes.
+// ---------------------------------------------------------------------------
+type SeoEntry = { title: string; description: string };
+const SEO: Record<Lang, Record<string, SeoEntry>> = {
+  fi: {
+    "/": { title: "NadaRuns — Nopea ja luotettava toimitus", description: "NadaRuns yhdistää kuljettajat ja yritykset nopeisiin, luotettaviin toimituksiin kaikkialla Suomessa. Ryhdy kuljettajaksi ansaitaksesi tai lähetä tuotteesi reaaliaikaisella seurannalla." },
+    "/about": { title: "Tietoa NadaRunsista — Vie Suomea eteenpäin", description: "NadaRuns yhdistää luotettavat kuljettajat ja yritykset nopeisiin, luotettaviin toimituksiin kaikkialla Suomessa. Tutustu missioomme, arvoihimme ja tarinaamme." },
+    "/drivers": { title: "Aja NadaRunsin kanssa — Ansaitse omilla aikatauluillasi", description: "Ryhdy NadaRuns-kuljettajaksi. Joustavat työajat, nopea viikkopalkka, valitse ajoneuvosi ja hyväksy keikkoja läheltäsi sovelluksen navigoinnilla." },
+    "/business": { title: "NadaRuns yrityksille — Lähetä älykkäämmin", description: "Kuljeta mitä tahansa kaikkialle Suomeen NadaRuns yrityksille -palvelulla. Välitön läpinäkyvä hinnoittelu, reaaliaikainen seuranta, 11 ajoneuvotyyppiä ja toimitustodistus." },
+    "/contact": { title: "Yhteystiedot — NadaRuns", description: "Ota yhteyttä NadaRunsiin. Kysymykset, kumppanuudet tai tuki — tiimimme vastaa yleensä yhden työpäivän kuluessa." },
+    "/download": { title: "Lataa NadaRuns-sovellus — iOS & Android", description: "Lataa NadaRuns iOS:lle ja Androidille. Seuraa toimituksia reaaliajassa, hyväksy keikkoja, keskustele kuljettajien kanssa ja saat välittömät ilmoitukset." },
+    "/terms": { title: "Käyttöehdot — NadaRuns", description: "NadaRuns-logistiikka-alustan käyttöä koskevat ehdot." },
+    "/privacy": { title: "Tietosuojaseloste — NadaRuns", description: "Miten NadaRuns kerää, käyttää ja suojaa henkilötietojasi GDPR:n mukaisesti." },
+    "/cookies": { title: "Evästekäytäntö — NadaRuns", description: "Miten NadaRuns käyttää evästeitä ja vastaavia teknologioita verkkosivustollaan." },
+    "/gdpr": { title: "GDPR & oikeutesi — NadaRuns", description: "Tietosuojaoikeutesi GDPR:n mukaan ja miten käytät niitä NadaRunsin kanssa." },
+  },
+  en: {
+    "/": { title: "NadaRuns — Fast & Reliable Delivery", description: "NadaRuns connects drivers with businesses for fast, reliable deliveries across Finland. Join as a driver to earn money or as a business to ship your products." },
+    "/about": { title: "About NadaRuns — Moving Finland forward", description: "NadaRuns connects trusted drivers with businesses for fast, reliable deliveries across Finland. Learn about our mission, values and story." },
+    "/drivers": { title: "Drive with NadaRuns — Earn on your schedule", description: "Become a NadaRuns driver. Flexible hours, fast weekly pay, choose your vehicle and accept jobs near you with in-app navigation." },
+    "/business": { title: "NadaRuns for Business — Ship smarter", description: "Move anything across Finland with NadaRuns for Business. Instant transparent pricing, live tracking, 11 vehicle types and proof of delivery." },
+    "/contact": { title: "Contact — NadaRuns", description: "Get in touch with NadaRuns. Questions, partnerships or support — our team usually replies within one business day." },
+    "/download": { title: "Download the NadaRuns App — iOS & Android", description: "Download NadaRuns for iOS and Android. Track deliveries live, accept jobs, chat with drivers and get instant alerts." },
+    "/terms": { title: "Terms of Service — NadaRuns", description: "The terms and conditions governing the use of the NadaRuns logistics platform." },
+    "/privacy": { title: "Privacy Policy — NadaRuns", description: "How NadaRuns collects, uses and protects your personal data under the GDPR." },
+    "/cookies": { title: "Cookie Policy — NadaRuns", description: "How NadaRuns uses cookies and similar technologies on its website." },
+    "/gdpr": { title: "GDPR & Your Rights — NadaRuns", description: "Your data-protection rights under the GDPR and how to exercise them with NadaRuns." },
+  },
+};
+
+function setMetaContent(selector: string, attr: "name" | "property", key: string, content: string) {
+  let el = document.head.querySelector(selector) as HTMLMetaElement | null;
+  if (!el) {
+    el = document.createElement("meta");
+    el.setAttribute(attr, key);
+    document.head.appendChild(el);
+  }
+  el.setAttribute("content", content);
+}
+
+/** Keeps <title> + meta description in sync with active language & route. */
+export function SeoUpdater() {
+  const { lang } = useLang();
+  const pathname = usePathname() || "/";
+  useEffect(() => {
+    const table = SEO[lang];
+    const meta = table[pathname] ?? SEO[lang]["/"];
+    document.title = meta.title;
+    setMetaContent('meta[name="description"]', "name", "description", meta.description);
+    setMetaContent('meta[property="og:title"]', "property", "og:title", meta.title);
+    setMetaContent('meta[property="og:description"]', "property", "og:description", meta.description);
+    document.documentElement.lang = lang;
+  }, [lang, pathname]);
+  return null;
 }
 
 /** FI / EN toggle for the navbar. */

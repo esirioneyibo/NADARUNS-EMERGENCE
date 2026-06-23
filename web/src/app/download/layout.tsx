@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Download the NadaRuns App — iOS & Android",
+  title: "Lataa NadaRuns-sovellus — iOS & Android",
   description:
-    "Download NadaRuns for iOS and Android. Track deliveries live, accept jobs, chat with drivers and get instant alerts.",
+    "Lataa NadaRuns iOS:lle ja Androidille. Seuraa toimituksia reaaliajassa, hyväksy keikkoja, keskustele kuljettajien kanssa ja saat välittömät ilmoitukset.",
 };
 
 export default function DownloadLayout({ children }: { children: React.ReactNode }) {

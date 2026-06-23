@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "NadaRuns for Business — Ship smarter",
+  title: "NadaRuns yrityksille — Lähetä älykkäämmin",
   description:
-    "Move anything across Finland with NadaRuns for Business. Instant transparent pricing, live tracking, 11 vehicle types and proof of delivery.",
+    "Kuljeta mitä tahansa kaikkialle Suomeen NadaRuns yrityksille -palvelulla. Välitön läpinäkyvä hinnoittelu, reaaliaikainen seuranta, 11 ajoneuvotyyppiä ja toimitustodistus.",
 };
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {

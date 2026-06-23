@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Drive with NadaRuns — Earn on your schedule",
+  title: "Aja NadaRunsin kanssa — Ansaitse omilla aikatauluillasi",
   description:
-    "Become a NadaRuns driver. Flexible hours, fast weekly pay, choose your vehicle and accept jobs near you with in-app navigation.",
+    "Ryhdy NadaRuns-kuljettajaksi. Joustavat työajat, nopea viikkopalkka, valitse ajoneuvosi ja hyväksy keikkoja läheltäsi sovelluksen navigoinnilla.",
 };
 
 export default function DriversLayout({ children }: { children: React.ReactNode }) {
