@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 38 — Driver Onboarding (Individual + Fleet) verified end-to-end. Backend pytest suite (5/5 passing): individual register OK, fleet register without company_name → 400 (both missing and whitespace-only), fleet register success creates Company + sets company_id on driver, admin /api/admin/fleet/companies lists the new company with correct business_id and owner_email. Frontend (Expo web, 390x844) — Individual flow correctly shows 'Step 1..5 of 5' across account→name→contact→vehicle→review, registration POST returns 200. Fleet flow correctly shows 'Step 1..6 of 6', the Company step appears at Step 4 of 6, Continue is disabled (aria-disabled=true) when company name is empty (validation works), Review shows Account=Fleet/Company and the company name, registration POST returns 200 and an active company is created. NOTE: On the web preview, react-native-web's Alert.alert does NOT render the success dialog button, so the post-registration 'Continue to KYC' callback (router.replace('/kyc')) never fires — user stays on the Review screen even though registration succeeded. Same limitation makes tooltip alerts (tooltip-companyName/businessId/licenseClass) invisible on web. Both are web-only RNW Alert limitations and would work on native iOS/Android.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "onboarding.tsx — post-registration navigation",
+        "issue": "On web, react-native-web does not invoke Alert.alert button callbacks, so router.replace('/kyc') never runs after successful registration. User remains on Review screen. Backend record is created correctly. Works on native but a real UX regression on web preview. Consider Platform.OS === 'web' branch that calls router.replace('/kyc') directly (with a toast) instead of relying on the Alert button. Reference: /app/frontend/app/onboarding.tsx:226-233",
+        "testID": "onboarding-continue-button",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "onboarding.tsx — Tooltip helpers",
+        "issue": "Tooltips (tooltip-companyName, tooltip-businessId, tooltip-licenseClass, tooltip-capacity, tooltip-plate) use Alert.alert which is silently dropped by react-native-web. The information icon is tappable but no helper text appears on web. Will work on native. Consider a small in-app popover/Modal for web parity. Reference: /app/frontend/app/onboarding.tsx:156-169",
+        "testID": "tooltip-companyName",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter38_onboarding_fleet.py",
+    "/app/test_reports/pytest/iter38_onboarding.xml"
+  ],
+  "action_items": [
+    "Optional UX polish: branch on Platform.OS === 'web' in handleSubmit to navigate to /kyc directly (since Alert.alert button callbacks don't fire on react-native-web).",
+    "Optional UX polish: replace Tooltip Alert.alert with an in-app Modal/Popover so tooltips also work on web preview.",
+    "No code changes required for the task itself — Individual (5-step) and Fleet (6-step) flows, validation gate, and backend side effects all behave as specified."
+  ],
+  "critical_code_review_comments": [
+    "onboarding.tsx is 1027 lines — consider splitting steps into per-step components for maintainability.",
+    "handleSubmit relies on Alert.alert's onPress callback for routing; that callback is not invoked on react-native-web. Either branch by Platform or replace with an inline success state + auto-redirect."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100% (flows + validation); Alert-based post-flow UX limited on web only"},
+  "seed_data_creation": "Created 2 throw-away drivers (qa.ind+<ts>@example.com, qa.fleet+<ts>@example.com) and 1 company 'QA Fleet Oy <ts>' via the public /api/driver/register endpoint, plus pytest also created additional disposable users (TEST_-pattern not enforced because endpoint hashes the email as-is). All use unique timestamps so no collisions.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter 38 onboarding wizard is functional end-to-end. Use /app/backend/tests/test_iter38_onboarding_fleet.py for regression. Only known limitation: post-registration Alert.alert callback (router.replace('/kyc')) and Tooltip Alerts don't fire on react-native-web — backend registration still succeeds. Test credentials: admin@nadaruns.com / admin123.",
+  "rca_of_issue": "Why user remains on Review on web after Create Account: react-native-web's Alert.alert ignores the buttons array's onPress callbacks (it maps to window.alert without callback). Since router.replace('/kyc') is wrapped inside that callback, it never executes on web. Native iOS/Android implementations of Alert do fire the callback, so this is a web-only manifestation."
+}

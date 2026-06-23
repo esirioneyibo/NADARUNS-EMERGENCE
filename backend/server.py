@@ -955,6 +955,14 @@ class DriverRegistration(BaseModel):
     city: str
     license_plate: Optional[str] = None
     vehicle_capacity_kg: Optional[int] = None  # Custom capacity for "other" type
+    license_class: Optional[str] = None  # e.g. B, C, CE
+    # ---- Account type: individual driver vs fleet/company owner ----
+    account_type: Literal["individual", "fleet"] = "individual"
+    company_name: Optional[str] = None
+    business_id: Optional[str] = None      # Y-tunnus / VAT id
+    company_phone: Optional[str] = None
+    company_email: Optional[str] = None
+    company_address: Optional[str] = None
 
 
 class RegistrationResponse(BaseModel):
@@ -3106,6 +3114,10 @@ async def register_driver(registration: DriverRegistration):
     # Validate vehicle type
     if registration.vehicle_type not in VEHICLE_TYPES:
         raise HTTPException(400, f"Invalid vehicle type: {registration.vehicle_type}. Valid types: {list(VEHICLE_TYPES.keys())}")
+
+    # Fleet accounts must provide a company name
+    if registration.account_type == "fleet" and not (registration.company_name and registration.company_name.strip()):
+        raise HTTPException(400, "Company name is required for fleet accounts")
     
     # Create new driver
     driver_id = str(uuid.uuid4())
@@ -3155,6 +3167,34 @@ async def register_driver(registration: DriverRegistration):
     }
     await db.kyc_status.insert_one(kyc_status)
     
+    # Persist license class (extra field on the driver doc)
+    if registration.license_class:
+        await db.drivers.update_one(
+            {"id": driver_id}, {"$set": {"license_class": registration.license_class}}
+        )
+
+    # Fleet account: create the owning company + wallet and link this driver as owner.
+    if registration.account_type == "fleet":
+        company = Company(
+            company_name=registration.company_name.strip(),
+            owner_driver_id=driver_id,
+            business_id=(registration.business_id or None),
+            phone=registration.company_phone or registration.phone,
+            email=registration.company_email or registration.email,
+            address=registration.company_address,
+        )
+        await db.companies.insert_one(company.model_dump())
+        await db.company_wallets.update_one(
+            {"company_id": company.id},
+            {"$setOnInsert": CompanyWallet(company_id=company.id).model_dump()},
+            upsert=True,
+        )
+        await db.drivers.update_one(
+            {"id": driver_id},
+            {"$set": {"company_id": company.id, "company_role": "owner"}},
+        )
+        logger.info(f"Fleet company created on registration: {company.company_name} ({company.id})")
+
     # Generate JWT token
     token = create_token(driver_id, "driver")
     

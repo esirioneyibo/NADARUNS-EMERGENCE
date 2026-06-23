@@ -244,6 +244,13 @@ export const api = {
     city: string;
     license_plate?: string;
     vehicle_capacity_kg?: number;
+    license_class?: string;
+    account_type?: "individual" | "fleet";
+    company_name?: string;
+    business_id?: string;
+    company_phone?: string;
+    company_email?: string;
+    company_address?: string;
   }) => request<RegisterResponse>("/driver/register", {
     method: "POST",
     body: JSON.stringify(data),
