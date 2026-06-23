@@ -4,6 +4,7 @@ import {
   Alert,
   Dimensions,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -120,6 +121,7 @@ export default function OnboardingScreen() {
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     accountType: "individual",
     firstName: "",
@@ -154,8 +156,7 @@ export default function OnboardingScreen() {
   const currentKey = stepKeys[step - 1];
 
   const showTooltip = (key: string) => {
-    const t = TOOLTIPS[key];
-    if (t) Alert.alert(t.title, t.body);
+    if (TOOLTIPS[key]) setActiveTooltip(key);
   };
 
   const Tooltip = ({ field }: { field: string }) => (
@@ -223,14 +224,9 @@ export default function OnboardingScreen() {
         type: "driver",
       });
       
-      Alert.alert(
-        "Registration Successful!",
-        response.message,
-        [{ 
-          text: "Continue to KYC", 
-          onPress: () => router.replace("/kyc") 
-        }]
-      );
+      // Navigate straight to KYC. (Don't gate navigation behind an Alert
+      // button — react-native-web does not fire Alert button callbacks.)
+      router.replace("/kyc");
     } catch (error: any) {
       const message = error?.message || "Registration failed. Please try again.";
       Alert.alert("Error", message);
@@ -767,6 +763,22 @@ export default function OnboardingScreen() {
           )}
         </TouchableOpacity>
       </Animated.View>
+
+      {/* Cross-platform tooltip popover */}
+      <Modal visible={!!activeTooltip} transparent animationType="fade" onRequestClose={() => setActiveTooltip(null)}>
+        <TouchableOpacity style={styles.tooltipBackdrop} activeOpacity={1} onPress={() => setActiveTooltip(null)} testID="tooltip-close">
+          <View style={[styles.tooltipCard, shadows.lg]}>
+            <View style={styles.tooltipHeader}>
+              <Ionicons name="information-circle" size={22} color={theme.primary} />
+              <Text style={styles.tooltipTitle}>{activeTooltip ? TOOLTIPS[activeTooltip]?.title : ""}</Text>
+            </View>
+            <Text style={styles.tooltipBody}>{activeTooltip ? TOOLTIPS[activeTooltip]?.body : ""}</Text>
+            <TouchableOpacity style={styles.tooltipBtn} onPress={() => setActiveTooltip(null)}>
+              <Text style={styles.tooltipBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -851,6 +863,24 @@ const createStyles = (theme: any) => StyleSheet.create({
   accountDesc: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
   labelRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
   rowTwo: { flexDirection: "row", gap: spacing.md },
+
+  tooltipBackdrop: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center", justifyContent: "center", padding: spacing.xl,
+  },
+  tooltipCard: {
+    backgroundColor: theme.surface, borderRadius: radius.lg,
+    padding: spacing.lg, width: "100%", maxWidth: 360,
+  },
+  tooltipHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: spacing.sm },
+  tooltipTitle: { fontSize: 16, fontWeight: "800", color: theme.textPrimary, flex: 1 },
+  tooltipBody: { fontSize: 14, lineHeight: 20, color: theme.textSecondary },
+  tooltipBtn: {
+    marginTop: spacing.lg, alignSelf: "flex-end",
+    paddingVertical: 8, paddingHorizontal: spacing.lg,
+    borderRadius: radius.md, backgroundColor: theme.primary,
+  },
+  tooltipBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   stepTitle: { 
     fontSize: 28, 
     fontWeight: "800", 
