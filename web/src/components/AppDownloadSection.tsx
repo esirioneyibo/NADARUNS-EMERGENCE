@@ -1,8 +1,12 @@
+"use client";
+
 import AppBadges from "@/components/AppBadges";
 import { site } from "@/lib/site";
+import { useContent } from "@/lib/i18n";
 
 // Reusable "Get the app" band used on the home page and elsewhere.
 export default function AppDownloadSection() {
+  const c = useContent().appBand;
   return (
     <section className="section" style={{ background: "#0B1220" }}>
       <div className="container">
@@ -17,21 +21,18 @@ export default function AppDownloadSection() {
         >
           <div>
             <div className="badge badge-green" style={{ marginBottom: "20px" }}>
-              📱 Get the NadaRuns app
+              {c.badge}
             </div>
             <h2 style={{ fontSize: "40px", fontWeight: 800, color: "white", lineHeight: 1.15, marginBottom: "16px" }}>
-              Your deliveries,<br />
-              <span className="gradient-text">in your pocket</span>
+              {c.title1}<br />
+              <span className="gradient-text">{c.title2}</span>
             </h2>
             <p style={{ fontSize: "18px", color: "#9CA3AF", lineHeight: 1.7, marginBottom: "32px", maxWidth: "460px" }}>
-              Track shipments live, accept jobs, chat with drivers, and get instant
-              alerts — all from one beautifully simple app for iOS and Android.
+              {c.sub}
             </p>
             <AppBadges />
             <p style={{ color: "#6B7280", fontSize: "14px", marginTop: "20px" }}>
-              {site.app.comingSoon
-                ? "Launching soon — tap a badge to get notified."
-                : "Free to download. Available on iOS and Android."}
+              {site.app.comingSoon ? c.comingSoon : c.available}
             </p>
           </div>
 
@@ -53,16 +54,16 @@ export default function AppDownloadSection() {
                   <span>NadaRuns</span>
                 </div>
                 <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: "16px", padding: "16px", marginBottom: "14px" }}>
-                  <div style={{ fontSize: "12px", color: "#10B981", fontWeight: 600, marginBottom: "6px" }}>● In transit</div>
-                  <div style={{ fontWeight: 700, marginBottom: "4px" }}>Order #A249K</div>
-                  <div style={{ fontSize: "12px", color: "#9CA3AF" }}>Arriving in 8 mins</div>
+                  <div style={{ fontSize: "12px", color: "#10B981", fontWeight: 600, marginBottom: "6px" }}>{c.inTransit}</div>
+                  <div style={{ fontWeight: 700, marginBottom: "4px" }}>{c.orderId}</div>
+                  <div style={{ fontSize: "12px", color: "#9CA3AF" }}>{c.arriving}</div>
                 </div>
                 <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: "16px", padding: "16px", marginBottom: "14px" }}>
-                  <div style={{ fontSize: "12px", color: "#6366F1", fontWeight: 600, marginBottom: "6px" }}>Today’s earnings</div>
+                  <div style={{ fontSize: "12px", color: "#6366F1", fontWeight: 600, marginBottom: "6px" }}>{c.earnings}</div>
                   <div style={{ fontSize: "26px", fontWeight: 800 }}>€128.50</div>
                 </div>
                 <div style={{ background: "linear-gradient(135deg, #10B981 0%, #6366F1 100%)", borderRadius: "14px", padding: "14px", textAlign: "center", fontWeight: 700 }}>
-                  Go online
+                  {c.goOnline}
                 </div>
               </div>
             </div>

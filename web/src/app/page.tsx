@@ -1,7 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import AppDownloadSection from "@/components/AppDownloadSection";
+import { useContent } from "@/lib/i18n";
 
 export default function Home() {
+  const c = useContent().home;
   return (
     <>
       <div style={{ paddingTop: '72px' }}>
@@ -15,22 +19,22 @@ export default function Home() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }} className="hero-grid">
             <div>
               <div className="badge badge-green" style={{ marginBottom: '24px' }}>
-                ⚡ #1 Delivery Platform in Finland
+                {c.heroBadge}
               </div>
               <h1 style={{ fontSize: 'clamp(34px, 8vw, 56px)', fontWeight: '800', lineHeight: 1.1, marginBottom: '24px', color: '#111827' }}>
-                Fast & Reliable<br/>
-                <span className="gradient-text">Delivery</span> For<br/>
-                Everyone
+                {c.heroTitle1}<br/>
+                <span className="gradient-text">{c.heroTitle2}</span> {c.heroTitle3}<br/>
+                {c.heroTitle4}
               </h1>
               <p style={{ fontSize: 'clamp(16px, 4vw, 20px)', color: '#6B7280', lineHeight: 1.7, marginBottom: '40px', maxWidth: '500px' }}>
-                Connect with professional drivers for quick deliveries or join our fleet to earn money on your own schedule.
+                {c.heroSub}
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '60px' }}>
                 <Link href="/drivers" className="btn-primary">
-                  🚴 Become a Driver
+                  {c.becomeDriver}
                 </Link>
                 <Link href="/business" className="btn-secondary">
-                  🏢 Ship with Us
+                  {c.shipWithUs}
                 </Link>
               </div>
               
@@ -38,15 +42,15 @@ export default function Home() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'clamp(12px, 4vw, 32px)', borderTop: '1px solid #E5E7EB', paddingTop: '32px' }}>
                 <div>
                   <div className="stat-number">10K+</div>
-                  <div className="stat-label">Active Drivers</div>
+                  <div className="stat-label">{c.statDrivers}</div>
                 </div>
                 <div>
                   <div className="stat-number">500K+</div>
-                  <div className="stat-label">Deliveries</div>
+                  <div className="stat-label">{c.statDeliveries}</div>
                 </div>
                 <div>
                   <div className="stat-number">4.9★</div>
-                  <div className="stat-label">App Rating</div>
+                  <div className="stat-label">{c.statRating}</div>
                 </div>
               </div>
             </div>
@@ -72,13 +76,13 @@ export default function Home() {
                       📦
                     </div>
                     <div>
-                      <div style={{ fontWeight: '700', color: '#111827' }}>Order #A249K</div>
-                      <div style={{ fontSize: '14px', color: '#10B981', fontWeight: '500' }}>● In transit</div>
+                      <div style={{ fontWeight: '700', color: '#111827' }}>{c.orderId}</div>
+                      <div style={{ fontSize: '14px', color: '#10B981', fontWeight: '500' }}>{c.inTransit}</div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#6B7280' }}>
                     <span>📍</span>
-                    <span>Karl Fazer Café → Mannerheimintie 15</span>
+                    <span>{c.route}</span>
                   </div>
                 </div>
                 
@@ -95,8 +99,8 @@ export default function Home() {
                       🚴
                     </div>
                     <div>
-                      <div style={{ fontWeight: '600' }}>Eero V. is delivering</div>
-                      <div style={{ fontSize: '14px', opacity: 0.8 }}>Arriving in 8 mins</div>
+                      <div style={{ fontWeight: '600' }}>{c.delivering}</div>
+                      <div style={{ fontSize: '14px', opacity: 0.8 }}>{c.arriving}</div>
                     </div>
                   </div>
                 </div>
@@ -110,25 +114,25 @@ export default function Home() {
       <section className="section" style={{ background: 'white' }}>
         <div className="container">
           <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-            <h2 className="section-title">Why Choose NadaRuns?</h2>
+            <h2 className="section-title">{c.whyTitle}</h2>
             <p className="section-subtitle">
-              We're revolutionizing delivery with technology, reliability, and care.
+              {c.whySub}
             </p>
           </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px' }} className="features-grid">
             {[
-              { icon: '⚡', title: 'Fast Delivery', desc: 'Average delivery time under 30 minutes', color: 'green' },
-              { icon: '🛡️', title: 'Secure & Insured', desc: 'All deliveries are tracked and insured', color: 'purple' },
-              { icon: '⭐', title: 'Top Rated', desc: '4.9 star rating from 100K+ reviews', color: 'amber' },
-              { icon: '💬', title: '24/7 Support', desc: 'Round-the-clock customer support', color: 'rose' },
+              { icon: '⚡', color: 'green' },
+              { icon: '🛡️', color: 'purple' },
+              { icon: '⭐', color: 'amber' },
+              { icon: '💬', color: 'rose' },
             ].map((feature, i) => (
               <div key={i} className="feature-card">
                 <div className={`feature-icon feature-icon-${feature.color}`}>
                   <span style={{ fontSize: '28px' }}>{feature.icon}</span>
                 </div>
-                <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '12px', color: '#111827' }}>{feature.title}</h3>
-                <p style={{ color: '#6B7280', lineHeight: 1.6 }}>{feature.desc}</p>
+                <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '12px', color: '#111827' }}>{c.features[i].title}</h3>
+                <p style={{ color: '#6B7280', lineHeight: 1.6 }}>{c.features[i].desc}</p>
               </div>
             ))}
           </div>
@@ -139,9 +143,9 @@ export default function Home() {
       <section className="section" style={{ background: '#F9FAFB' }}>
         <div className="container">
           <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-            <h2 className="section-title">How It Works</h2>
+            <h2 className="section-title">{c.howTitle}</h2>
             <p className="section-subtitle">
-              Getting started is easy, whether you're a driver or a business.
+              {c.howSub}
             </p>
           </div>
 
@@ -149,18 +153,14 @@ export default function Home() {
             {/* For Drivers */}
             <div className="card" style={{ background: 'linear-gradient(135deg, #F0FDF4 0%, white 100%)' }}>
               <div className="badge badge-green" style={{ marginBottom: '24px' }}>
-                🚴 For Drivers
+                {c.forDrivers}
               </div>
-              <h3 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '32px', color: '#111827' }}>Start earning today</h3>
+              <h3 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '32px', color: '#111827' }}>{c.driverHead}</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {[
-                  { step: '1', title: 'Sign Up', desc: 'Download the app and create your account' },
-                  { step: '2', title: 'Get Verified', desc: 'Complete KYC verification in minutes' },
-                  { step: '3', title: 'Start Delivering', desc: 'Accept orders and earn money' },
-                ].map((item, i) => (
+                {c.driverSteps.map((item, i) => (
                   <div key={i} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
                     <div style={{ width: '40px', height: '40px', background: '#10B981', color: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', flexShrink: 0 }}>
-                      {item.step}
+                      {i + 1}
                     </div>
                     <div>
                       <div style={{ fontWeight: '600', color: '#111827', marginBottom: '4px' }}>{item.title}</div>
@@ -170,25 +170,21 @@ export default function Home() {
                 ))}
               </div>
               <Link href="/drivers" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '32px', color: '#10B981', fontWeight: '600', textDecoration: 'none' }}>
-                Learn more →
+                {c.learnMore}
               </Link>
             </div>
 
             {/* For Business */}
             <div className="card" style={{ background: 'linear-gradient(135deg, #EEF2FF 0%, white 100%)' }}>
               <div className="badge badge-purple" style={{ marginBottom: '24px' }}>
-                🏢 For Business
+                {c.forBusiness}
               </div>
-              <h3 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '32px', color: '#111827' }}>Ship with confidence</h3>
+              <h3 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '32px', color: '#111827' }}>{c.bizHead}</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {[
-                  { step: '1', title: 'Create Account', desc: 'Register your business in minutes' },
-                  { step: '2', title: 'Book Delivery', desc: 'Enter pickup and delivery details' },
-                  { step: '3', title: 'Track & Receive', desc: 'Monitor in real-time until delivery' },
-                ].map((item, i) => (
+                {c.bizSteps.map((item, i) => (
                   <div key={i} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
                     <div style={{ width: '40px', height: '40px', background: '#6366F1', color: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', flexShrink: 0 }}>
-                      {item.step}
+                      {i + 1}
                     </div>
                     <div>
                       <div style={{ fontWeight: '600', color: '#111827', marginBottom: '4px' }}>{item.title}</div>
@@ -198,7 +194,7 @@ export default function Home() {
                 ))}
               </div>
               <Link href="/business" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '32px', color: '#6366F1', fontWeight: '600', textDecoration: 'none' }}>
-                Learn more →
+                {c.learnMore}
               </Link>
             </div>
           </div>
@@ -209,18 +205,14 @@ export default function Home() {
       <section className="section" style={{ background: 'white' }}>
         <div className="container">
           <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-            <h2 className="section-title">Loved by Thousands</h2>
+            <h2 className="section-title">{c.lovedTitle}</h2>
             <p className="section-subtitle">
-              See what our drivers and customers are saying.
+              {c.lovedSub}
             </p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }} className="testimonials-grid">
-            {[
-              { name: 'Mikko L.', role: 'Driver', text: 'Best platform for flexible work. I earn well and manage my own schedule. The app is super easy to use!' },
-              { name: 'Sanna R.', role: 'Business Owner', text: 'NadaRuns has transformed our delivery operations. Fast, reliable, and their support team is amazing.' },
-              { name: 'Aino K.', role: 'Customer', text: 'Always get my orders on time. The tracking feature is amazing - I can see exactly where my package is.' },
-            ].map((testimonial, i) => (
+            {c.testimonials.map((testimonial, i) => (
               <div key={i} className="testimonial-card">
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
                   {[...Array(5)].map((_, j) => (
@@ -228,7 +220,7 @@ export default function Home() {
                   ))}
                 </div>
                 <p style={{ color: '#374151', lineHeight: 1.7, marginBottom: '24px', position: 'relative', zIndex: 1 }}>
-                  "{testimonial.text}"
+                  &ldquo;{testimonial.text}&rdquo;
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #10B981 0%, #6366F1 100%)', borderRadius: '12px' }} />
@@ -253,10 +245,10 @@ export default function Home() {
         
         <div className="container" style={{ position: 'relative', textAlign: 'center' }}>
           <h2 style={{ fontSize: 'clamp(30px, 7vw, 44px)', fontWeight: '800', color: 'white', marginBottom: '20px' }}>
-            Ready to Get Started?
+            {c.ctaTitle}
           </h2>
           <p style={{ fontSize: 'clamp(16px, 4vw, 20px)', color: 'rgba(255,255,255,0.8)', marginBottom: '40px', maxWidth: '500px', margin: '0 auto 40px' }}>
-            Join thousands of drivers and businesses already using NadaRuns.
+            {c.ctaSub}
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'center' }}>
             <Link href="/drivers" style={{
@@ -273,7 +265,7 @@ export default function Home() {
               transition: 'all 0.3s',
               boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
             }}>
-              🚴 Start Driving
+              {c.startDriving}
             </Link>
             <Link href="/business" style={{
               background: 'rgba(255,255,255,0.15)',
@@ -289,7 +281,7 @@ export default function Home() {
               border: '2px solid rgba(255,255,255,0.3)',
               backdropFilter: 'blur(10px)'
             }}>
-              🏢 Ship Products
+              {c.shipProducts}
             </Link>
           </div>
         </div>

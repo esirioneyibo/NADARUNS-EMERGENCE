@@ -1,26 +1,27 @@
+"use client";
+
 import Link from "next/link";
 import { site } from "@/lib/site";
+import { useContent } from "@/lib/i18n";
 
 export interface LegalSection {
   heading: string;
-  paragraphs?: string[];
-  bullets?: string[];
+  paragraphs?: readonly string[];
+  bullets?: readonly string[];
 }
 
 interface LegalPageProps {
   title: string;
-  lastUpdated: string;
   intro: string;
-  sections: LegalSection[];
+  sections: readonly LegalSection[];
 }
 
 /**
  * Shared layout for all NadaRuns legal documents (Terms, Privacy, Cookies, GDPR).
- * Content is scaffolded as a TEMPLATE — replace the placeholder copy with text
- * reviewed by qualified legal counsel before launch. Company details are pulled
- * from the single source of truth in src/lib/site.ts.
+ * Content is passed in already translated; static chrome labels come from i18n.
  */
-export default function LegalPage({ title, lastUpdated, intro, sections }: LegalPageProps) {
+export default function LegalPage({ title, intro, sections }: LegalPageProps) {
+  const t = useContent().legal;
   return (
     <main style={{ background: "#ffffff", color: "#1f2937" }}>
       <section style={{ maxWidth: 860, margin: "0 auto", padding: "128px 24px 80px" }}>
@@ -34,12 +35,12 @@ export default function LegalPage({ title, lastUpdated, intro, sections }: Legal
             marginBottom: 12,
           }}
         >
-          Legal
+          {t.eyebrow}
         </p>
         <h1 style={{ fontSize: 40, fontWeight: 800, lineHeight: 1.15, margin: "0 0 12px", color: "#0f172a" }}>
           {title}
         </h1>
-        <p style={{ fontSize: 14, color: "#6b7280", margin: "0 0 24px" }}>Last updated: {lastUpdated}</p>
+        <p style={{ fontSize: 14, color: "#6b7280", margin: "0 0 24px" }}>{t.lastUpdatedLabel} {t.toBeSet}</p>
 
         <div
           style={{
@@ -53,9 +54,7 @@ export default function LegalPage({ title, lastUpdated, intro, sections }: Legal
             lineHeight: 1.5,
           }}
         >
-          <strong>Template notice:</strong> This document is a scaffold provided for layout and
-          structure. The final wording must be reviewed and approved by qualified legal counsel and
-          comply with Finnish and EU law before NadaRuns accepts real customers or payments.
+          <strong>{t.templateNotice}</strong> {t.templateBody}
         </div>
 
         <p style={{ fontSize: 16, lineHeight: 1.7, color: "#374151", marginBottom: 8 }}>{intro}</p>
@@ -92,21 +91,21 @@ export default function LegalPage({ title, lastUpdated, intro, sections }: Legal
           }}
         >
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", margin: "0 0 12px" }}>
-            Company details
+            {t.companyDetails}
           </h2>
           <p style={{ fontSize: 15, lineHeight: 1.7, color: "#374151", margin: 0 }}>
             <strong>{site.company.legalName}</strong>
             <br />
-            Business ID (Y-tunnus): {site.company.businessId}
+            {t.businessId} {site.company.businessId}
             <br />
             {site.contact.address.line1}, {site.contact.address.line2}
             <br />
-            Support:{" "}
+            {t.support}{" "}
             <a href={`mailto:${site.contact.supportEmail}`} style={{ color: "#059669" }}>
               {site.contact.supportEmail}
             </a>
             <br />
-            General enquiries:{" "}
+            {t.general}{" "}
             <a href={`mailto:${site.contact.email}`} style={{ color: "#059669" }}>
               {site.contact.email}
             </a>
@@ -115,7 +114,7 @@ export default function LegalPage({ title, lastUpdated, intro, sections }: Legal
 
         <div style={{ marginTop: 32 }}>
           <Link href="/" style={{ color: "#059669", fontWeight: 600, textDecoration: "none" }}>
-            ← Back to home
+            {t.backHome}
           </Link>
         </div>
       </section>

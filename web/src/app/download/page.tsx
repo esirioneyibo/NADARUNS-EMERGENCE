@@ -1,23 +1,14 @@
+"use client";
+
 import AppBadges from "@/components/AppBadges";
 import { site } from "@/lib/site";
 import { Bell, MapPin, Wallet, MessageSquare, ShieldCheck, Zap } from "lucide-react";
+import { useContent } from "@/lib/i18n";
 
-export const metadata = {
-  title: "Download the NadaRuns App — iOS & Android",
-  description:
-    "Download NadaRuns for iOS and Android. Track deliveries live, accept jobs, chat with drivers and get instant alerts.",
-};
-
-const FEATURES = [
-  { icon: MapPin, title: "Live tracking", desc: "Follow every delivery on the map from pickup to drop-off." },
-  { icon: Bell, title: "Instant alerts", desc: "Distinct sounds & push notifications for every key event." },
-  { icon: Wallet, title: "Earnings dashboard", desc: "Drivers see today, this week and total earnings at a glance." },
-  { icon: MessageSquare, title: "In-app chat", desc: "Message between shipper and driver without sharing numbers." },
-  { icon: ShieldCheck, title: "Secure & insured", desc: "OTP hand-offs and proof-of-delivery on every order." },
-  { icon: Zap, title: "Fast booking", desc: "Create a shipment in under a minute with instant pricing." },
-];
+const FEATURE_ICONS = [MapPin, Bell, Wallet, MessageSquare, ShieldCheck, Zap];
 
 export default function DownloadPage() {
+  const c = useContent().download;
   return (
     <>
       <div style={{ paddingTop: "72px" }}>
@@ -27,13 +18,13 @@ export default function DownloadPage() {
           <div className="container">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "64px", alignItems: "center" }} className="dl-hero-grid">
               <div>
-                <div className="badge badge-purple" style={{ marginBottom: "24px" }}>⬇️ Download NadaRuns</div>
+                <div className="badge badge-purple" style={{ marginBottom: "24px" }}>{c.heroBadge}</div>
                 <h1 style={{ fontSize: "52px", fontWeight: 800, lineHeight: 1.1, marginBottom: "20px", color: "#111827" }}>
-                  Get the app.<br />
-                  <span className="gradient-text">Move everything.</span>
+                  {c.heroTitle1}<br />
+                  <span className="gradient-text">{c.heroTitle2}</span>
                 </h1>
                 <p style={{ fontSize: "19px", color: "#6B7280", lineHeight: 1.7, marginBottom: "32px", maxWidth: "480px" }}>
-                  One app for drivers and businesses. {site.app.comingSoon ? "Launching soon on the App Store and Google Play — tap below to get notified." : "Available now on the App Store and Google Play."}
+                  {site.app.comingSoon ? c.heroLeadSoon : c.heroLeadLive}
                 </p>
                 <AppBadges />
               </div>
@@ -54,7 +45,7 @@ export default function DownloadPage() {
                       margin: "0 auto 12px",
                     }}
                   />
-                  <div style={{ fontSize: "13px", color: "#6B7280", fontWeight: 600 }}>Scan to download</div>
+                  <div style={{ fontSize: "13px", color: "#6B7280", fontWeight: 600 }}>{c.scan}</div>
                 </div>
               </div>
             </div>
@@ -65,19 +56,22 @@ export default function DownloadPage() {
         <section className="section" style={{ background: "white" }}>
           <div className="container">
             <div style={{ textAlign: "center", marginBottom: "56px" }}>
-              <h2 className="section-title">Everything in one app</h2>
-              <p className="section-subtitle">Built for speed, reliability and a delightful experience.</p>
+              <h2 className="section-title">{c.featuresHead}</h2>
+              <p className="section-subtitle">{c.featuresSub}</p>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "24px" }} className="dl-feature-grid">
-              {FEATURES.map((f, i) => (
-                <div key={i} className="feature-card">
-                  <div className="feature-icon feature-icon-purple">
-                    <f.icon className="w-7 h-7" />
+              {c.features.map((f, i) => {
+                const Icon = FEATURE_ICONS[i];
+                return (
+                  <div key={i} className="feature-card">
+                    <div className="feature-icon feature-icon-purple">
+                      <Icon className="w-7 h-7" />
+                    </div>
+                    <h3 style={{ fontSize: "19px", fontWeight: 700, marginBottom: "10px", color: "#111827" }}>{f.title}</h3>
+                    <p style={{ color: "#6B7280", lineHeight: 1.6 }}>{f.desc}</p>
                   </div>
-                  <h3 style={{ fontSize: "19px", fontWeight: 700, marginBottom: "10px", color: "#111827" }}>{f.title}</h3>
-                  <p style={{ color: "#6B7280", lineHeight: 1.6 }}>{f.desc}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
@@ -85,9 +79,9 @@ export default function DownloadPage() {
         {/* CTA */}
         <section style={{ padding: "90px 0", background: "linear-gradient(135deg, #10B981 0%, #6366F1 100%)" }}>
           <div className="container" style={{ textAlign: "center" }}>
-            <h2 style={{ fontSize: "40px", fontWeight: 800, color: "white", marginBottom: "16px" }}>Ready when you are</h2>
+            <h2 style={{ fontSize: "40px", fontWeight: 800, color: "white", marginBottom: "16px" }}>{c.ctaTitle}</h2>
             <p style={{ fontSize: "19px", color: "rgba(255,255,255,0.85)", marginBottom: "36px" }}>
-              Download NadaRuns and start moving in minutes.
+              {c.ctaSub}
             </p>
             <div style={{ display: "flex", justifyContent: "center" }}>
               <AppBadges />

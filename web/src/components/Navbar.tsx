@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useContent, LangToggle } from "@/lib/i18n";
 
 export default function Navbar() {
   const pathname = usePathname();
+  const c = useContent();
   const [isOpen, setIsOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -44,26 +46,27 @@ export default function Navbar() {
 
         {/* Desktop Navigation */}
         <div className="nav-links">
-          <Link href="/" className="nav-link">Home</Link>
-          <Link href="/about" className="nav-link">About</Link>
-          <Link href="/drivers" className="nav-link">For Drivers</Link>
-          <Link href="/business" className="nav-link">For Business</Link>
-          <Link href="/download" className="nav-link">Download</Link>
-          <Link href="/contact" className="nav-link">Contact</Link>
+          <Link href="/" className="nav-link">{c.nav.home}</Link>
+          <Link href="/about" className="nav-link">{c.nav.about}</Link>
+          <Link href="/drivers" className="nav-link">{c.nav.drivers}</Link>
+          <Link href="/business" className="nav-link">{c.nav.business}</Link>
+          <Link href="/download" className="nav-link">{c.nav.download}</Link>
+          <Link href="/contact" className="nav-link">{c.nav.contact}</Link>
         </div>
 
         {/* CTA Buttons */}
         <div className="nav-cta">
+          <LangToggle />
           {isAdmin && (
             <Link href="/admin" className="btn-outline" data-testid="nav-admin-link" style={{ padding: '10px 20px', fontSize: '14px', borderColor: '#6366F1', color: '#6366F1' }}>
-              Admin Dashboard
+              {c.nav.admin}
             </Link>
           )}
           <Link href="/drivers" className="btn-outline" style={{ padding: '10px 20px', fontSize: '14px' }}>
-            Drive with us
+            {c.nav.driveWithUs}
           </Link>
           <Link href="/download" className="btn-primary" style={{ padding: '10px 20px', fontSize: '14px' }}>
-            Get the app
+            {c.nav.getApp}
           </Link>
         </div>
 
@@ -89,18 +92,19 @@ export default function Navbar() {
           borderTop: '1px solid #E5E7EB',
           boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
         }}>
-          <Link href="/" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>Home</Link>
-          <Link href="/about" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>About</Link>
-          <Link href="/drivers" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>For Drivers</Link>
-          <Link href="/business" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>For Business</Link>
-          <Link href="/download" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>Download</Link>
-          <Link href="/contact" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>Contact</Link>
+          <div style={{ marginBottom: '16px' }}><LangToggle /></div>
+          <Link href="/" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>{c.nav.home}</Link>
+          <Link href="/about" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>{c.nav.about}</Link>
+          <Link href="/drivers" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>{c.nav.drivers}</Link>
+          <Link href="/business" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>{c.nav.business}</Link>
+          <Link href="/download" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>{c.nav.download}</Link>
+          <Link href="/contact" className="nav-link" style={{ display: 'block', padding: '12px 0' }} onClick={() => setIsOpen(false)}>{c.nav.contact}</Link>
           <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {isAdmin && (
-              <Link href="/admin" className="btn-outline" style={{ justifyContent: 'center', borderColor: '#6366F1', color: '#6366F1' }} onClick={() => setIsOpen(false)}>Admin Dashboard</Link>
+              <Link href="/admin" className="btn-outline" style={{ justifyContent: 'center', borderColor: '#6366F1', color: '#6366F1' }} onClick={() => setIsOpen(false)}>{c.nav.admin}</Link>
             )}
-            <Link href="/drivers" className="btn-outline" style={{ justifyContent: 'center' }} onClick={() => setIsOpen(false)}>Drive with us</Link>
-            <Link href="/download" className="btn-primary" style={{ justifyContent: 'center' }} onClick={() => setIsOpen(false)}>Get the app</Link>
+            <Link href="/drivers" className="btn-outline" style={{ justifyContent: 'center' }} onClick={() => setIsOpen(false)}>{c.nav.driveWithUs}</Link>
+            <Link href="/download" className="btn-primary" style={{ justifyContent: 'center' }} onClick={() => setIsOpen(false)}>{c.nav.getApp}</Link>
           </div>
         </div>
       )}
