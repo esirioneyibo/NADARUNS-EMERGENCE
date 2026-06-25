@@ -1400,232 +1400,14 @@ async def ensure_seed():
 
 # ===================== Routes =====================
 
-@api_router.get("/")
-async def root():
-    return {"message": "NadaRuns Logistics API - Production Ready"}
 
 
-@api_router.post("/seed-demo")
-async def seed_demo_data():
-    """
-    Seed demo data for testing purposes.
-    Creates a demo driver, demo shipper, and sample logistics orders.
-    WARNING: This is for development/testing only!
-    """
-    result = {
-        "message": "Demo data seeded successfully",
-        "created": {
-            "driver": None,
-            "shipper": None,
-            "orders": 0,
-            "history": 0,
-        }
-    }
-    
-    # Create demo driver if not exists
-    demo_driver_email = "demo.driver@nadaruns.com"
-    existing_driver = await db.drivers.find_one({"email": demo_driver_email})
-    if not existing_driver:
-        demo_driver_id = str(uuid.uuid4())
-        demo_driver = Driver(
-            id=demo_driver_id,
-            name="Demo Driver",
-            rating=4.85,
-            avatar=f"https://api.dicebear.com/7.x/avataaars/png?seed={demo_driver_id}",
-            vehicle="Cargo Van • DEMO-001",
-            vehicle_type="cargo_van",
-            vehicle_capacity_kg=1500,
-            plate="DEMO-001",
-            email=demo_driver_email,
-            phone="+358 40 123 4567",
-            password_hash=hash_password("demo1234"),
-            is_online=False,
-            earnings_today=0.0,
-            deliveries_today=0,
-            acceptance_rate=95.0,
-        )
-        await db.drivers.insert_one(demo_driver.model_dump())
-        result["created"]["driver"] = {"email": demo_driver_email, "password": "demo1234"}
-        logger.info(f"Created demo driver: {demo_driver_email}")
-    else:
-        demo_driver_id = existing_driver["id"]
-
-    # Demo driver is pre-Verified so the demo works end-to-end (KYC approved).
-    await db.kyc_status.update_one(
-        {"driver_id": demo_driver_id},
-        {"$set": {
-            "driver_id": demo_driver_id,
-            "license_front": "approved",
-            "license_back": "approved",
-            "selfie": "approved",
-            "overall_status": "approved",
-            "submitted_at": datetime.now(timezone.utc).isoformat(),
-            "reviewed_at": datetime.now(timezone.utc).isoformat(),
-        }},
-        upsert=True,
-    )
-    
-    # Create demo shipper if not exists
-    demo_shipper_email = "demo.shipper@nadaruns.com"
-    existing_shipper = await db.shippers.find_one({"email": demo_shipper_email})
-    if not existing_shipper:
-        demo_shipper_id = str(uuid.uuid4())
-        demo_shipper = Shipper(
-            id=demo_shipper_id,
-            company_name="Demo Logistics Co",
-            contact_name="Demo Manager",
-            email=demo_shipper_email,
-            phone="+358 40 987 6543",
-            password_hash=hash_password("demo1234"),
-            avatar="https://api.dicebear.com/7.x/initials/png?seed=DemoLogistics",
-            is_verified=True,
-            total_shipments=0,
-        )
-        await db.shippers.insert_one(demo_shipper.model_dump())
-        result["created"]["shipper"] = {"email": demo_shipper_email, "password": "demo1234"}
-        logger.info(f"Created demo shipper: {demo_shipper_email}")
-    
-    # Seed pending orders for all regions
-    pending_count = await db.orders.count_documents({"status": "pending"})
-    if pending_count < 20:
-        orders_created = 0
-        
-        # Helsinki region - 10 orders
-        for i, pickup in enumerate(LOGISTICS_PICKUPS):
-            dropoff = LOGISTICS_DROPOFFS[i % len(LOGISTICS_DROPOFFS)]
-            order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff, region="helsinki")
-            await db.orders.insert_one(order)
-            orders_created += 1
-        logger.info("Seeded 10 Helsinki region logistics orders")
-        
-        # Tampere region - 10 orders
-        for i, pickup in enumerate(TAMPERE_PICKUPS):
-            dropoff = TAMPERE_DROPOFFS[i % len(TAMPERE_DROPOFFS)]
-            order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff, region="tampere")
-            await db.orders.insert_one(order)
-            orders_created += 1
-        logger.info("Seeded 10 Tampere region logistics orders")
-        
-        # Turku region - 2 orders
-        for i, pickup in enumerate(TURKU_PICKUPS):
-            dropoff = TURKU_DROPOFFS[i % len(TURKU_DROPOFFS)]
-            order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff, region="turku")
-            await db.orders.insert_one(order)
-            orders_created += 1
-        logger.info("Seeded 2 Turku region logistics orders")
-        
-        # Oulu region - 2 orders
-        for i, pickup in enumerate(OULU_PICKUPS):
-            dropoff = OULU_DROPOFFS[i % len(OULU_DROPOFFS)]
-            order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff, region="oulu")
-            await db.orders.insert_one(order)
-            orders_created += 1
-        logger.info("Seeded 2 Oulu region logistics orders")
-        
-        # Kuopio region - 1 order
-        for i, pickup in enumerate(KUOPIO_PICKUPS):
-            dropoff = KUOPIO_DROPOFFS[i % len(KUOPIO_DROPOFFS)]
-            order = build_logistics_order("pending", override_pickup=pickup, override_dropoff=dropoff, region="kuopio")
-            await db.orders.insert_one(order)
-            orders_created += 1
-        logger.info("Seeded 1 Kuopio region logistics order")
-        
-        result["created"]["orders"] = orders_created
-        result["created"]["orders_by_region"] = {
-            "helsinki": 10,
-            "tampere": 10,
-            "turku": 2,
-            "oulu": 2,
-            "kuopio": 1,
-        }
-        logger.info(f"Seeded total {orders_created} pending logistics orders across all regions")
-    
-    # Seed delivery history if none exists
-    history_count = await db.orders.count_documents({"status": "delivered"})
-    if history_count < 6:
-        for i in range(8):
-            await db.orders.insert_one(build_logistics_order("delivered", completed_offset_hours=i * 6 + random.randint(1, 5)))
-        result["created"]["history"] = 8
-        logger.info("Seeded delivery history")
-    
-    return result
 
 
-@api_router.delete("/seed-demo")
-async def clear_demo_data():
-    """
-    Clear all demo data.
-    WARNING: This will delete orders, drivers, and shippers!
-    """
-    deleted = {
-        "orders": 0,
-        "drivers": 0,
-        "shippers": 0,
-    }
-    
-    # Delete all orders
-    orders_result = await db.orders.delete_many({})
-    deleted["orders"] = orders_result.deleted_count
-    
-    # Delete demo driver (but keep real registered users)
-    drivers_result = await db.drivers.delete_many({"email": {"$regex": "demo"}})
-    deleted["drivers"] = drivers_result.deleted_count
-    
-    # Delete demo shipper
-    shippers_result = await db.shippers.delete_many({"email": {"$regex": "demo"}})
-    deleted["shippers"] = shippers_result.deleted_count
-    
-    logger.info(f"Cleared demo data: {deleted}")
-    return {"message": "Demo data cleared", "deleted": deleted}
 
 
-@api_router.get("/driver/me", response_model=Driver)
-async def get_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get current driver profile. Requires authentication."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required. Please login first.")
-    
-    payload = decode_token(credentials.credentials)
-    driver_id = payload.get("sub")
-    user_type = payload.get("type")
-    
-    if user_type != "driver":
-        raise HTTPException(403, "Driver access required")
-    
-    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
-    if not driver:
-        raise HTTPException(404, "Driver not found. Please register or login again.")
-    driver = await _ensure_driver_vehicles(driver)  # migrate legacy single-vehicle records
-    return Driver(**driver)
 
 
-@api_router.post("/driver/toggle-online", response_model=Driver)
-async def toggle_online(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Toggle driver online/offline status. Requires authentication."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    driver_id = payload.get("sub")
-    user_type = payload.get("type")
-    
-    if user_type != "driver":
-        raise HTTPException(403, "Driver access required")
-    
-    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-    
-    new_state = not driver["is_online"]
-    if new_state and driver.get("is_suspended"):
-        raise HTTPException(403, "Your account is suspended. Please contact support.")
-    await db.drivers.update_one({"id": driver_id}, {"$set": {"is_online": new_state}})
-    driver["is_online"] = new_state
-    
-    # Broadcast status change to connected clients
-    await broadcast_driver_status(driver_id, new_state)
-    
-    return Driver(**driver)
 
 
 async def broadcast_driver_status(driver_id: str, is_online: bool):
@@ -1644,318 +1426,18 @@ async def broadcast_driver_status(driver_id: str, is_online: bool):
             pass
 
 
-@api_router.get("/orders/pending", response_model=Optional[Order])
-async def get_pending():
-    # Jobs are published to drivers as soon as they are created (1a); payment
-    # is handled separately and does not gate marketplace visibility.
-    order = await db.orders.find_one(
-        {"status": "pending"},
-        {"_id": 0},
-    )
-    if not order:
-        return None
-    return Order(**order)
 
 
-@api_router.get("/orders/available", response_model=List[Order])
-async def get_available_orders(
-    vehicle_type: Optional[str] = None,
-    min_capacity_kg: Optional[int] = None,
-    lat: Optional[float] = None,
-    lng: Optional[float] = None,
-    radius_km: float = 50.0,
-):
-    """
-    Get all available (pending) orders for map-based job discovery.
-    Returns orders with their pickup locations for displaying on driver's map.
-
-    Optional filters:
-    - vehicle_type: Filter orders requiring a specific vehicle type
-    - min_capacity_kg: Filter orders where cargo weight is within this capacity
-    - lat/lng + radius_km: only return jobs whose pickup is within radius_km of
-      the driver, sorted nearest-first (so the "jobs nearby" count is accurate)
-    """
-    query = {"status": "pending"}
-    # Jobs are visible to drivers as soon as the shipper creates them (1a).
-    # Payment is handled separately and no longer gates marketplace visibility.
-    
-    # Filter by vehicle type if specified
-    if vehicle_type:
-        # Show orders that either:
-        # 1. Require this exact vehicle type
-        # 2. Have no vehicle type requirement (legacy orders)
-        query["$or"] = [
-            {"vehicle_type": vehicle_type},
-            {"vehicle_type": None},
-            {"vehicle_type": {"$exists": False}},
-        ]
-    
-    # Filter by capacity if specified
-    if min_capacity_kg:
-        # Show orders where cargo weight is within the driver's capacity
-        query["$or"] = query.get("$or", []) + [
-            {"cargo_weight_kg": {"$lte": min_capacity_kg}},
-            {"cargo_weight_kg": None},
-            {"cargo_weight_kg": {"$exists": False}},
-        ]
-    
-    def _enrich(o: dict) -> dict:
-        dist = o.get("distance_km") or 0
-        try:
-            o["payout_per_km"] = round(float(o.get("earnings") or 0) / dist, 2) if dist else None
-        except Exception:
-            o["payout_per_km"] = None
-        return o
-
-    if lat is not None and lng is not None:
-        # Make sure pending orders carry a GeoJSON pickup_location for $geoNear.
-        try:
-            await db.orders.update_many(
-                {"status": "pending",
-                 "$or": [{"pickup_location": {"$exists": False}}, {"pickup_location": None}],
-                 "pickup.lat": {"$type": "number"}, "pickup.lng": {"$type": "number"}},
-                [{"$set": {"pickup_location": {"type": "Point", "coordinates": ["$pickup.lng", "$pickup.lat"]}}}],
-            )
-        except Exception as exc:
-            logger.warning(f"lazy pickup_location backfill failed: {exc}")
-
-        # 2dsphere proximity search — returns jobs nearest-first with real distance.
-        pipeline = [
-            {"$geoNear": {
-                "near": {"type": "Point", "coordinates": [lng, lat]},
-                "distanceField": "pickup_distance_m",
-                "maxDistance": radius_km * 1000,
-                "spherical": True,
-                "query": query,
-            }},
-            {"$limit": 50},
-            {"$project": {"_id": 0}},
-        ]
-        items = await db.orders.aggregate(pipeline).to_list(50)
-        for o in items:
-            o["pickup_distance_km"] = round((o.pop("pickup_distance_m", 0) or 0) / 1000, 1)
-            _enrich(o)
-    else:
-        items = await db.orders.find(query, {"_id": 0}).limit(50).to_list(50)
-        for o in items:
-            _enrich(o)
-
-    # Defensive serialization: never let a single malformed order 500 the whole
-    # feed (which would make ALL jobs vanish from every driver's screen).
-    result = []
-    for o in items:
-        try:
-            result.append(Order(**o))
-        except Exception as exc:
-            logger.warning(f"Skipping malformed order {o.get('order_number') or o.get('id')} in available feed: {exc}")
-    return result
 
 
-@api_router.get("/orders/available/matched", response_model=List[Order])
-async def get_matched_orders(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """
-    Get available orders matched to the driver's vehicle type and capacity.
-    Orders are sorted by best match (exact vehicle type match first).
-    """
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "driver":
-        raise HTTPException(403, "Driver access required")
-    
-    driver = await db.drivers.find_one({"id": payload["sub"]}, {"_id": 0})
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-    
-    driver_vehicle_type = driver.get("vehicle_type", "cargo_van")
-    driver_capacity = driver.get("vehicle_capacity_kg", 1500)
-    
-    # Get all pending orders
-    all_orders = await db.orders.find({"status": "pending"}, {"_id": 0}).limit(100).to_list(100)
-    
-    # Score and filter orders based on vehicle match
-    matched_orders = []
-    for order in all_orders:
-        order_vehicle_type = order.get("vehicle_type")
-        order_weight = order.get("cargo_weight_kg", 0) or 0
-        
-        # Check if driver can handle this order
-        if order_weight > driver_capacity:
-            continue  # Skip orders that exceed driver's capacity
-        
-        # Calculate match score
-        score = 0
-        if order_vehicle_type is None:
-            # No vehicle preference - any driver can take it
-            score = 1
-        elif order_vehicle_type == driver_vehicle_type:
-            # Exact match - highest priority
-            score = 3
-        else:
-            # Check if driver's vehicle can handle this type of order
-            # Allow higher capacity vehicles to take lower capacity orders
-            order_vehicle_info = VEHICLE_TYPES.get(order_vehicle_type)
-            driver_vehicle_info = VEHICLE_TYPES.get(driver_vehicle_type)
-            
-            if order_vehicle_info and driver_vehicle_info:
-                if driver_vehicle_info["max_weight_kg"] >= order_vehicle_info["max_weight_kg"]:
-                    score = 2  # Driver has bigger/equal vehicle
-                # Special case: specialized vehicles can only take their own type
-                if order_vehicle_info["category"] == "Specialized" and order_vehicle_type != driver_vehicle_type:
-                    continue  # Skip specialized orders if vehicle doesn't match
-        
-        if score > 0:
-            matched_orders.append((score, order))
-    
-    # Sort by score (highest first), then by earnings (highest first)
-    matched_orders.sort(key=lambda x: (-x[0], -(x[1].get("earnings", 0) or 0)))
-    
-    return [Order(**order) for _, order in matched_orders[:50]]
 
 
-@api_router.get("/orders/active", response_model=Optional[Order])
-async def get_active(request: Request):
-    """Return the authenticated driver's current active order.
-
-    Filters by the driver bound to the order so a driver only ever sees
-    their own in-progress job. Legacy orders with no driver_id remain
-    visible for backward compatibility.
-    """
-    driver_id = await get_optional_driver_id(request)
-    query: dict = {"status": {"$in": list(sm.ACTIVE_STATES)}}
-    if driver_id:
-        query["driver_id"] = {"$in": [driver_id, None]}
-    order = await db.orders.find_one(query, {"_id": 0})
-    if not order:
-        return None
-    return Order(**order)
 
 
-@api_router.get("/orders/history", response_model=List[Order])
-async def get_history(request: Request):
-    """Get delivery history for the authenticated driver."""
-    # Get the authenticated driver
-    driver_id = await get_current_driver_id(request)
-    
-    # Return only orders that were delivered by this driver
-    cursor = db.orders.find(
-        {"status": "delivered", "driver_id": driver_id}, 
-        {"_id": 0}
-    ).sort("completed_at", -1).limit(50)
-    items = await cursor.to_list(50)
-    return [Order(**o) for o in items]
 
 
-@api_router.post("/orders/{order_id}/accept", response_model=Order)
-async def accept_order(order_id: str, request: Request):
-    """Atomically claim a pending order for the authenticated driver.
-
-    Uses a conditional update on `status == pending` so two drivers can never
-    accept the same job (race-safe). Idempotent: a driver re-accepting their
-    own order gets a 200; a driver accepting a job already claimed by someone
-    else gets a 409 Conflict.
-    """
-    driver_id = await get_optional_driver_id(request)
-
-    # KYC gate: a driver must be Verified (admin-approved) before accepting jobs.
-    fleet_fields: dict = {}
-    if driver_id:
-        kyc = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
-        if not kyc or kyc.get("overall_status") != "approved":
-            raise HTTPException(
-                403,
-                "KYC verification required. Please complete identity verification and wait for admin approval before accepting jobs.",
-            )
-        # Fleet: enforce job-acceptance mode and record company audit fields.
-        drv = await db.drivers.find_one(
-            {"id": driver_id}, {"_id": 0, "company_id": 1, "is_suspended": 1}
-        )
-        if drv and drv.get("is_suspended"):
-            raise HTTPException(403, "Your account is suspended. Contact your company owner.")
-        company_id = drv.get("company_id") if drv else None
-        if company_id:
-            company = await db.companies.find_one({"id": company_id}, {"_id": 0})
-            if company and company.get("status") == "suspended":
-                raise HTTPException(403, "Your company is suspended. Contact support.")
-            mode = (company or {}).get("job_acceptance_mode", "self_accept")
-            if mode == "owner_assign":
-                raise HTTPException(
-                    403, "Self-accept is disabled. Your company owner assigns jobs."
-                )
-            veh = await db.fleet_vehicles.find_one(
-                {"company_id": company_id, "assigned_driver_id": driver_id, "status": "active"},
-                {"_id": 0, "id": 1},
-            )
-            fleet_fields = {
-                "assigned_company_id": company_id,
-                "assigned_driver_id": driver_id,
-                "assigned_vehicle_id": veh["id"] if veh else None,
-            }
-
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-
-    current = order["status"]
-
-    # Idempotent replay / conflict detection for already-claimed orders.
-    if current in sm.ACTIVE_STATES:
-        existing_driver = order.get("driver_id")
-        if driver_id and existing_driver and existing_driver == driver_id:
-            return Order(**order)  # this driver already owns it
-        if existing_driver and driver_id and existing_driver != driver_id:
-            raise HTTPException(409, "Order already accepted by another driver")
-        # legacy active order with no bound driver -> allow claim below isn't
-        # possible (status no longer pending); just return as-is to be safe.
-        return Order(**order)
-
-    if not sm.can_transition(current, sm.ACCEPTED):
-        raise HTTPException(400, f"Order not in pending state (current: {current})")
-
-    set_fields: dict = {"status": sm.ACCEPTED}
-    if driver_id:
-        set_fields["driver_id"] = driver_id
-    set_fields.update(fleet_fields)
-
-    # Atomic claim: only succeeds if the order is still pending.
-    result = await db.orders.update_one(
-        {"id": order_id, "status": "pending"}, {"$set": set_fields}
-    )
-    if result.modified_count == 0:
-        fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
-        if fresh and fresh.get("driver_id") == driver_id:
-            return Order(**fresh)
-        raise HTTPException(409, "Order already accepted by another driver")
-
-    order.update(set_fields)
-    await audit.record_event(
-        db, order_id, "status_change",
-        from_status=current, to_status=sm.ACCEPTED,
-        actor_id=driver_id, actor_type="driver",
-    )
-    # Background push to the shipper: a driver has been assigned.
-    asyncio.create_task(push_status_to_shipper(order, "accepted"))
-    return Order(**order)
 
 
-@api_router.post("/orders/{order_id}/reject", response_model=Order)
-async def reject_order(order_id: str, request: Request):
-    driver_id = await get_optional_driver_id(request)
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    current = order["status"]
-    await db.orders.update_one({"id": order_id}, {"$set": {"status": "rejected"}})
-    await audit.record_event(
-        db, order_id, "rejected",
-        from_status=current, to_status="rejected",
-        actor_id=driver_id, actor_type="driver",
-    )
-    # generate a fresh pending order so the demo continues
-    await db.orders.insert_one(build_order("pending"))
-    order["status"] = "rejected"
-    return Order(**order)
 
 
 async def _get_or_create_company_wallet(company_id: str) -> dict:
@@ -2000,94 +1482,10 @@ async def _credit_company_wallet_on_delivery(order: dict):
     )
 
 
-@api_router.post("/orders/{order_id}/advance", response_model=Order)
-async def advance_order(order_id: str, body: AdvanceRequest, request: Request):
-    """Advance an order through its lifecycle, validated by the state machine.
-
-    - Rejects illegal transitions (e.g. pending -> delivered) with 400.
-    - Idempotent: requesting the current status returns the order unchanged.
-    - Credits the AUTHENTICATED driver on delivery (fixes the legacy bug that
-      always credited a hardcoded driver id).
-    """
-    driver_id = await get_optional_driver_id(request)
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-
-    current = order["status"]
-
-    # Idempotent: already at requested state -> no-op.
-    if body.next_status and body.next_status == current:
-        return Order(**order)
-
-    try:
-        next_status = sm.resolve_target(current, body.next_status)
-    except sm.InvalidTransition as exc:
-        raise HTTPException(400, str(exc))
-
-    update: dict = {"status": next_status}
-    if next_status == sm.DELIVERED:
-        update["completed_at"] = datetime.now(timezone.utc).isoformat()
-        # Credit the authenticated driver, falling back to the order's bound
-        # driver, then the legacy demo driver as a last resort.
-        credit_driver_id = driver_id or order.get("driver_id") or DRIVER_ID
-        await db.drivers.update_one(
-            {"id": credit_driver_id},
-            {"$inc": {"earnings_today": order["earnings"] + order.get("tip", 0), "deliveries_today": 1}},
-        )
-        # Phase 3: for company jobs, the net earnings belong to the COMPANY wallet.
-        try:
-            await _credit_company_wallet_on_delivery(order)
-        except Exception as exc:  # never block delivery on a wallet error
-            logger.warning(f"Company wallet credit failed for {order_id}: {exc}")
-        # Note: we intentionally do NOT auto-seed a replacement pending order
-        # here. The available-jobs pool should shrink as jobs are completed so
-        # the "jobs nearby" counter reflects reality. Use POST
-        # /api/orders/seed-new-pending to top up demo data when needed.
-
-    await db.orders.update_one({"id": order_id}, {"$set": update})
-    order.update(update)
-    await audit.record_event(
-        db, order_id, "status_change",
-        from_status=current, to_status=next_status,
-        actor_id=driver_id, actor_type="driver",
-    )
-    # On delivery completion, capture the previously authorized payment (auth -> capture).
-    if next_status == sm.DELIVERED:
-        try:
-            captured = await _auto_capture_on_delivery(order_id)
-            if captured:
-                order.update(captured)
-        except Exception as exc:  # never block delivery on a payment error
-            logger.warning(f"Auto-capture on delivery failed for {order_id}: {exc}")
-    # Background push to the shipper on key lifecycle transitions.
-    if next_status in ("arrived_pickup", "arrived_dropoff", "delivered"):
-        asyncio.create_task(push_status_to_shipper(order, next_status))
-    return Order(**order)
 
 
-@api_router.get("/orders/{order_id}/events")
-async def get_order_events(order_id: str):
-    """Return the immutable audit timeline for an order (status changes etc.)."""
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "order_number": 1, "status": 1})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    events = await audit.get_events(db, order_id)
-    return {"order_id": order_id, "current_status": order.get("status"), "events": events}
 
 
-@api_router.post("/orders/{order_id}/rate", response_model=Order)
-async def rate_order(order_id: str, body: RateRequest):
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {"rating_given": body.rating, "feedback": body.feedback}},
-    )
-    order["rating_given"] = body.rating
-    order["feedback"] = body.feedback
-    return Order(**order)
 
 
 async def _recompute_driver_rating(driver_id: str) -> Optional[float]:
@@ -2126,449 +1524,33 @@ async def _recompute_shipper_rating(shipper_id: str) -> Optional[float]:
     return avg
 
 
-@api_router.post("/shipper/shipments/{order_id}/rate-driver")
-async def rate_driver(
-    order_id: str,
-    body: StarRatingRequest,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-):
-    """Shipper rates their driver (1-5 stars, one-time) after a delivered job.
-    Recomputes and persists the driver's average rating on their profile."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "shipper":
-        raise HTTPException(403, "Shipper access required")
-    shipper_id = payload["sub"]
-
-    if not (1 <= int(body.rating) <= 5):
-        raise HTTPException(400, "Rating must be between 1 and 5 stars")
-
-    order = await db.orders.find_one({"id": order_id, "shipper_id": shipper_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Shipment not found")
-    if order.get("status") != "delivered":
-        raise HTTPException(400, "You can only rate the driver once the job is delivered")
-    if not order.get("driver_id"):
-        raise HTTPException(400, "No driver was assigned to this shipment")
-    if order.get("driver_rating") is not None:
-        raise HTTPException(400, "You have already rated this driver")
-
-    now = datetime.now(timezone.utc).isoformat()
-    review = (body.review or "").strip() or None
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {"driver_rating": int(body.rating), "driver_review": review, "driver_rated_at": now}},
-    )
-    new_avg = await _recompute_driver_rating(order["driver_id"])
-    return {
-        "success": True,
-        "driver_rating": int(body.rating),
-        "driver_review": review,
-        "driver_average_rating": new_avg,
-    }
 
 
-@api_router.post("/orders/{order_id}/rate-shipper")
-async def rate_shipper(
-    order_id: str,
-    body: StarRatingRequest,
-    request: Request,
-):
-    """Driver rates the shipper (1-5 stars, one-time) after a delivered job.
-    Recomputes and persists the shipper's average rating on their profile."""
-    driver_id = await get_current_driver_id(request)
-
-    if not (1 <= int(body.rating) <= 5):
-        raise HTTPException(400, "Rating must be between 1 and 5 stars")
-
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    # Only the assigned driver may rate (legacy/demo orders with no driver bound are allowed).
-    if order.get("driver_id") and order.get("driver_id") != driver_id:
-        raise HTTPException(403, "You can only rate shipments you delivered")
-    if order.get("status") != "delivered":
-        raise HTTPException(400, "You can only rate the shipper once the job is delivered")
-    if not order.get("shipper_id"):
-        raise HTTPException(400, "This order has no shipper to rate")
-    if order.get("shipper_rating") is not None:
-        raise HTTPException(400, "You have already rated this shipper")
-
-    now = datetime.now(timezone.utc).isoformat()
-    review = (body.review or "").strip() or None
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {"shipper_rating": int(body.rating), "shipper_review": review, "shipper_rated_at": now}},
-    )
-    new_avg = await _recompute_shipper_rating(order["shipper_id"])
-    return {
-        "success": True,
-        "shipper_rating": int(body.rating),
-        "shipper_review": review,
-        "shipper_average_rating": new_avg,
-    }
 
 
-@api_router.post("/orders/{order_id}/verify-otp", response_model=Order)
-async def verify_otp(order_id: str, body: OtpRequest):
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    expected = order.get("pickup_otp") if body.kind == "pickup" else order.get("dropoff_otp")
-    if str(body.otp).strip() != str(expected):
-        raise HTTPException(400, "Invalid OTP")
-    field = "pickup_otp_verified" if body.kind == "pickup" else "dropoff_otp_verified"
-    await db.orders.update_one({"id": order_id}, {"$set": {field: True}})
-    order[field] = True
-    return Order(**order)
 
 
-@api_router.post("/orders/{order_id}/photo", response_model=Order)
-async def attach_photo(order_id: str, body: PhotoRequest):
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    photo = (body.photo or "").strip()
-    if not photo:
-        raise HTTPException(400, "Photo payload is empty")
-    # accept either raw base64 or full data URI; normalise to data URI
-    if not photo.startswith("data:"):
-        photo = f"data:image/jpeg;base64,{photo}"
-    # Soft size guard (~6MB encoded ≈ 4.5MB raw)
-    if len(photo) > 7_500_000:
-        raise HTTPException(413, "Photo too large; please resize")
-    await db.orders.update_one({"id": order_id}, {"$set": {"delivery_photo": photo}})
-    order["delivery_photo"] = photo
-    return Order(**order)
 
 
-@api_router.post("/orders/{order_id}/pickup-photo", response_model=Order)
-async def attach_pickup_photo(order_id: str, body: PhotoRequest):
-    """Attach a photo proof taken at pickup (order items received from merchant)."""
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    photo = (body.photo or "").strip()
-    if not photo:
-        raise HTTPException(400, "Photo payload is empty")
-    # accept either raw base64 or full data URI; normalise to data URI
-    if not photo.startswith("data:"):
-        photo = f"data:image/jpeg;base64,{photo}"
-    # Soft size guard (~6MB encoded ≈ 4.5MB raw)
-    if len(photo) > 7_500_000:
-        raise HTTPException(413, "Photo too large; please resize")
-    await db.orders.update_one({"id": order_id}, {"$set": {"pickup_photo": photo}})
-    order["pickup_photo"] = photo
-    return Order(**order)
 
 
 # ===================== Wallet Endpoints =====================
 
-@api_router.get("/driver/wallet")
-async def get_driver_wallet(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get driver's wallet with transaction history."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    driver_id = payload.get("sub")
-    user_type = payload.get("type")
-    
-    if user_type != "driver":
-        raise HTTPException(403, "Driver access required")
-    
-    # Get all delivered orders for this driver
-    history = await db.orders.find(
-        {"status": "delivered", "driver_id": driver_id}, 
-        {"_id": 0}
-    ).sort("completed_at", -1).limit(100).to_list(100)
-    
-    txns: List[dict] = []
-    available = 0.0
-    pending = 0.0
-    now = datetime.now(timezone.utc)
-    
-    for o in history:
-        ts = o.get("completed_at") or o.get("created_at")
-        try:
-            done_at = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        except Exception:
-            done_at = now
-        age_hours = (now - done_at).total_seconds() / 3600
-        is_pending = age_hours < 48  # earnings clear after 48h
-        base_amount = float(o.get("earnings", 0))
-        tip_amount = float(o.get("tip", 0) or 0)
-        if is_pending:
-            pending += base_amount + tip_amount
-        else:
-            available += base_amount + tip_amount
-        txns.append(WalletTransaction(
-            type="delivery",
-            amount=base_amount,
-            description=f"Delivery {o.get('order_number')} • {o['pickup'].get('name', '')}",
-            timestamp=ts,
-        ).model_dump())
-        if tip_amount > 0:
-            txns.append(WalletTransaction(
-                type="tip",
-                amount=tip_amount,
-                description=f"Tip from {o['customer'].get('name', 'customer')}",
-                timestamp=ts,
-            ).model_dump())
-
-    # Check for actual payouts in transactions collection
-    actual_payouts = await db.transactions.find(
-        {"user_id": driver_id, "type": "payout"}
-    ).sort("created_at", -1).limit(10).to_list(10)
-    
-    for payout in actual_payouts:
-        txns.append(WalletTransaction(
-            type="payout",
-            amount=-abs(payout.get("amount", 0)),
-            description=payout.get("description", "Payout"),
-            timestamp=payout.get("created_at"),
-        ).model_dump())
-
-    txns.sort(key=lambda t: t["timestamp"], reverse=True)
-    next_payout = (now + timedelta(days=(7 - now.weekday()) % 7 or 7)).date().isoformat()
-
-    return {
-        "available_balance": round(available, 2),
-        "pending_balance": round(pending, 2),
-        "payout_schedule": "Weekly • Mondays",
-        "next_payout_date": next_payout,
-        "transactions": [WalletTransaction(**t) for t in txns],
-    }
-
-
-@api_router.get("/driver/performance")
-async def get_driver_performance(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Driver performance dashboard: earnings (today/week/total), acceptance &
-    completion rates (derived from the order audit log), rating, status, and a
-    recent-deliveries timeline."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-
-    payload = decode_token(credentials.credentials)
-    driver_id = payload.get("sub")
-    if payload.get("type") != "driver":
-        raise HTTPException(403, "Driver access required")
-
-    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-
-    now = datetime.now(timezone.utc)
-    week_ago = now - timedelta(days=7)
-    today = now.date()
-
-    # Delivered orders for THIS driver only (strict per-driver scoping).
-    delivered = await db.orders.find(
-        {"status": "delivered", "driver_id": driver_id}, {"_id": 0}
-    ).sort("completed_at", -1).to_list(500)
-
-    def parse_ts(ts):
-        if not ts:
-            return now
-        try:
-            return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-        except Exception:
-            return now
-
-    total_earnings = week_earnings = today_earnings = 0.0
-    total_deliveries = week_deliveries = today_deliveries = 0
-    recent = []
-    for o in delivered:
-        amount = float(o.get("earnings", 0)) + float(o.get("tip", 0) or 0)
-        done = parse_ts(o.get("completed_at") or o.get("created_at"))
-        total_earnings += amount
-        total_deliveries += 1
-        if done >= week_ago:
-            week_earnings += amount
-            week_deliveries += 1
-        if done.date() == today:
-            today_earnings += amount
-            today_deliveries += 1
-        if len(recent) < 12:
-            recent.append({
-                "order_number": o.get("order_number"),
-                "pickup_name": (o.get("pickup") or {}).get("name", ""),
-                "dropoff_name": (o.get("dropoff") or {}).get("name", ""),
-                "earnings": round(amount, 2),
-                "distance_km": o.get("distance_km", 0),
-                "completed_at": o.get("completed_at") or o.get("created_at"),
-            })
-
-    # Acceptance & completion rates derived from the immutable audit log.
-    accepted = await db.order_events.count_documents(
-        {"actor_id": driver_id, "to_status": "accepted"}
-    )
-    rejected = await db.order_events.count_documents(
-        {"actor_id": driver_id, "event_type": "rejected"}
-    )
-    cancelled = await db.order_events.count_documents(
-        {"actor_id": driver_id, "to_status": "cancelled"}
-    )
-    delivered_events = await db.order_events.count_documents(
-        {"actor_id": driver_id, "to_status": "delivered"}
-    )
-
-    if accepted + rejected > 0:
-        acceptance_rate = round(accepted / (accepted + rejected) * 100, 1)
-    else:
-        acceptance_rate = float(driver.get("acceptance_rate", 96.0))
-
-    if delivered_events + cancelled > 0:
-        completion_rate = round(delivered_events / (delivered_events + cancelled) * 100, 1)
-    else:
-        completion_rate = float(driver.get("completion_rate", 98.0))
-
-    # Derived live status for the status system (offline/online/busy/en_route).
-    active = await db.orders.find_one(
-        {"driver_id": driver_id, "status": {"$in": list(sm.ACTIVE_STATES)}}, {"_id": 0}
-    )
-    if not driver.get("is_online"):
-        status = "offline"
-    elif active:
-        status = active["status"] if active["status"] in sm.ACTIVE_STATES else "busy"
-    else:
-        status = "online"
-
-    return {
-        "status": status,
-        "is_online": driver.get("is_online", False),
-        "rating": driver.get("rating", 5.0),
-        "acceptance_rate": acceptance_rate,
-        "completion_rate": completion_rate,
-        "earnings": {
-            "today": round(today_earnings, 2),
-            "week": round(week_earnings, 2),
-            "total": round(total_earnings, 2),
-        },
-        "deliveries": {
-            "today": today_deliveries,
-            "week": week_deliveries,
-            "total": total_deliveries,
-        },
-        "recent_deliveries": recent,
-    }
 
 
 
-@api_router.post("/driver/wallet/payout")
-async def request_payout(request: PayoutRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Request a payout from driver's wallet."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    driver_id = payload.get("sub")
-    
-    if request.amount <= 0:
-        raise HTTPException(400, "Payout amount must be positive")
-    
-    # Create payout transaction
-    transaction = Transaction(
-        user_id=driver_id,
-        user_type="driver",
-        type="payout",
-        amount=-abs(request.amount),
-        description=f"Payout via {request.method}",
-        status="pending",
-    )
-    await db.transactions.insert_one(transaction.model_dump())
-    
-    # Create notification
-    notification = Notification(
-        recipient_id=driver_id,
-        recipient_type="driver",
-        type="payment",
-        title="Payout Requested",
-        message=f"Your payout of €{request.amount:.2f} is being processed.",
-        data={"transaction_id": transaction.id},
-    )
-    await db.notifications.insert_one(notification.model_dump())
-    
-    return {"message": "Payout requested successfully", "transaction_id": transaction.id}
+
+
 
 
 # ===================== Notification Endpoints =====================
 
-@api_router.get("/notifications")
-async def get_notifications(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    unread_only: bool = False,
-    limit: int = 50,
-):
-    """Get notifications for the authenticated user."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    user_id = payload.get("sub")
-    
-    query = {"recipient_id": user_id}
-    if unread_only:
-        query["read"] = False
-    
-    notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
-    
-    return {"notifications": notifications, "unread_count": len([n for n in notifications if not n.get("read")])}
 
 
-@api_router.post("/notifications/{notification_id}/read")
-async def mark_notification_read(notification_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Mark a notification as read."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    user_id = payload.get("sub")
-    
-    result = await db.notifications.update_one(
-        {"id": notification_id, "recipient_id": user_id},
-        {"$set": {"read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(404, "Notification not found")
-    
-    return {"message": "Notification marked as read"}
 
 
-@api_router.post("/notifications/read-all")
-async def mark_all_notifications_read(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Mark all notifications as read for the authenticated user."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    user_id = payload.get("sub")
-    
-    result = await db.notifications.update_many(
-        {"recipient_id": user_id, "read": False},
-        {"$set": {"read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    return {"message": f"Marked {result.modified_count} notifications as read"}
 
 
-@api_router.delete("/notifications/{notification_id}")
-async def delete_notification(notification_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Delete a notification."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    user_id = payload.get("sub")
-    
-    result = await db.notifications.delete_one({"id": notification_id, "recipient_id": user_id})
-    
-    if result.deleted_count == 0:
-        raise HTTPException(404, "Notification not found")
-    
-    return {"message": "Notification deleted"}
 
 
 class PushTokenRegister(BaseModel):
@@ -2578,23 +1560,6 @@ class PushTokenRegister(BaseModel):
     platform: str = "ios"
 
 
-@api_router.post("/notifications/register")
-async def register_push_token(body: PushTokenRegister):
-    """Register a push token for a user."""
-    # Store the push token in the user's document
-    if body.user_type == "driver":
-        await db.drivers.update_one(
-            {"id": body.user_id},
-            {"$set": {"push_token": body.push_token, "push_platform": body.platform}}
-        )
-    else:
-        await db.shippers.update_one(
-            {"id": body.user_id},
-            {"$set": {"push_token": body.push_token, "push_platform": body.platform}}
-        )
-    
-    logger.info(f"Registered push token for {body.user_type} {body.user_id}")
-    return {"message": "Push token registered"}
 
 
 async def send_push_notification(
@@ -2651,20 +1616,6 @@ class RegisterPushBody(BaseModel):
     device_token: str
 
 
-@api_router.post("/register-push", status_code=201)
-async def register_push(body: RegisterPushBody):
-    """Register a native device push token with the Emergent push relay (SuprSend)."""
-    try:
-        resp = await _push_client.post("/api/v1/push/users/register", json=body.model_dump())
-    except Exception as e:
-        logger.warning(f"register-push relay error (non-fatal): {e}")
-        raise HTTPException(502, "Push provider unavailable")
-    if resp.status_code == 401:
-        raise HTTPException(500, "EMERGENT_PUSH_KEY missing or invalid")
-    if resp.status_code >= 500:
-        raise HTTPException(502, "Push provider unavailable")
-    resp.raise_for_status()
-    return {"status": "registered"}
 
 
 async def send_push(recipients: list, data: dict, idempotency_key: Optional[str] = None) -> None:
@@ -2867,54 +1818,12 @@ async def create_notification(
     return notification
 
 
-@api_router.post("/orders/seed-new-pending", response_model=Order)
-async def seed_new_pending():
-    # remove existing pending then create one
-    await db.orders.delete_many({"status": "pending"})
-    new_order = build_order("pending")
-    await db.orders.insert_one(new_order.copy())
-    return Order(**new_order)
 
 
-@api_router.post("/orders/add-pending", response_model=Order)
-async def add_pending_order():
-    """Add a single pending order without deleting existing ones."""
-    new_order = build_order("pending")
-    await db.orders.insert_one(new_order.copy())
-    return Order(**new_order)
 
 
 # ===================== Driver Update =====================
 
-@api_router.patch("/driver/me", response_model=Driver)
-async def update_driver(update: DriverUpdate, request: Request):
-    """Update the authenticated driver's profile."""
-    # Get the authenticated driver ID
-    driver_id = await get_current_driver_id(request)
-    
-    payload = {k: v for k, v in update.model_dump(exclude_unset=True).items() if v is not None}
-    if payload.get("notifications") is not None:
-        payload["notifications"] = update.notifications.model_dump()
-    
-    # Update vehicle string if vehicle_type or plate is updated
-    if "vehicle_type" in payload or "plate" in payload:
-        # Get current driver data
-        current_driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
-        if current_driver:
-            vehicle_type = payload.get("vehicle_type", current_driver.get("vehicle_type", "cargo_van"))
-            plate = payload.get("plate", current_driver.get("plate", ""))
-            vehicle_info = VEHICLE_TYPES.get(vehicle_type, VEHICLE_TYPES.get("cargo_van"))
-            vehicle_label = vehicle_info["name"] if vehicle_info else "Cargo Van"
-            payload["vehicle"] = f"{vehicle_label} • {plate}" if plate else vehicle_label
-    
-    if payload:
-        result = await db.drivers.update_one({"id": driver_id}, {"$set": payload})
-        logger.info(f"Driver profile updated: {driver_id}, fields: {list(payload.keys())}, matched: {result.matched_count}, modified: {result.modified_count}")
-    
-    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-    return Driver(**driver)
 
 
 # ===================== Driver Vehicles (multi-vehicle) =====================
@@ -2966,95 +1875,12 @@ async def _sync_primary_vehicle(driver_id: str, vehicles: list) -> dict:
     return driver
 
 
-@api_router.post("/driver/vehicles", response_model=Driver)
-async def add_driver_vehicle(body: VehicleInput, request: Request):
-    """Add a vehicle to the authenticated driver's garage."""
-    driver_id = await get_current_driver_id(request)
-    if body.vehicle_type not in VEHICLE_TYPES:
-        raise HTTPException(400, f"Invalid vehicle type: {body.vehicle_type}")
-    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-    driver = await _ensure_driver_vehicles(driver)
-    vehicles = driver.get("vehicles", [])
-    new_vehicle = {
-        "id": str(uuid.uuid4()),
-        "vehicle_type": body.vehicle_type,
-        "label": _vehicle_label(body.vehicle_type),
-        "plate": body.plate or "",
-        "capacity_kg": body.capacity_kg or _default_capacity(body.vehicle_type),
-        "is_primary": body.make_primary or len(vehicles) == 0,
-    }
-    if new_vehicle["is_primary"]:
-        for v in vehicles:
-            v["is_primary"] = False
-    vehicles.append(new_vehicle)
-    driver = await _sync_primary_vehicle(driver_id, vehicles)
-    return Driver(**driver)
 
 
-@api_router.patch("/driver/vehicles/{vehicle_id}", response_model=Driver)
-async def update_driver_vehicle(vehicle_id: str, body: VehicleInput, request: Request):
-    """Update an existing vehicle (type/plate/capacity)."""
-    driver_id = await get_current_driver_id(request)
-    if body.vehicle_type not in VEHICLE_TYPES:
-        raise HTTPException(400, f"Invalid vehicle type: {body.vehicle_type}")
-    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-    driver = await _ensure_driver_vehicles(driver)
-    vehicles = driver.get("vehicles", [])
-    found = next((v for v in vehicles if v["id"] == vehicle_id), None)
-    if not found:
-        raise HTTPException(404, "Vehicle not found")
-    found["vehicle_type"] = body.vehicle_type
-    found["label"] = _vehicle_label(body.vehicle_type)
-    found["plate"] = body.plate or ""
-    found["capacity_kg"] = body.capacity_kg or _default_capacity(body.vehicle_type)
-    if body.make_primary:
-        for v in vehicles:
-            v["is_primary"] = v["id"] == vehicle_id
-    driver = await _sync_primary_vehicle(driver_id, vehicles)
-    return Driver(**driver)
 
 
-@api_router.post("/driver/vehicles/{vehicle_id}/primary", response_model=Driver)
-async def set_primary_vehicle(vehicle_id: str, request: Request):
-    """Mark a vehicle as the active/primary one used for job matching."""
-    driver_id = await get_current_driver_id(request)
-    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-    driver = await _ensure_driver_vehicles(driver)
-    vehicles = driver.get("vehicles", [])
-    if not any(v["id"] == vehicle_id for v in vehicles):
-        raise HTTPException(404, "Vehicle not found")
-    for v in vehicles:
-        v["is_primary"] = v["id"] == vehicle_id
-    driver = await _sync_primary_vehicle(driver_id, vehicles)
-    return Driver(**driver)
 
 
-@api_router.delete("/driver/vehicles/{vehicle_id}", response_model=Driver)
-async def delete_driver_vehicle(vehicle_id: str, request: Request):
-    """Remove a vehicle. The last remaining vehicle cannot be deleted."""
-    driver_id = await get_current_driver_id(request)
-    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-    driver = await _ensure_driver_vehicles(driver)
-    vehicles = driver.get("vehicles", [])
-    if len(vehicles) <= 1:
-        raise HTTPException(400, "You must keep at least one vehicle")
-    target = next((v for v in vehicles if v["id"] == vehicle_id), None)
-    if not target:
-        raise HTTPException(404, "Vehicle not found")
-    vehicles = [v for v in vehicles if v["id"] != vehicle_id]
-    # If we removed the primary, promote the first remaining one.
-    if target.get("is_primary") and vehicles:
-        vehicles[0]["is_primary"] = True
-    driver = await _sync_primary_vehicle(driver_id, vehicles)
-    return Driver(**driver)
 
 
 # ===================== Change Password (driver & shipper) =====================
@@ -3064,207 +1890,15 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=1024)
 
 
-@api_router.post("/auth/change-password", status_code=200)
-async def change_password(
-    body: ChangePasswordRequest,
-    user: dict = Depends(get_current_user),
-):
-    """Authenticated password change for the current driver or shipper.
 
-    Verifies the current password against the stored bcrypt hash, then rehashes
-    and stores the new one. The collection is derived from the JWT role (never
-    the request body) to avoid cross-account changes.
-    """
-    user_type = user.get("type")
-    if user_type not in ("driver", "shipper"):
-        raise HTTPException(403, "Password change not supported for this account")
-
-    collection = db.drivers if user_type == "driver" else db.shippers
-    record = await collection.find_one({"id": user["id"]})
-    if not record:
-        raise HTTPException(404, "User not found")
-
-    stored = record.get("password_hash")
-    if not stored or not verify_password(body.current_password, stored):
-        raise HTTPException(400, "Current password is incorrect")
-
-    if body.new_password == body.current_password:
-        raise HTTPException(400, "New password must be different from the current one")
-
-    new_hash = hash_password(body.new_password)
-    await collection.update_one({"id": user["id"]}, {"$set": {"password_hash": new_hash}})
-    logger.info(f"Password changed for {user_type}: {user['id']}")
-
-    disp_name = record.get("name") or record.get("company_name") or "there"
-    if record.get("email"):
-        subj, html = email_tpl.password_changed(disp_name)
-        send_email_bg(record["email"], subj, html, to_name=disp_name,
-                      category="password_changed", related_id=user["id"])
-
-    return {"status": "ok", "message": "Password updated successfully"}
-
-@api_router.post("/driver/register", response_model=RegistrationResponse)
-async def register_driver(registration: DriverRegistration):
-    """Register a new driver account."""
-    # Check if email already exists
-    existing = await db.drivers.find_one({"email": registration.email})
-    if existing:
-        raise HTTPException(400, "A driver with this email already exists")
-    
-    # Validate vehicle type
-    if registration.vehicle_type not in VEHICLE_TYPES:
-        raise HTTPException(400, f"Invalid vehicle type: {registration.vehicle_type}. Valid types: {list(VEHICLE_TYPES.keys())}")
-
-    # Fleet accounts must provide a company name
-    if registration.account_type == "fleet" and not (registration.company_name and registration.company_name.strip()):
-        raise HTTPException(400, "Company name is required for fleet accounts")
-    
-    # Create new driver
-    driver_id = str(uuid.uuid4())
-    
-    # Get vehicle info from VEHICLE_TYPES
-    vehicle_info = VEHICLE_TYPES.get(registration.vehicle_type, VEHICLE_TYPES.get("cargo_van"))
-    vehicle_label = vehicle_info["name"] if vehicle_info else "Cargo Van"
-    
-    # Use custom capacity if provided (for "other" type), otherwise use vehicle default
-    if registration.vehicle_type == "other" and registration.vehicle_capacity_kg:
-        vehicle_capacity = registration.vehicle_capacity_kg
-    else:
-        vehicle_capacity = vehicle_info["max_weight_kg"] if vehicle_info else 1500
-    
-    # Hash the password
-    password_hash = hash_password(registration.password)
-    
-    new_driver = Driver(
-        id=driver_id,
-        name=f"{registration.first_name} {registration.last_name}",
-        rating=5.0,  # New drivers start with 5.0
-        avatar="https://api.dicebear.com/7.x/avataaars/png?seed=" + driver_id,
-        vehicle=f"{vehicle_label} • {registration.license_plate or '—'}",
-        vehicle_type=registration.vehicle_type,
-        vehicle_capacity_kg=vehicle_capacity,
-        plate=registration.license_plate or "",
-        email=registration.email,
-        phone=registration.phone,
-        password_hash=password_hash,
-        is_online=False,
-        earnings_today=0.0,
-        deliveries_today=0,
-        acceptance_rate=100.0,
-    )
-    
-    await db.drivers.insert_one(new_driver.model_dump())
-    
-    # Initialize KYC status
-    kyc_status = {
-        "driver_id": driver_id,
-        "license_front": None,
-        "license_back": None,
-        "selfie": None,
-        "overall_status": "incomplete",
-        "submitted_at": None,
-        "reviewed_at": None,
-    }
-    await db.kyc_status.insert_one(kyc_status)
-    
-    # Persist license class (extra field on the driver doc)
-    if registration.license_class:
-        await db.drivers.update_one(
-            {"id": driver_id}, {"$set": {"license_class": registration.license_class}}
-        )
-
-    # Fleet account: create the owning company + wallet and link this driver as owner.
-    if registration.account_type == "fleet":
-        company = Company(
-            company_name=registration.company_name.strip(),
-            owner_driver_id=driver_id,
-            business_id=(registration.business_id or None),
-            phone=registration.company_phone or registration.phone,
-            email=registration.company_email or registration.email,
-            address=registration.company_address,
-        )
-        await db.companies.insert_one(company.model_dump())
-        await db.company_wallets.update_one(
-            {"company_id": company.id},
-            {"$setOnInsert": CompanyWallet(company_id=company.id).model_dump()},
-            upsert=True,
-        )
-        await db.drivers.update_one(
-            {"id": driver_id},
-            {"$set": {"company_id": company.id, "company_role": "owner"}},
-        )
-        logger.info(f"Fleet company created on registration: {company.company_name} ({company.id})")
-
-    # Generate JWT token
-    token = create_token(driver_id, "driver")
-    
-    logger.info(f"Registered new driver: {registration.email} ({driver_id})")
-
-    subj, html = email_tpl.welcome(new_driver.name, "driver")
-    send_email_bg(new_driver.email, subj, html, to_name=new_driver.name,
-                  category="driver_welcome", related_id=driver_id)
-
-    return RegistrationResponse(
-        driver_id=driver_id,
-        message="Registration successful! Please complete KYC verification to start delivering.",
-        token=token,
-        kyc_required=True
-    )
 
 
 # ===================== Authentication Endpoints =====================
 
-@api_router.post("/auth/login", response_model=LoginResponse)
-async def login(request: LoginRequest):
-    """Login with email and password."""
-    driver = await db.drivers.find_one({"email": request.email}, {"_id": 0})
-    if not driver:
-        raise HTTPException(401, "Invalid email or password")
-    
-    if not driver.get("password_hash"):
-        raise HTTPException(401, "Invalid email or password")
-    
-    if not verify_password(request.password, driver["password_hash"]):
-        raise HTTPException(401, "Invalid email or password")
-    
-    token = create_token(driver["id"], "driver")
-    
-    logger.info(f"Driver logged in: {request.email}")
-    
-    return LoginResponse(
-        token=token,
-        driver_id=driver["id"],
-        name=driver["name"],
-        is_admin=False
-    )
 
 
-@api_router.post("/auth/admin-login", response_model=LoginResponse)
-async def admin_login(request: AdminLoginRequest):
-    """Admin login with hardcoded credentials."""
-    if request.email != ADMIN_EMAIL or request.password != ADMIN_PASSWORD:
-        raise HTTPException(401, "Invalid admin credentials")
-    
-    token = create_token("admin", "admin")
-    
-    logger.info(f"Admin logged in: {request.email}")
-    
-    return LoginResponse(
-        token=token,
-        driver_id="admin",
-        name="Admin",
-        is_admin=True
-    )
 
 
-@api_router.get("/auth/me")
-async def get_me(user: dict = Depends(get_current_user)):
-    """Get current authenticated user info."""
-    if user["type"] == "admin":
-        return {"id": "admin", "type": "admin", "email": ADMIN_EMAIL, "name": "Admin"}
-    if user["type"] == "shipper":
-        return {"id": user["id"], "type": "shipper", "shipper": user["shipper"]}
-    return {"id": user["id"], "type": "driver", "driver": user["driver"]}
 
 
 # ===================== Shipper Registration & Auth =====================
@@ -3286,208 +1920,16 @@ class SimpleShipperRegistration(BaseModel):
     preferred_vehicle_type: Optional[str] = None  # Default preferred vehicle
 
 
-@api_router.post("/auth/driver-register")
-async def simple_driver_register(registration: SimpleDriverRegistration):
-    """Simple driver registration endpoint."""
-    # Check if email already exists
-    existing = await db.drivers.find_one({"email": registration.email})
-    if existing:
-        raise HTTPException(400, "A driver with this email already exists")
-    
-    # Validate vehicle type
-    vehicle_type = registration.vehicle_type or "cargo_van"
-    if vehicle_type not in VEHICLE_TYPES:
-        vehicle_type = "cargo_van"  # Fallback to cargo van
-    
-    driver_id = str(uuid.uuid4())
-    password_hash = hash_password(registration.password)
-    
-    # Get vehicle info
-    vehicle_info = VEHICLE_TYPES[vehicle_type]
-    vehicle_label = vehicle_info["name"]
-    
-    # Use custom capacity if provided (for "other" type), otherwise use vehicle default
-    if vehicle_type == "other" and registration.vehicle_capacity_kg:
-        vehicle_capacity = registration.vehicle_capacity_kg
-    else:
-        vehicle_capacity = vehicle_info["max_weight_kg"]
-    
-    new_driver = Driver(
-        id=driver_id,
-        name=registration.name,
-        rating=5.0,
-        avatar="https://api.dicebear.com/7.x/avataaars/png?seed=" + driver_id,
-        vehicle=f"{vehicle_label} • —",
-        vehicle_type=vehicle_type,
-        vehicle_capacity_kg=vehicle_capacity,
-        plate="",
-        email=registration.email,
-        phone=registration.phone or "",
-        password_hash=password_hash,
-        is_online=False,
-        earnings_today=0.0,
-        deliveries_today=0,
-        acceptance_rate=100.0,
-    )
-    
-    await db.drivers.insert_one(new_driver.model_dump())
-    
-    # Initialize KYC status
-    kyc_status = {
-        "driver_id": driver_id,
-        "license_front": None,
-        "license_back": None,
-        "selfie": None,
-        "overall_status": "incomplete",
-        "submitted_at": None,
-        "reviewed_at": None,
-    }
-    await db.kyc_status.insert_one(kyc_status)
-    
-    token = create_token(driver_id, "driver")
-    
-    logger.info(f"Registered new driver: {registration.email} ({driver_id})")
-
-    subj, html = email_tpl.welcome(registration.name, "driver")
-    send_email_bg(registration.email, subj, html, to_name=registration.name,
-                  category="driver_welcome", related_id=driver_id)
-
-    return {
-        "driver_id": driver_id,
-        "name": registration.name,
-        "message": "Registration successful! Please complete KYC verification.",
-        "token": token,
-        "kyc_required": True
-    }
 
 
-@api_router.post("/auth/shipper-register")
-async def simple_shipper_register(registration: SimpleShipperRegistration):
-    """Simple shipper/business registration endpoint."""
-    # Check if email already exists
-    existing = await db.shippers.find_one({"email": registration.email})
-    if existing:
-        raise HTTPException(400, "A business with this email already exists")
-    
-    # Validate preferred vehicle type if provided
-    preferred_vehicle = registration.preferred_vehicle_type
-    if preferred_vehicle and preferred_vehicle not in VEHICLE_TYPES:
-        preferred_vehicle = None  # Reset to no preference if invalid
-    
-    shipper_id = str(uuid.uuid4())
-    password_hash = hash_password(registration.password)
-    
-    new_shipper = Shipper(
-        id=shipper_id,
-        company_name=registration.business_name,
-        contact_name=registration.business_name,
-        email=registration.email,
-        phone=registration.phone or "",
-        password_hash=password_hash,
-        avatar=f"https://api.dicebear.com/7.x/initials/png?seed={registration.business_name}",
-        preferred_vehicle_type=preferred_vehicle,
-    )
-    
-    await db.shippers.insert_one(new_shipper.model_dump())
-    
-    token = create_token(shipper_id, "shipper")
-    
-    logger.info(f"Registered new shipper: {registration.email} ({shipper_id})")
-
-    subj, html = email_tpl.welcome(registration.business_name, "shipper")
-    send_email_bg(registration.email, subj, html, to_name=registration.business_name,
-                  category="shipper_welcome", related_id=shipper_id)
-
-    return {
-        "shipper_id": shipper_id,
-        "business_name": registration.business_name,
-        "token": token,
-        "message": "Business registration successful!"
-    }
 
 
-@api_router.post("/shipper/register")
-async def register_shipper(registration: ShipperRegistration):
-    """Register a new shipper/business account."""
-    # Check if email already exists
-    existing = await db.shippers.find_one({"email": registration.email})
-    if existing:
-        raise HTTPException(400, "A business with this email already exists")
-    
-    shipper_id = str(uuid.uuid4())
-    password_hash = hash_password(registration.password)
-    
-    new_shipper = Shipper(
-        id=shipper_id,
-        company_name=registration.company_name,
-        contact_name=registration.contact_name,
-        email=registration.email,
-        phone=registration.phone,
-        password_hash=password_hash,
-        tax_id=registration.tax_id,
-        address=registration.address,
-        avatar=f"https://api.dicebear.com/7.x/initials/png?seed={registration.company_name}",
-    )
-    
-    await db.shippers.insert_one(new_shipper.model_dump())
-    
-    token = create_token(shipper_id, "shipper")
-    
-    logger.info(f"Registered new shipper: {registration.email} ({shipper_id})")
-
-    subj, html = email_tpl.welcome(registration.company_name, "shipper")
-    send_email_bg(registration.email, subj, html, to_name=registration.company_name,
-                  category="shipper_welcome", related_id=shipper_id)
-
-    return {
-        "shipper_id": shipper_id,
-        "token": token,
-        "message": "Business registration successful!"
-    }
 
 
-@api_router.post("/auth/shipper-login")
-async def shipper_login(request: LoginRequest):
-    """Login for shippers/businesses."""
-    shipper = await db.shippers.find_one({"email": request.email}, {"_id": 0})
-    if not shipper:
-        raise HTTPException(401, "Invalid email or password")
-    
-    if not shipper.get("password_hash"):
-        raise HTTPException(401, "Invalid email or password")
-    
-    if not verify_password(request.password, shipper["password_hash"]):
-        raise HTTPException(401, "Invalid email or password")
-    
-    token = create_token(shipper["id"], "shipper")
-    
-    logger.info(f"Shipper logged in: {request.email}")
-    
-    return LoginResponse(
-        token=token,
-        driver_id=shipper["id"],  # reusing field name for simplicity
-        name=shipper["company_name"],
-        is_admin=False
-    )
 
 
 # ===================== Shipper Profile =====================
 
-@api_router.get("/shipper/me")
-async def get_shipper_profile(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get current shipper profile."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "shipper":
-        raise HTTPException(403, "Shipper access required")
-    
-    shipper = await db.shippers.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
-    if not shipper:
-        raise HTTPException(404, "Shipper not found")
-    
-    return shipper
 
 
 class ShipperUpdate(BaseModel):
@@ -3500,385 +1942,18 @@ class ShipperUpdate(BaseModel):
     preferred_vehicle_type: Optional[str] = None
 
 
-@api_router.patch("/shipper/me")
-async def update_shipper_profile(
-    update: ShipperUpdate,
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    """Update shipper profile."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "shipper":
-        raise HTTPException(403, "Shipper access required")
-    
-    shipper_id = payload["sub"]
-    
-    # Build update payload (only include non-None fields)
-    update_data = {k: v for k, v in update.model_dump(exclude_unset=True).items() if v is not None}
-    
-    # Validate vehicle type if provided
-    if update_data.get("preferred_vehicle_type") and update_data["preferred_vehicle_type"] not in VEHICLE_TYPES:
-        raise HTTPException(400, f"Invalid vehicle type: {update_data['preferred_vehicle_type']}")
-    
-    if update_data:
-        await db.shippers.update_one({"id": shipper_id}, {"$set": update_data})
-    
-    shipper = await db.shippers.find_one({"id": shipper_id}, {"_id": 0, "password_hash": 0})
-    if not shipper:
-        raise HTTPException(404, "Shipper not found")
-    
-    logger.info(f"Updated shipper profile: {shipper_id}")
-    
-    return shipper
 
 
 # ===================== Shipper Orders (Shipments) =====================
 
-@api_router.get("/shipper/vehicle-types")
-async def get_vehicle_types():
-    """Get available vehicle types for shipping."""
-    return list(VEHICLE_TYPES.values())
 
 
-@api_router.post("/shipper/quote", response_model=PriceQuoteResponse)
-async def get_price_quote(request: PriceQuoteRequest):
-    """Get a price quote for a shipment.
-
-    Pricing uses REAL-WORLD road distance from Google Directions (driving). If
-    the route cannot be computed we hard-fail (NO Haversine fallback for money).
-    """
-    # Validate vehicle type first (cheap check before hitting Google).
-    vehicle = VEHICLE_TYPES.get(request.vehicle_type)
-    if not vehicle:
-        raise HTTPException(400, f"Invalid vehicle type: {request.vehicle_type}")
-
-    # Haversine kept ONLY as a reference value (not used for pricing).
-    straight_km = _haversine_km(
-        request.pickup_lat, request.pickup_lng,
-        request.dropoff_lat, request.dropoff_lng,
-    )
-
-    # SOURCE OF TRUTH: Google Directions road distance + duration.
-    route = await fetch_road_route(
-        request.pickup_lat, request.pickup_lng,
-        request.dropoff_lat, request.dropoff_lng,
-    )
-    road_km = route["road_distance_km"]
-
-    # NadaRuns pricing engine (driven by ROAD distance)
-    breakdown = pricing.calculate_price(
-        vehicle_type=request.vehicle_type,
-        distance_km=road_km,
-        weight_kg=request.cargo_weight_kg,
-        urgency=request.urgency,
-        special_handling=request.special_handling,
-        volume_m3=request.cargo_volume_m3,
-        pallets=request.pallet_count,
-        loading_meters=request.loading_meters,
-    )
-
-    estimated_duration = max(1, int(round(route["duration_minutes"])))
-
-    return PriceQuoteResponse(
-        distance_km=road_km,
-        straight_distance_km=round(straight_km, 2),
-        road_distance_km=road_km,
-        route_source=route["source"],
-        estimated_duration_minutes=estimated_duration,
-        base_price=round(breakdown["base_fee"] + breakdown["distance_fee"], 2),
-        weight_surcharge=breakdown["freight_fee"],
-        total_price=breakdown["total_price"],
-        vehicle_type=request.vehicle_type,
-        base_fee=breakdown["base_fee"],
-        distance_fee=breakdown["distance_fee"],
-        weight_fee=breakdown["freight_fee"],
-        freight_fee=breakdown["freight_fee"],
-        freight_rate_per_kg=breakdown["freight_rate_per_kg"],
-        chargeable_weight=breakdown["chargeable_weight"],
-        chargeable_basis=breakdown["chargeable_basis"],
-        actual_weight_kg=breakdown["actual_weight_kg"],
-        fuel_surcharge=breakdown["fuel_surcharge"],
-        urgency=breakdown["urgency"],
-        urgency_multiplier=breakdown["urgency_multiplier"],
-        special_multiplier=breakdown["special_multiplier"],
-        estimate_low=breakdown["estimate_low"],
-        estimate_high=breakdown["estimate_high"],
-    )
 
 
-@api_router.post("/shipper/shipments")
-async def create_shipment(
-    request: ShipmentCreateRequest,
-    http_request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    """Create a new shipment order.
-
-    Supports an optional `Idempotency-Key` header so a retried request (e.g.
-    after a flaky mobile network) replays the original result instead of
-    creating a duplicate job.
-    """
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "shipper":
-        raise HTTPException(403, "Shipper access required")
-    
-    shipper_id = payload["sub"]
-
-    # Idempotency: replay the stored response if this key was already used.
-    idem_key = idempotency.extract_key(http_request)
-    if idem_key:
-        existing = await idempotency.get_existing(db, idem_key, scope=f"shipment:{shipper_id}")
-        if existing and existing.get("response"):
-            return existing["response"]
-
-    shipper = await db.shippers.find_one({"id": shipper_id}, {"_id": 0})
-    if not shipper:
-        raise HTTPException(404, "Shipper not found")
-
-    if shipper.get("is_suspended"):
-        raise HTTPException(403, "Your account is suspended. Please contact support.")
-    
-    # Validate vehicle type
-    vehicle = VEHICLE_TYPES.get(request.vehicle_type)
-    if not vehicle:
-        raise HTTPException(400, f"Invalid vehicle type: {request.vehicle_type}")
-    
-    # Check weight capacity
-    if request.cargo_weight_kg > vehicle["max_weight_kg"]:
-        raise HTTPException(400, f"Cargo weight exceeds vehicle capacity ({vehicle['max_weight_kg']} kg)")
-    
-    # Haversine kept ONLY as a reference value (geofencing) - NOT for pricing.
-    straight_km = _haversine_km(
-        request.pickup_lat, request.pickup_lng,
-        request.dropoff_lat, request.dropoff_lng
-    )
-
-    # SOURCE OF TRUTH for pricing/earnings/ETA: Google Directions road distance.
-    # Hard-fail BEFORE creating the order so we never publish/charge a job whose
-    # price was computed from straight-line distance.
-    route = await fetch_road_route(
-        request.pickup_lat, request.pickup_lng,
-        request.dropoff_lat, request.dropoff_lng,
-    )
-    road_km = route["road_distance_km"]
-    duration_minutes = route["duration_minutes"]
-
-    # NadaRuns pricing engine (immutable base price, driven by ROAD distance)
-    special_handling = bool(
-        (request.special_requirements and len(request.special_requirements) > 0)
-        or request.cargo_type == "oversized"
-    )
-    breakdown = pricing.calculate_price(
-        vehicle_type=request.vehicle_type,
-        distance_km=road_km,
-        weight_kg=request.cargo_weight_kg,
-        urgency=request.urgency,
-        special_handling=special_handling,
-        volume_m3=request.cargo_volume_m3,
-        pallets=request.pallet_count,
-        loading_meters=request.loading_meters,
-    )
-    base_total = breakdown["total_price"]
-
-    # Optional shipper bonus on top of the base (paid fully to the driver).
-    offer = max(0.0, float(request.shipper_offer or 0.0))
-    total_price = round(base_total + offer, 2)
-
-    # Generate order
-    order_id = str(uuid.uuid4())
-    order_number = f"SHP-{random.randint(1000, 9999)}"
-    
-    # Create OTPs
-    pickup_otp = str(random.randint(1000, 9999))
-    dropoff_otp = str(random.randint(1000, 9999))
-    
-    # Driver keeps 80% of base + 100% of the shipper's bonus.
-    driver_earnings = pricing.driver_earnings(base_total, offer)
-    
-    new_order = Order(
-        id=order_id,
-        order_number=order_number,
-        status="pending",
-        pickup=GeoPoint(
-            lat=request.pickup_lat,
-            lng=request.pickup_lng,
-            address=request.pickup_address,
-            name=request.pickup_contact_name,
-        ),
-        dropoff=GeoPoint(
-            lat=request.dropoff_lat,
-            lng=request.dropoff_lng,
-            address=request.dropoff_address,
-            name=request.dropoff_contact_name,
-        ),
-        customer=Customer(
-            name=request.dropoff_contact_name,
-            rating=5.0,
-            phone=request.dropoff_contact_phone,
-            notes=request.dropoff_notes,
-        ),
-        items=[OrderItem(name=request.cargo_description, quantity=1)],
-        distance_km=round(road_km, 2),
-        straight_distance_km=round(straight_km, 2),
-        road_distance_km=round(road_km, 2),
-        duration_minutes=duration_minutes,
-        route_polyline=route["polyline"],
-        eta_minutes=max(1, int(round(duration_minutes))),
-        earnings=round(driver_earnings, 2),
-        tip=round(offer, 2),
-        pickup_otp=pickup_otp,
-        dropoff_otp=dropoff_otp,
-        shipper_id=shipper_id,
-        vehicle_type=request.vehicle_type,
-        cargo_weight_kg=request.cargo_weight_kg,
-        cargo_dimensions=request.cargo_dimensions,
-        cargo_type=request.cargo_type,
-        special_requirements=request.special_requirements,
-        scheduled_pickup=request.scheduled_pickup,
-        price_quote=round(total_price, 2),
-        shipper_notes=request.pickup_notes,
-    )
-    
-    await db.orders.insert_one(new_order.model_dump())
-    
-    # Update shipper stats
-    await db.shippers.update_one(
-        {"id": shipper_id},
-        {"$inc": {"total_shipments": 1}}
-    )
-    
-    logger.info(f"Shipper {shipper_id} created shipment {order_id}")
-
-    if shipper.get("email"):
-        subj, html = email_tpl.order_created(
-            shipper.get("contact_name") or shipper.get("company_name") or "there",
-            {
-                "order_number": order_number,
-                "pickup": request.pickup_address,
-                "dropoff": request.dropoff_address,
-                "price": total_price,
-            },
-        )
-        send_email_bg(shipper["email"], subj, html,
-                      to_name=shipper.get("contact_name") or shipper.get("company_name"),
-                      category="order_created", related_id=order_id)
-
-    # Audit trail: record order creation.
-    await audit.record_event(
-        db, order_id, "order_created",
-        from_status=None, to_status="pending",
-        actor_id=shipper_id, actor_type="shipper",
-        metadata={"vehicle_type": request.vehicle_type, "price": round(total_price, 2)},
-    )
-
-    # NOTE: drivers are NOT notified here. The order is only published to the
-    # marketplace once the shipper's payment is AUTHORIZED (see
-    # _apply_intent_to_order), enforcing pay-at-creation.
-    
-    response = {
-        "order_id": order_id,
-        "order_number": order_number,
-        "status": "pending",
-        "pickup_otp": pickup_otp,
-        "dropoff_otp": dropoff_otp,
-        "price": total_price,
-        "base_price": base_total,
-        "offer": round(offer, 2),
-        "breakdown": breakdown,
-        "distance_km": round(road_km, 2),
-        "straight_distance_km": round(straight_km, 2),
-        "road_distance_km": round(road_km, 2),
-        "duration_minutes": duration_minutes,
-        "polyline": route["polyline"],
-        "estimated_duration_minutes": new_order.eta_minutes,
-        "message": "Shipment created successfully! Waiting for driver assignment."
-    }
-
-    # Persist idempotent response for safe client retries.
-    await idempotency.store(db, idem_key, scope=f"shipment:{shipper_id}", response=response)
-
-    return response
 
 
-@api_router.get("/shipper/shipments")
-async def get_shipper_shipments(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get all shipments for the current shipper."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "shipper":
-        raise HTTPException(403, "Shipper access required")
-    
-    shipper_id = payload["sub"]
-    
-    shipments = []
-    async for order in db.orders.find({"shipper_id": shipper_id}, {"_id": 0}).sort("created_at", -1):
-        # Get driver info if assigned
-        driver_info = None
-        if order.get("driver_id"):
-            driver = await db.drivers.find_one({"id": order["driver_id"]}, {"_id": 0, "password_hash": 0})
-            if driver:
-                driver_info = {
-                    "id": driver["id"],
-                    "name": driver["name"],
-                    "phone": driver.get("phone"),
-                    "vehicle": driver.get("vehicle"),
-                    "rating": driver.get("rating"),
-                    "avatar": driver.get("avatar"),
-                }
-        
-        shipments.append({
-            **order,
-            "driver": driver_info,
-        })
-    
-    return shipments
 
 
-@api_router.get("/shipper/shipments/{order_id}")
-async def get_shipment_details(
-    order_id: str,
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    """Get details of a specific shipment."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "shipper":
-        raise HTTPException(403, "Shipper access required")
-    
-    shipper_id = payload["sub"]
-    
-    order = await db.orders.find_one({"id": order_id, "shipper_id": shipper_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Shipment not found")
-    
-    # Get driver info if assigned
-    driver_info = None
-    if order.get("driver_id"):
-        driver = await db.drivers.find_one({"id": order["driver_id"]}, {"_id": 0, "password_hash": 0})
-        if driver:
-            driver_info = {
-                "id": driver["id"],
-                "name": driver["name"],
-                "phone": driver.get("phone"),
-                "vehicle": driver.get("vehicle"),
-                "rating": driver.get("rating"),
-                "avatar": driver.get("avatar"),
-                "location": driver.get("location"),
-            }
-    
-    return {
-        **order,
-        "driver": driver_info,
-    }
 
 
 # Cancellation policy defaults (admin-overridable via db.settings key="policy").
@@ -3903,327 +1978,16 @@ async def get_cancellation_policy() -> dict:
     return {"free_cancel_minutes": free_minutes, "cancel_fee_pct": max(0.0, min(1.0, fee_pct))}
 
 
-@api_router.post("/shipper/shipments/{order_id}/cancel")
-async def cancel_shipment(
-    order_id: str,
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    """Cancel a shipment before pickup.
-
-    Cancellation policy:
-      * Within the free window (default 60 min of creation) -> the payment
-        authorization is released; the shipper is charged nothing.
-      * After the free window -> a cancellation fee (default 15% of the price)
-        is captured and the remaining hold is released.
-    """
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "shipper":
-        raise HTTPException(403, "Shipper access required")
-
-    shipper_id = payload["sub"]
-
-    order = await db.orders.find_one({"id": order_id, "shipper_id": shipper_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Shipment not found")
-
-    # Can only cancel if not yet picked up
-    if order["status"] in ["picked_up", "enroute_dropoff", "arrived_dropoff", "delivered"]:
-        raise HTTPException(400, "Cannot cancel shipment after pickup")
-    if order["status"] in ["rejected", "cancelled"]:
-        raise HTTPException(400, "Shipment is already cancelled")
-
-    policy = await get_cancellation_policy()
-    free_minutes = policy["free_cancel_minutes"]
-    fee_pct = policy["cancel_fee_pct"]
-
-    # Minutes elapsed since the order was created.
-    minutes_since = 0.0
-    created_raw = order.get("created_at")
-    if created_raw:
-        try:
-            created_dt = datetime.fromisoformat(str(created_raw).replace("Z", "+00:00"))
-            if created_dt.tzinfo is None:
-                created_dt = created_dt.replace(tzinfo=timezone.utc)
-            minutes_since = (datetime.now(timezone.utc) - created_dt).total_seconds() / 60.0
-        except Exception:
-            minutes_since = 0.0
-
-    within_free = minutes_since <= free_minutes
-    cancellation_fee = 0.0
-    refund_note = "No payment was charged."
-    intent_id = order.get("stripe_payment_intent_id")
-    pay_status = order.get("payment_status")
-    amount = float(order.get("payment_amount") or order.get("price_quote") or 0)
-    new_pay_status = pay_status or "unpaid"
-
-    if intent_id and pay_status == "authorized":
-        try:
-            if within_free or fee_pct <= 0 or amount <= 0:
-                payments.cancel_payment_intent(intent_id)
-                new_pay_status = "canceled"
-                refund_note = "Authorization released — you were not charged."
-            else:
-                fee_cents = max(1, payments.to_cents(round(amount * fee_pct, 2)))
-                payments.capture_payment_intent(intent_id, amount_cents=fee_cents)
-                cancellation_fee = payments.from_cents(fee_cents)
-                new_pay_status = "captured"
-                refund_note = (
-                    f"Cancellation fee of €{cancellation_fee:.2f} charged; "
-                    f"the remaining hold was released."
-                )
-        except Exception as exc:
-            logger.error(f"Cancel payment handling failed for {order_id}: {exc}")
-            raise HTTPException(502, f"Could not process cancellation payment: {exc}")
-
-    now_iso = datetime.now(timezone.utc).isoformat()
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {
-            "status": "rejected",
-            "completed_at": now_iso,
-            "cancelled_at": now_iso,
-            "payment_status": new_pay_status,
-            "cancellation_fee": round(cancellation_fee, 2),
-        }},
-    )
-
-    try:
-        await audit.record_event(
-            db, order_id, "order_cancelled",
-            from_status=order["status"], to_status="rejected",
-            actor_id=shipper_id, actor_type="shipper",
-            metadata={
-                "minutes_since_create": round(minutes_since, 1),
-                "within_free": within_free,
-                "cancellation_fee": round(cancellation_fee, 2),
-            },
-        )
-    except Exception:
-        pass
-
-    logger.info(
-        f"Shipper {shipper_id} cancelled shipment {order_id} "
-        f"(fee €{cancellation_fee:.2f}, within_free={within_free})"
-    )
-
-    return {
-        "message": "Shipment cancelled",
-        "cancellation_fee": round(cancellation_fee, 2),
-        "within_free_window": within_free,
-        "free_cancel_minutes": free_minutes,
-        "cancel_fee_pct": fee_pct,
-        "refund_note": refund_note,
-    }
 
 
-@api_router.get("/shipper/shipments/{order_id}/tracking")
-async def track_shipment(
-    order_id: str,
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    """Get real-time tracking info for a shipment."""
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "shipper":
-        raise HTTPException(403, "Shipper access required")
-    
-    shipper_id = payload["sub"]
-    
-    order = await db.orders.find_one({"id": order_id, "shipper_id": shipper_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Shipment not found")
-    
-    # Get driver location if assigned and in transit
-    driver_location = None
-    driver_info = None
-    if order.get("driver_id") and order["status"] in ["enroute_pickup", "arrived_pickup", "picked_up", "enroute_dropoff", "arrived_dropoff"]:
-        driver = await db.drivers.find_one({"id": order["driver_id"]}, {"_id": 0})
-        if driver:
-            driver_info = {
-                "name": driver["name"],
-                "phone": driver.get("phone"),
-                "vehicle": driver.get("vehicle"),
-                "avatar": driver.get("avatar"),
-            }
-            # Simulate driver location (in real app, this would come from driver's location updates)
-            if order["status"] in ["enroute_pickup", "arrived_pickup"]:
-                driver_location = {"lat": order["pickup"]["lat"], "lng": order["pickup"]["lng"]}
-            else:
-                driver_location = {"lat": order["dropoff"]["lat"], "lng": order["dropoff"]["lng"]}
-    
-    # Status descriptions
-    status_messages = {
-        "pending": "Waiting for driver assignment",
-        "accepted": "Driver assigned, preparing for pickup",
-        "enroute_pickup": "Driver is on the way to pickup",
-        "arrived_pickup": "Driver arrived at pickup location",
-        "picked_up": "Cargo picked up, preparing for delivery",
-        "enroute_dropoff": "Driver is on the way to delivery",
-        "arrived_dropoff": "Driver arrived at delivery location",
-        "delivered": "Delivery completed",
-        "rejected": "Shipment cancelled",
-    }
-    
-    return {
-        "order_id": order_id,
-        "status": order["status"],
-        "status_message": status_messages.get(order["status"], "Unknown status"),
-        "pickup": order["pickup"],
-        "dropoff": order["dropoff"],
-        "driver": driver_info,
-        "driver_location": driver_location,
-        "eta_minutes": order.get("eta_minutes"),
-        "created_at": order.get("created_at"),
-        "completed_at": order.get("completed_at"),
-    }
 
 
 # ===================== KYC Endpoints =====================
 
-@api_router.get("/driver/kyc-status", response_model=KYCStatus)
-async def get_kyc_status(driver: dict = Depends(get_current_driver)):
-    """Get the authenticated driver's KYC verification status."""
-    driver_id = driver["id"]
-    status = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
-    if not status:
-        # Initialize if not exists
-        status = {
-            "driver_id": driver_id,
-            "license_front": None,
-            "license_back": None,
-            "selfie": None,
-            "overall_status": "incomplete",
-            "submitted_at": None,
-            "reviewed_at": None,
-        }
-        await db.kyc_status.insert_one(status.copy())
-    return KYCStatus(**status)
 
 
-@api_router.post("/driver/kyc/upload", response_model=KYCStatus)
-async def upload_kyc_document(request: KYCUploadRequest, driver: dict = Depends(get_current_driver)):
-    """Upload a single KYC document for the authenticated driver."""
-    driver_id = driver["id"]
-    image_data = (request.image_data or "").strip()
-    if not image_data:
-        raise HTTPException(400, "Image data is required")
-    
-    # Normalize to data URI
-    if not image_data.startswith("data:"):
-        image_data = f"data:image/jpeg;base64,{image_data}"
-    
-    # Size guard (~6MB)
-    if len(image_data) > 7_500_000:
-        raise HTTPException(413, "Image too large; please resize")
-    
-    # Store the document
-    doc = KYCDocument(
-        driver_id=driver_id,
-        document_type=request.document_type,
-        image_data=image_data,
-        status="pending"
-    )
-    
-    # Upsert - replace if exists
-    await db.kyc_documents.update_one(
-        {"driver_id": driver_id, "document_type": request.document_type},
-        {"$set": doc.model_dump()},
-        upsert=True
-    )
-    
-    # Update KYC status
-    await db.kyc_status.update_one(
-        {"driver_id": driver_id},
-        {"$set": {request.document_type: "pending", "driver_id": driver_id}},
-        upsert=True
-    )
-    
-    # Check if all documents uploaded
-    status = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
-    if not status:
-        status = {"driver_id": driver_id, "overall_status": "incomplete"}
-    
-    # Update overall status
-    all_uploaded = all([
-        status.get("license_front") is not None,
-        status.get("license_back") is not None,
-        status.get("selfie") is not None,
-    ])
-    
-    if all_uploaded:
-        await db.kyc_status.update_one(
-            {"driver_id": driver_id},
-            {"$set": {"overall_status": "pending", "submitted_at": datetime.now(timezone.utc).isoformat()}}
-        )
-    
-    updated_status = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
-    return KYCStatus(**updated_status)
 
 
-@api_router.post("/driver/kyc/submit", response_model=KYCStatus)
-async def submit_kyc_documents(request: KYCSubmitRequest, driver: dict = Depends(get_current_driver)):
-    """Submit all KYC documents at once for the authenticated driver.
-
-    Sets the application to PENDING and routes it to the admin for review.
-    There is NO auto-approval — an admin must approve via the dashboard.
-    """
-    driver_id = driver["id"]
-    documents = [
-        ("license_front", request.license_front),
-        ("license_back", request.license_back),
-        ("selfie", request.selfie),
-    ]
-    
-    for doc_type, image_data in documents:
-        if not image_data or not image_data.strip():
-            raise HTTPException(400, f"Missing {doc_type} image")
-        
-        # Normalize
-        image = image_data.strip()
-        if not image.startswith("data:"):
-            image = f"data:image/jpeg;base64,{image}"
-        
-        if len(image) > 7_500_000:
-            raise HTTPException(413, f"{doc_type} image too large")
-        
-        doc = KYCDocument(
-            driver_id=driver_id,
-            document_type=doc_type,
-            image_data=image,
-            status="pending"
-        )
-        
-        await db.kyc_documents.update_one(
-            {"driver_id": driver_id, "document_type": doc_type},
-            {"$set": doc.model_dump()},
-            upsert=True
-        )
-    
-    # Update KYC status to pending review
-    now = datetime.now(timezone.utc).isoformat()
-    await db.kyc_status.update_one(
-        {"driver_id": driver_id},
-        {"$set": {
-            "driver_id": driver_id,
-            "license_front": "pending",
-            "license_back": "pending",
-            "selfie": "pending",
-            "overall_status": "pending",
-            "submitted_at": now,
-            "reviewed_at": None,
-        }},
-        upsert=True
-    )
-    
-    logger.info(f"KYC documents submitted for driver {driver_id} — awaiting admin review")
-    
-    status = await db.kyc_status.find_one({"driver_id": driver_id}, {"_id": 0})
-    return KYCStatus(**status)
 
 
 # ===================== Directions =====================
@@ -4439,233 +2203,20 @@ def compute_live_tracking(order: dict, loc: dict) -> dict:
 
 
 
-@api_router.get("/orders/{order_id}/route", response_model=DirectionsResponse)
-async def get_route(order_id: str):
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-
-    origin = order["pickup"]
-    dest = order["dropoff"]
-
-    # Cache routes per (origin, dest) pair to save quota.
-    cache_key = f"{origin['lat']:.5f},{origin['lng']:.5f}|{dest['lat']:.5f},{dest['lng']:.5f}"
-    cached = await db.route_cache.find_one({"key": cache_key}, {"_id": 0})
-    if cached:
-        return DirectionsResponse(**cached["response"])
-
-    if GOOGLE_DIRECTIONS_API_KEY:
-        try:
-            async with httpx.AsyncClient(timeout=10) as client_http:
-                resp = await client_http.get(
-                    "https://maps.googleapis.com/maps/api/directions/json",
-                    params={
-                        "origin": f"{origin['lat']},{origin['lng']}",
-                        "destination": f"{dest['lat']},{dest['lng']}",
-                        "mode": "driving",
-                        "units": "metric",
-                        "key": GOOGLE_DIRECTIONS_API_KEY,
-                    },
-                )
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("status") == "OK" and data.get("routes"):
-                    route = data["routes"][0]
-                    encoded = route.get("overview_polyline", {}).get("points")
-                    if encoded:
-                        decoded = decode_polyline(encoded)
-                        legs = route.get("legs", [])
-                        total_distance = sum(leg.get("distance", {}).get("value", 0) for leg in legs)
-                        total_duration = sum(leg.get("duration", {}).get("value", 0) for leg in legs)
-                        response = DirectionsResponse(
-                            points=[RoutePoint(lat=lat, lng=lng) for lat, lng in decoded],
-                            distance_meters=total_distance,
-                            duration_seconds=total_duration,
-                            source="google",
-                        )
-                        await db.route_cache.insert_one({"key": cache_key, "response": response.model_dump()})
-                        return response
-                else:
-                    logger.warning("Directions API status: %s", data.get("status"))
-            else:
-                logger.warning("Directions API HTTP %s", resp.status_code)
-        except Exception as e:
-            logger.warning("Directions API call failed: %s", e)
-
-    # Fallback: straight-line polyline (2 points)
-    distance_km = _haversine_km(origin["lat"], origin["lng"], dest["lat"], dest["lng"])
-    response = DirectionsResponse(
-        points=[RoutePoint(lat=origin["lat"], lng=origin["lng"]),
-                RoutePoint(lat=dest["lat"], lng=dest["lng"])],
-        distance_meters=int(distance_km * 1000),
-        duration_seconds=int(distance_km * 240),  # ~15 km/h for bicycle
-        source="fallback",
-    )
-    return response
 
 
 # ===================== Admin Endpoints =====================
 
-@api_router.get("/admin/kyc-applications")
-async def get_kyc_applications(user: dict = Depends(get_admin_user)):
-    """Get all KYC applications for admin review."""
-    applications = []
-    async for status in db.kyc_status.find({}, {"_id": 0}):
-        # Get driver info
-        driver = await db.drivers.find_one({"id": status["driver_id"]}, {"_id": 0, "password_hash": 0})
-        
-        # Get document images
-        docs = {}
-        async for doc in db.kyc_documents.find({"driver_id": status["driver_id"]}, {"_id": 0}):
-            docs[doc["document_type"]] = {
-                "image_data": doc["image_data"],
-                "status": doc.get("status", "pending"),
-                "uploaded_at": doc.get("uploaded_at"),
-            }
-        
-        applications.append({
-            "driver": driver,
-            "kyc_status": status,
-            "documents": docs,
-        })
-    
-    return applications
 
 
-@api_router.post("/admin/kyc/{driver_id}/approve")
-async def approve_kyc(driver_id: str, user: dict = Depends(get_admin_user)):
-    """Approve a driver's KYC application."""
-    now = datetime.now(timezone.utc).isoformat()
-    
-    result = await db.kyc_status.update_one(
-        {"driver_id": driver_id},
-        {"$set": {
-            "license_front": "approved",
-            "license_back": "approved",
-            "selfie": "approved",
-            "overall_status": "approved",
-            "reviewed_at": now,
-        }}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(404, "KYC application not found")
-    
-    # Update document statuses
-    await db.kyc_documents.update_many(
-        {"driver_id": driver_id},
-        {"$set": {"status": "approved"}}
-    )
-    
-    logger.info(f"Admin approved KYC for driver {driver_id}")
-
-    drv = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "name": 1, "email": 1})
-    if drv and drv.get("email"):
-        subj, html = email_tpl.driver_approved(drv.get("name", "there"))
-        send_email_bg(drv["email"], subj, html, to_name=drv.get("name"),
-                      category="driver_approved", related_id=driver_id)
-
-    return {"message": "KYC approved successfully"}
 
 
-@api_router.post("/admin/kyc/{driver_id}/reject")
-async def reject_kyc(driver_id: str, reason: str = "Documents not clear", user: dict = Depends(get_admin_user)):
-    """Reject a driver's KYC application."""
-    now = datetime.now(timezone.utc).isoformat()
-    
-    result = await db.kyc_status.update_one(
-        {"driver_id": driver_id},
-        {"$set": {
-            "license_front": "rejected",
-            "license_back": "rejected",
-            "selfie": "rejected",
-            "overall_status": "rejected",
-            "reviewed_at": now,
-            "rejection_reason": reason,
-        }}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(404, "KYC application not found")
-    
-    # Update document statuses
-    await db.kyc_documents.update_many(
-        {"driver_id": driver_id},
-        {"$set": {"status": "rejected", "rejection_reason": reason}}
-    )
-    
-    logger.info(f"Admin rejected KYC for driver {driver_id}: {reason}")
-
-    drv = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "name": 1, "email": 1})
-    if drv and drv.get("email"):
-        subj, html = email_tpl.driver_rejected(drv.get("name", "there"), reason)
-        send_email_bg(drv["email"], subj, html, to_name=drv.get("name"),
-                      category="driver_rejected", related_id=driver_id)
-
-    return {"message": "KYC rejected"}
 
 
-@api_router.get("/admin/stats")
-async def get_admin_stats(user: dict = Depends(get_admin_user)):
-    """Get platform statistics for admin dashboard."""
-    total_drivers = await db.drivers.count_documents({})
-    active_drivers = await db.drivers.count_documents({"is_online": True})
-    total_shippers = await db.shippers.count_documents({})
-    total_orders = await db.orders.count_documents({})
-    pending_orders = await db.orders.count_documents({"status": "pending"})
-    completed_orders = await db.orders.count_documents({"status": "delivered"})
-    pending_kyc = await db.kyc_status.count_documents({"overall_status": "pending"})
-    
-    # Calculate total revenue from completed orders
-    pipeline = [
-        {"$match": {"status": "delivered"}},
-        {"$group": {"_id": None, "total": {"$sum": "$earnings"}}}
-    ]
-    revenue_result = await db.orders.aggregate(pipeline).to_list(1)
-    total_revenue = revenue_result[0]["total"] if revenue_result else 0
-    
-    return {
-        "total_drivers": total_drivers,
-        "active_drivers": active_drivers,
-        "total_shippers": total_shippers,
-        "total_orders": total_orders,
-        "pending_orders": pending_orders,
-        "completed_orders": completed_orders,
-        "total_revenue": total_revenue,
-        "pending_kyc": pending_kyc,
-    }
 
 
-@api_router.get("/admin/drivers")
-async def get_admin_drivers(user: dict = Depends(get_admin_user)):
-    """Get all drivers for admin dashboard."""
-    drivers = []
-    async for driver in db.drivers.find({}, {"_id": 0, "password_hash": 0}):
-        drivers.append({
-            "id": driver["id"],
-            "name": driver["name"],
-            "email": driver["email"],
-            "is_online": driver.get("is_online", False),
-            "rating": driver.get("rating", 5.0),
-            "deliveries_today": driver.get("deliveries_today", 0),
-        })
-    return drivers
 
 
-@api_router.get("/admin/shippers")
-async def get_admin_shippers(user: dict = Depends(get_admin_user)):
-    """Get all shippers for admin dashboard."""
-    shippers = []
-    async for shipper in db.shippers.find({}, {"_id": 0, "password_hash": 0}):
-        # Count orders for this shipper
-        order_count = await db.orders.count_documents({"shipper_id": shipper["id"]})
-        shippers.append({
-            "id": shipper["id"],
-            "company_name": shipper.get("company_name", "Unknown"),
-            "email": shipper["email"],
-            "total_orders": order_count,
-        })
-    return shippers
 
 
 # ===================== Admin: world-class management API =====================
@@ -4736,166 +2287,12 @@ def _admin_order_row(o: dict) -> dict:
     }
 
 
-@api_router.get("/admin/overview")
-async def admin_overview(user: dict = Depends(get_admin_user)):
-    """Rich analytics for the admin dashboard: KPIs, time-series & breakdowns."""
-    now = datetime.now(timezone.utc)
-    days = 14
-    since = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    since_iso = since.isoformat()
-
-    total_drivers = await db.drivers.count_documents({})
-    active_drivers = await db.drivers.count_documents({"is_online": True})
-    suspended_drivers = await db.drivers.count_documents({"is_suspended": True})
-    total_shippers = await db.shippers.count_documents({})
-    suspended_shippers = await db.shippers.count_documents({"is_suspended": True})
-    total_orders = await db.orders.count_documents({})
-    pending_orders = await db.orders.count_documents({"status": "pending"})
-    delivered_orders = await db.orders.count_documents({"status": "delivered"})
-    cancelled_orders = await db.orders.count_documents({"status": "cancelled"})
-    in_progress = await db.orders.count_documents(
-        {"status": {"$nin": ["pending", "delivered", "cancelled", "rejected"]}}
-    )
-    try:
-        pending_kyc = await db.kyc_status.count_documents({"overall_status": "pending"})
-    except Exception:
-        pending_kyc = 0
-
-    rev = await db.orders.aggregate([
-        {"$match": {"status": "delivered"}},
-        {"$group": {"_id": None, "total": {"$sum": "$earnings"}, "tips": {"$sum": "$tip"}}},
-    ]).to_list(1)
-    total_revenue = round(float(rev[0]["total"]), 2) if rev else 0.0
-    total_tips = round(float(rev[0].get("tips", 0.0) or 0), 2) if rev else 0.0
-
-    status_rows = await db.orders.aggregate([
-        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
-    ]).to_list(50)
-    orders_by_status = {r["_id"]: r["count"] for r in status_rows if r.get("_id")}
-
-    veh_rows = await db.orders.aggregate([
-        {"$match": {"vehicle_type": {"$ne": None}}},
-        {"$group": {"_id": "$vehicle_type", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-    ]).to_list(50)
-    orders_by_vehicle = [{"vehicle_type": r["_id"], "count": r["count"]} for r in veh_rows if r.get("_id")]
-
-    day_keys = [(since + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
-    del_rows = {r["_id"]: r for r in await db.orders.aggregate([
-        {"$match": {"status": "delivered", "completed_at": {"$gte": since_iso}}},
-        {"$group": {"_id": {"$substr": ["$completed_at", 0, 10]},
-                    "deliveries": {"$sum": 1}, "revenue": {"$sum": "$earnings"}}},
-    ]).to_list(1000)}
-    new_rows = {r["_id"]: r["count"] for r in await db.orders.aggregate([
-        {"$match": {"created_at": {"$gte": since_iso}}},
-        {"$group": {"_id": {"$substr": ["$created_at", 0, 10]}, "count": {"$sum": 1}}},
-    ]).to_list(1000)}
-    series = []
-    for k in day_keys:
-        dr = del_rows.get(k, {})
-        series.append({
-            "date": k,
-            "deliveries": dr.get("deliveries", 0),
-            "revenue": round(float(dr.get("revenue", 0.0) or 0), 2),
-            "new_orders": new_rows.get(k, 0),
-        })
-
-    top_rows = await db.orders.aggregate([
-        {"$match": {"status": "delivered", "driver_id": {"$ne": None}}},
-        {"$group": {"_id": "$driver_id", "deliveries": {"$sum": 1}, "earnings": {"$sum": "$earnings"}}},
-        {"$sort": {"deliveries": -1}},
-        {"$limit": 5},
-    ]).to_list(5)
-    top_drivers = []
-    for r in top_rows:
-        d = await db.drivers.find_one({"id": r["_id"]}, {"_id": 0, "name": 1, "avatar": 1})
-        top_drivers.append({
-            "driver_id": r["_id"],
-            "name": (d or {}).get("name", "Unknown"),
-            "avatar": (d or {}).get("avatar", ""),
-            "deliveries": r["deliveries"],
-            "earnings": round(float(r["earnings"]), 2),
-        })
-
-    recent = []
-    async for o in db.orders.find({}, {"_id": 0}).sort("created_at", -1).limit(8):
-        recent.append(_admin_order_row(o))
-
-    return {
-        "kpis": {
-            "total_drivers": total_drivers,
-            "active_drivers": active_drivers,
-            "suspended_drivers": suspended_drivers,
-            "total_shippers": total_shippers,
-            "suspended_shippers": suspended_shippers,
-            "total_orders": total_orders,
-            "pending_orders": pending_orders,
-            "in_progress_orders": in_progress,
-            "delivered_orders": delivered_orders,
-            "cancelled_orders": cancelled_orders,
-            "pending_kyc": pending_kyc,
-            "total_revenue": total_revenue,
-            "total_tips": total_tips,
-        },
-        "orders_by_status": orders_by_status,
-        "orders_by_vehicle": orders_by_vehicle,
-        "series": series,
-        "top_drivers": top_drivers,
-        "recent_orders": recent,
-    }
 
 
 # ---------- Drivers management ----------
 
-@api_router.get("/admin/manage/drivers")
-async def admin_list_drivers(
-    user: dict = Depends(get_admin_user),
-    search: str = "",
-    status: str = "all",
-    page: int = 1,
-    limit: int = 20,
-):
-    query: dict = {}
-    if search:
-        rx = {"$regex": re.escape(search), "$options": "i"}
-        query["$or"] = [{"name": rx}, {"email": rx}, {"phone": rx}, {"plate": rx}]
-    if status == "online":
-        query["is_online"] = True
-    elif status == "offline":
-        query["is_online"] = False
-    elif status == "suspended":
-        query["is_suspended"] = True
-    page = max(1, page)
-    limit = max(1, min(limit, 100))
-    total = await db.drivers.count_documents(query)
-    items = []
-    cursor = db.drivers.find(query, {"_id": 0, "password_hash": 0}).sort("name", 1).skip((page - 1) * limit).limit(limit)
-    async for d in cursor:
-        items.append(_admin_driver_row(d))
-    return {"items": items, "total": total, "page": page, "limit": limit}
 
 
-@api_router.get("/admin/manage/drivers/{driver_id}")
-async def admin_driver_detail(driver_id: str, user: dict = Depends(get_admin_user)):
-    d = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "password_hash": 0})
-    if not d:
-        raise HTTPException(404, "Driver not found")
-    orders = []
-    async for o in db.orders.find({"driver_id": driver_id}, {"_id": 0}).sort("created_at", -1).limit(20):
-        orders.append(_admin_order_row(o))
-    delivered = await db.orders.count_documents({"driver_id": driver_id, "status": "delivered"})
-    total_assigned = await db.orders.count_documents({"driver_id": driver_id})
-    er = await db.orders.aggregate([
-        {"$match": {"driver_id": driver_id, "status": "delivered"}},
-        {"$group": {"_id": None, "total": {"$sum": "$earnings"}}},
-    ]).to_list(1)
-    lifetime_earnings = round(float(er[0]["total"]), 2) if er else 0.0
-    return {
-        "driver": d,
-        "vehicles": d.get("vehicles", []),
-        "recent_orders": orders,
-        "stats": {"delivered": delivered, "total_assigned": total_assigned, "lifetime_earnings": lifetime_earnings},
-    }
 
 
 class AdminDriverUpdate(BaseModel):
@@ -4906,83 +2303,16 @@ class AdminDriverUpdate(BaseModel):
     plate: Optional[str] = None
 
 
-@api_router.patch("/admin/manage/drivers/{driver_id}")
-async def admin_update_driver(driver_id: str, body: AdminDriverUpdate, user: dict = Depends(get_admin_user)):
-    patch = body.model_dump(exclude_none=True)
-    if not patch:
-        raise HTTPException(400, "No fields to update")
-    res = await db.drivers.update_one({"id": driver_id}, {"$set": patch})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Driver not found")
-    d = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "password_hash": 0})
-    return _admin_driver_row(d)
 
 
-@api_router.post("/admin/manage/drivers/{driver_id}/suspend")
-async def admin_suspend_driver(driver_id: str, user: dict = Depends(get_admin_user)):
-    res = await db.drivers.update_one({"id": driver_id}, {"$set": {"is_suspended": True, "is_online": False}})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Driver not found")
-    return {"status": "suspended", "driver_id": driver_id}
 
 
-@api_router.post("/admin/manage/drivers/{driver_id}/activate")
-async def admin_activate_driver(driver_id: str, user: dict = Depends(get_admin_user)):
-    res = await db.drivers.update_one({"id": driver_id}, {"$set": {"is_suspended": False}})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Driver not found")
-    return {"status": "active", "driver_id": driver_id}
 
 
 # ---------- Shippers management ----------
 
-@api_router.get("/admin/manage/shippers")
-async def admin_list_shippers(
-    user: dict = Depends(get_admin_user),
-    search: str = "",
-    status: str = "all",
-    page: int = 1,
-    limit: int = 20,
-):
-    query: dict = {}
-    if search:
-        rx = {"$regex": re.escape(search), "$options": "i"}
-        query["$or"] = [{"company_name": rx}, {"contact_name": rx}, {"email": rx}, {"phone": rx}]
-    if status == "suspended":
-        query["is_suspended"] = True
-    elif status == "verified":
-        query["is_verified"] = True
-    page = max(1, page)
-    limit = max(1, min(limit, 100))
-    total = await db.shippers.count_documents(query)
-    items = []
-    cursor = db.shippers.find(query, {"_id": 0, "password_hash": 0}).sort("company_name", 1).skip((page - 1) * limit).limit(limit)
-    async for s in cursor:
-        oc = await db.orders.count_documents({"shipper_id": s["id"]})
-        items.append(_admin_shipper_row(s, oc))
-    return {"items": items, "total": total, "page": page, "limit": limit}
 
 
-@api_router.get("/admin/manage/shippers/{shipper_id}")
-async def admin_shipper_detail(shipper_id: str, user: dict = Depends(get_admin_user)):
-    s = await db.shippers.find_one({"id": shipper_id}, {"_id": 0, "password_hash": 0})
-    if not s:
-        raise HTTPException(404, "Shipper not found")
-    orders = []
-    async for o in db.orders.find({"shipper_id": shipper_id}, {"_id": 0}).sort("created_at", -1).limit(20):
-        orders.append(_admin_order_row(o))
-    total_orders = await db.orders.count_documents({"shipper_id": shipper_id})
-    delivered = await db.orders.count_documents({"shipper_id": shipper_id, "status": "delivered"})
-    sp = await db.orders.aggregate([
-        {"$match": {"shipper_id": shipper_id, "status": "delivered"}},
-        {"$group": {"_id": None, "total": {"$sum": "$earnings"}}},
-    ]).to_list(1)
-    total_spend = round(float(sp[0]["total"]), 2) if sp else 0.0
-    return {
-        "shipper": s,
-        "recent_orders": orders,
-        "stats": {"total_orders": total_orders, "delivered": delivered, "total_spend": total_spend},
-    }
 
 
 class AdminShipperUpdate(BaseModel):
@@ -4995,113 +2325,24 @@ class AdminShipperUpdate(BaseModel):
     is_verified: Optional[bool] = None
 
 
-@api_router.patch("/admin/manage/shippers/{shipper_id}")
-async def admin_update_shipper(shipper_id: str, body: AdminShipperUpdate, user: dict = Depends(get_admin_user)):
-    patch = body.model_dump(exclude_none=True)
-    if not patch:
-        raise HTTPException(400, "No fields to update")
-    res = await db.shippers.update_one({"id": shipper_id}, {"$set": patch})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Shipper not found")
-    s = await db.shippers.find_one({"id": shipper_id}, {"_id": 0, "password_hash": 0})
-    oc = await db.orders.count_documents({"shipper_id": shipper_id})
-    return _admin_shipper_row(s, oc)
 
 
-@api_router.post("/admin/manage/shippers/{shipper_id}/suspend")
-async def admin_suspend_shipper(shipper_id: str, user: dict = Depends(get_admin_user)):
-    res = await db.shippers.update_one({"id": shipper_id}, {"$set": {"is_suspended": True}})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Shipper not found")
-    return {"status": "suspended", "shipper_id": shipper_id}
 
 
-@api_router.post("/admin/manage/shippers/{shipper_id}/activate")
-async def admin_activate_shipper(shipper_id: str, user: dict = Depends(get_admin_user)):
-    res = await db.shippers.update_one({"id": shipper_id}, {"$set": {"is_suspended": False}})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Shipper not found")
-    return {"status": "active", "shipper_id": shipper_id}
 
 
 # ---------- Orders management ----------
 
-@api_router.get("/admin/manage/orders")
-async def admin_list_orders(
-    user: dict = Depends(get_admin_user),
-    search: str = "",
-    status: str = "all",
-    page: int = 1,
-    limit: int = 20,
-):
-    query: dict = {}
-    if status and status != "all":
-        query["status"] = status
-    if search:
-        rx = {"$regex": re.escape(search), "$options": "i"}
-        query["$or"] = [{"order_number": rx}, {"pickup.address": rx}, {"dropoff.address": rx}]
-    page = max(1, page)
-    limit = max(1, min(limit, 100))
-    total = await db.orders.count_documents(query)
-    items = []
-    cursor = db.orders.find(query, {"_id": 0}).sort("created_at", -1).skip((page - 1) * limit).limit(limit)
-    async for o in cursor:
-        items.append(_admin_order_row(o))
-    return {"items": items, "total": total, "page": page, "limit": limit}
 
 
-@api_router.get("/admin/manage/orders/{order_id}")
-async def admin_order_detail(order_id: str, user: dict = Depends(get_admin_user)):
-    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not o:
-        raise HTTPException(404, "Order not found")
-    driver = None
-    if o.get("driver_id"):
-        driver = await db.drivers.find_one(
-            {"id": o["driver_id"]}, {"_id": 0, "id": 1, "name": 1, "phone": 1, "avatar": 1}
-        )
-    shipper = None
-    if o.get("shipper_id"):
-        shipper = await db.shippers.find_one(
-            {"id": o["shipper_id"]}, {"_id": 0, "id": 1, "company_name": 1, "contact_name": 1, "phone": 1}
-        )
-    events = []
-    try:
-        async for e in db.order_events.find({"order_id": order_id}, {"_id": 0}).sort("created_at", 1):
-            events.append(e)
-    except Exception:
-        events = []
-    return {"order": o, "driver": driver, "shipper": shipper, "events": events}
 
 
-@api_router.post("/admin/manage/orders/{order_id}/cancel")
-async def admin_cancel_order(order_id: str, user: dict = Depends(get_admin_user)):
-    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not o:
-        raise HTTPException(404, "Order not found")
-    if o.get("status") in ("delivered", "cancelled"):
-        raise HTTPException(400, f"Cannot cancel an order that is already {o.get('status')}")
-    await db.orders.update_one({"id": order_id}, {"$set": {"status": "cancelled"}})
-    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _admin_order_row(o2)
 
 
 class AdminReassignRequest(BaseModel):
     driver_id: str
 
 
-@api_router.post("/admin/manage/orders/{order_id}/reassign")
-async def admin_reassign_order(order_id: str, body: AdminReassignRequest, user: dict = Depends(get_admin_user)):
-    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not o:
-        raise HTTPException(404, "Order not found")
-    d = await db.drivers.find_one({"id": body.driver_id}, {"_id": 0})
-    if not d:
-        raise HTTPException(404, "Driver not found")
-    await db.orders.update_one({"id": order_id}, {"$set": {"driver_id": body.driver_id}})
-    await _record_assignment(order_id, "reassigned", body.driver_id, user.get("id"))
-    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _admin_order_row(o2)
 
 
 # ============================================================
@@ -5133,121 +2374,20 @@ class AdminReasonRequest(BaseModel):
     reason: Optional[str] = None
 
 
-@api_router.post("/admin/manage/orders/{order_id}/assign")
-async def admin_assign_order(order_id: str, body: AdminReassignRequest, user: dict = Depends(get_admin_user)):
-    """Assign (or reassign) a job to a specific driver."""
-    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not o:
-        raise HTTPException(404, "Order not found")
-    d = await db.drivers.find_one({"id": body.driver_id}, {"_id": 0})
-    if not d:
-        raise HTTPException(404, "Driver not found")
-    new_status = o["status"] if o["status"] not in ("pending", "cancelled", "paused", "failed") else "accepted"
-    await db.orders.update_one({"id": order_id}, {"$set": {"driver_id": body.driver_id, "status": new_status}})
-    await _record_assignment(order_id, "assigned", body.driver_id, user.get("id"))
-    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _admin_order_row(o2)
 
 
-@api_router.post("/admin/manage/orders/{order_id}/unassign")
-async def admin_unassign_order(order_id: str, body: AdminReasonRequest = AdminReasonRequest(), user: dict = Depends(get_admin_user)):
-    """Remove the assigned driver and return the job to the open marketplace (pending).
-
-    Used for driver emergencies (illness, breakdown, no-response, etc.).
-    """
-    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not o:
-        raise HTTPException(404, "Order not found")
-    prev_driver = o.get("driver_id")
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {"driver_id": None, "status": "pending"}},
-    )
-    await _record_assignment(order_id, "returned_to_marketplace", prev_driver, user.get("id"),
-                             note=(body.reason if body else None))
-    # Notify the affected shipper (non-blocking).
-    try:
-        if o.get("shipper_id"):
-            await _notify_shipper_status(o["shipper_id"], order_id,
-                                         "Your delivery was returned to the marketplace and will be reassigned shortly.")
-    except Exception:
-        pass
-    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _admin_order_row(o2)
 
 
-@api_router.post("/admin/manage/orders/{order_id}/restore")
-async def admin_restore_order(order_id: str, user: dict = Depends(get_admin_user)):
-    """Restore a cancelled/paused/failed job back to the open marketplace."""
-    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not o:
-        raise HTTPException(404, "Order not found")
-    if o["status"] not in ("cancelled", "paused", "failed"):
-        raise HTTPException(400, f"Only cancelled/paused/failed orders can be restored (is {o['status']})")
-    await db.orders.update_one({"id": order_id}, {"$set": {"status": "pending", "driver_id": None}})
-    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _admin_order_row(o2)
 
 
-@api_router.post("/admin/manage/orders/{order_id}/pause")
-async def admin_pause_order(order_id: str, user: dict = Depends(get_admin_user)):
-    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not o:
-        raise HTTPException(404, "Order not found")
-    if o["status"] in ("delivered", "cancelled"):
-        raise HTTPException(400, f"Cannot pause an order that is {o['status']}")
-    await db.orders.update_one({"id": order_id}, {"$set": {"status": "paused"}})
-    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _admin_order_row(o2)
 
 
-@api_router.post("/admin/manage/orders/{order_id}/complete")
-async def admin_complete_order(order_id: str, user: dict = Depends(get_admin_user)):
-    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not o:
-        raise HTTPException(404, "Order not found")
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {"status": "delivered", "completed_at": datetime.now(timezone.utc).isoformat()}},
-    )
-    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _admin_order_row(o2)
 
 
-@api_router.post("/admin/manage/orders/{order_id}/fail")
-async def admin_fail_order(order_id: str, body: AdminReasonRequest = AdminReasonRequest(), user: dict = Depends(get_admin_user)):
-    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not o:
-        raise HTTPException(404, "Order not found")
-    update = {"status": "failed"}
-    if body and body.reason:
-        update["fail_reason"] = body.reason
-    await db.orders.update_one({"id": order_id}, {"$set": update})
-    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _admin_order_row(o2)
 
 
-@api_router.post("/admin/manage/orders/{order_id}/notes")
-async def admin_add_order_note(order_id: str, body: AdminNoteRequest, user: dict = Depends(get_admin_user)):
-    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not o:
-        raise HTTPException(404, "Order not found")
-    note = {
-        "id": str(uuid.uuid4()),
-        "note": body.note,
-        "admin_id": user.get("id"),
-        "admin_name": user.get("name") or user.get("email"),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.orders.update_one({"id": order_id}, {"$push": {"admin_notes": note}})
-    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return {"order": _admin_order_row(o2), "notes": o2.get("admin_notes", [])}
 
 
-@api_router.get("/admin/manage/orders/{order_id}/assignment-history")
-async def admin_assignment_history(order_id: str, user: dict = Depends(get_admin_user)):
-    rows = await db.assignment_history.find({"order_id": order_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return {"history": rows}
 
 
 # ============================================================
@@ -5679,94 +2819,14 @@ async def _email_invoice_pdf(inv: dict):
 
 # ---------- Admin receipts management ----------
 
-@api_router.get("/admin/receipts")
-async def admin_list_receipts(
-    doc_type: Optional[str] = None, q: Optional[str] = None,
-    user: dict = Depends(get_admin_user),
-):
-    query: dict = {}
-    if doc_type and doc_type != "all":
-        query["doc_type"] = doc_type
-    if q:
-        rx = {"$regex": q, "$options": "i"}
-        query["$or"] = [
-            {"receipt_number": rx}, {"order_number": rx},
-            {"user_name": rx}, {"user_email": rx},
-        ]
-    rows = await db.receipts.find(query, {"_id": 0}).sort("issued_at", -1).to_list(500)
-    totals = {
-        "count": len(rows),
-        "payment_receipts": sum(1 for r in rows if r.get("doc_type") == "payment_receipt"),
-        "withdrawal_receipts": sum(1 for r in rows if r.get("doc_type") == "withdrawal_receipt"),
-        "withdrawal_invoices": sum(1 for r in rows if r.get("doc_type") == "withdrawal_invoice"),
-        "total_amount": round(sum(float(r.get("amount") or 0) for r in rows), 2),
-    }
-    return {"receipts": rows, "totals": totals}
 
 
-@api_router.get("/receipts/{receipt_id}/pdf")
-async def get_receipt_pdf(receipt_id: str, token: Optional[str] = None,
-                          credentials: HTTPAuthorizationCredentials = Depends(security)):
-    from fastapi.responses import Response
-    raw = credentials.credentials if credentials else token
-    if not raw:
-        raise HTTPException(401, "Authentication required")
-    payload = decode_token(raw)
-    rec = await db.receipts.find_one({"id": receipt_id}, {"_id": 0}) \
-        or await db.receipts.find_one({"receipt_number": receipt_id}, {"_id": 0})
-    if not rec:
-        raise HTTPException(404, "Receipt not found")
-    # Owners may view their own; admins view all.
-    if payload.get("type") != "admin" and rec.get("user_id") != payload.get("sub"):
-        raise HTTPException(403, "Not authorized")
-    pdf_bytes = _receipt_pdf(rec)
-    return Response(
-        content=pdf_bytes, media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={rec['receipt_number']}.pdf"},
-    )
 
 
-@api_router.post("/admin/receipts/{receipt_id}/resend")
-async def admin_resend_receipt(receipt_id: str, user: dict = Depends(get_admin_user)):
-    rec = await db.receipts.find_one({"id": receipt_id}, {"_id": 0})
-    if not rec:
-        raise HTTPException(404, "Receipt not found")
-    await _send_receipt_email(rec)
-    now_iso = datetime.now(timezone.utc).isoformat()
-    await db.receipts.update_one({"id": receipt_id}, {"$set": {"last_sent_at": now_iso}})
-    return {"ok": True, "last_sent_at": now_iso, "receipt_number": rec["receipt_number"]}
 
 
-@api_router.get("/shipper/receipts")
-async def shipper_list_receipts(shipper: dict = Depends(get_current_shipper)):
-    rows = await db.receipts.find(
-        {"user_id": shipper["id"], "user_type": "shipper"}, {"_id": 0}
-    ).sort("issued_at", -1).to_list(200)
-    return rows
 
 
-@api_router.get("/admin/email-logs")
-async def admin_list_email_logs(
-    category: Optional[str] = None, status: Optional[str] = None,
-    q: Optional[str] = None, limit: int = 200,
-    user: dict = Depends(get_admin_user),
-):
-    query: dict = {}
-    if category and category != "all":
-        query["category"] = category
-    if status and status != "all":
-        query["status"] = status
-    if q:
-        rx = {"$regex": q, "$options": "i"}
-        query["$or"] = [{"to_email": rx}, {"subject": rx}]
-    rows = await db.email_logs.find(query, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(500, limit)))
-    totals = {
-        "count": len(rows),
-        "sent": sum(1 for r in rows if r.get("status") == "sent"),
-        "failed": sum(1 for r in rows if r.get("status") == "failed"),
-        "dry_run": sum(1 for r in rows if r.get("status") == "dry_run"),
-    }
-    return {"logs": rows, "totals": totals}
 
 
 # ---------- Admin email template preview / test-send ----------
@@ -5806,188 +2866,36 @@ def _email_template_registry() -> dict:
     }
 
 
-@api_router.get("/admin/email-templates")
-async def admin_list_email_templates(user: dict = Depends(get_admin_user)):
-    reg = _email_template_registry()
-    items = []
-    for key, (label, category, fn) in reg.items():
-        subject, _ = fn()
-        items.append({"key": key, "label": label, "category": category, "subject": subject})
-    return {"templates": items, "provider": email_service.EMAIL_PROVIDER,
-            "sender": email_service.SENDER_EMAIL, "dry_run": email_service.DRY_RUN,
-            "configured": email_service.is_configured()}
 
 
-@api_router.get("/admin/email-templates/{key}/preview")
-async def admin_preview_email_template(key: str, user: dict = Depends(get_admin_user)):
-    reg = _email_template_registry()
-    if key not in reg:
-        raise HTTPException(404, "Unknown template")
-    label, category, fn = reg[key]
-    subject, html = fn()
-    return {"key": key, "label": label, "category": category, "subject": subject, "html": html}
 
 
 class EmailTestSendRequest(BaseModel):
     to_email: EmailStr
 
 
-@api_router.post("/admin/email-templates/{key}/test-send")
-async def admin_test_send_email_template(key: str, body: EmailTestSendRequest,
-                                         user: dict = Depends(get_admin_user)):
-    reg = _email_template_registry()
-    if key not in reg:
-        raise HTTPException(404, "Unknown template")
-    label, category, fn = reg[key]
-    subject, html = fn()
-    result = await email_service.send_email(
-        db, body.to_email, f"[TEST] {subject}", html, to_name="Admin Test",
-        category=f"test_{category}", related_id=None,
-    )
-    if result.get("status") == "failed":
-        raise HTTPException(502, f"Send failed: {result.get('error') or 'unknown error'}")
-    return {"ok": True, "status": result.get("status"), "to": body.to_email,
-            "provider_message_id": result.get("provider_message_id"), "template": key}
 
 
 
 
-@api_router.post("/shipper/shipments/{order_id}/accept-invoice")
-async def shipper_accept_invoice(order_id: str, shipper: dict = Depends(get_current_shipper)):
-    """Shipper chooses 'Accept Invoice' for an order -> generate a Net-14 invoice."""
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if order.get("shipper_id") != shipper["id"]:
-        raise HTTPException(403, "This order does not belong to you")
-    already = await db.invoices.find_one({"order_id": order_id}, {"_id": 0, "id": 1})
-    invoice = await _create_invoice_for_order(order, shipper)
-    if not already:
-        await _email_invoice_pdf(invoice)
-    return invoice
 
 
-@api_router.get("/shipper/invoices")
-async def shipper_list_invoices(shipper: dict = Depends(get_current_shipper)):
-    rows = await db.invoices.find({"shipper_id": shipper["id"]}, {"_id": 0}).sort("issued_at", -1).to_list(200)
-    return rows
 
 
-@api_router.get("/invoices/{invoice_id}")
-async def get_invoice(invoice_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if not credentials:
-        raise HTTPException(401, "Authentication required")
-    payload = decode_token(credentials.credentials)
-    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
-    if not inv:
-        inv = await db.invoices.find_one({"invoice_number": invoice_id}, {"_id": 0})
-    if not inv:
-        raise HTTPException(404, "Invoice not found")
-    # Shippers may only view their own invoices; admins may view all.
-    if payload.get("type") == "shipper" and inv.get("shipper_id") != payload.get("sub"):
-        raise HTTPException(403, "Not authorized to view this invoice")
-    return inv
 
 
-@api_router.get("/invoices/{invoice_id}/pdf")
-async def get_invoice_pdf(invoice_id: str, token: Optional[str] = None,
-                          credentials: HTTPAuthorizationCredentials = Depends(security)):
-    from fastapi.responses import Response
-    # Allow either header auth or ?token= (for direct browser downloads).
-    raw = credentials.credentials if credentials else token
-    if not raw:
-        raise HTTPException(401, "Authentication required")
-    payload = decode_token(raw)
-    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0}) \
-        or await db.invoices.find_one({"invoice_number": invoice_id}, {"_id": 0})
-    if not inv:
-        raise HTTPException(404, "Invoice not found")
-    if payload.get("type") == "shipper" and inv.get("shipper_id") != payload.get("sub"):
-        raise HTTPException(403, "Not authorized")
-    pdf_bytes = _build_invoice_pdf(inv)
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={inv['invoice_number']}.pdf"},
-    )
 
 
 # ---------- Admin invoice management ----------
 
-@api_router.get("/admin/invoices")
-async def admin_list_invoices(
-    status: Optional[str] = None,
-    q: Optional[str] = None,
-    user: dict = Depends(get_admin_user),
-):
-    query: dict = {}
-    if status and status != "all":
-        query["status"] = status
-    if q:
-        rx = {"$regex": q, "$options": "i"}
-        query["$or"] = [
-            {"invoice_number": rx}, {"order_number": rx},
-            {"shipper_company": rx}, {"shipper_email": rx},
-        ]
-    # Auto-flag overdue (unpaid past due date) on read.
-    now_iso = datetime.now(timezone.utc).isoformat()
-    try:
-        await db.invoices.update_many(
-            {"status": "unpaid", "due_date": {"$lt": now_iso}},
-            {"$set": {"status": "overdue"}},
-        )
-    except Exception:
-        pass
-    rows = await db.invoices.find(query, {"_id": 0}).sort("issued_at", -1).to_list(500)
-    totals = {
-        "count": len(rows),
-        "unpaid": sum(1 for r in rows if r.get("status") == "unpaid"),
-        "overdue": sum(1 for r in rows if r.get("status") == "overdue"),
-        "paid": sum(1 for r in rows if r.get("status") == "paid"),
-        "total_outstanding": round(sum(float(r.get("total_amount") or 0) for r in rows if r.get("status") in ("unpaid", "overdue")), 2),
-    }
-    return {"invoices": rows, "totals": totals}
 
 
-@api_router.post("/admin/invoices/{invoice_id}/mark-paid")
-async def admin_mark_invoice_paid(invoice_id: str, user: dict = Depends(get_admin_user)):
-    res = await db.invoices.update_one(
-        {"id": invoice_id},
-        {"$set": {"status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}},
-    )
-    if res.matched_count == 0:
-        raise HTTPException(404, "Invoice not found")
-    return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
 
 
-@api_router.post("/admin/invoices/{invoice_id}/mark-overdue")
-async def admin_mark_invoice_overdue(invoice_id: str, user: dict = Depends(get_admin_user)):
-    res = await db.invoices.update_one({"id": invoice_id}, {"$set": {"status": "overdue"}})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Invoice not found")
-    return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
 
 
-@api_router.post("/admin/invoices/{invoice_id}/resend")
-async def admin_resend_invoice(invoice_id: str, user: dict = Depends(get_admin_user)):
-    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
-    if not inv:
-        raise HTTPException(404, "Invoice not found")
-    now_iso = datetime.now(timezone.utc).isoformat()
-    await db.invoices.update_one({"id": invoice_id}, {"$set": {"last_sent_at": now_iso}})
-    # Email the invoice PDF to the shipper and record an in-app notice.
-    await _email_invoice_pdf(inv)
-    try:
-        await _notify_shipper_status(inv["shipper_id"], inv["order_id"],
-                                     f"Invoice {inv['invoice_number']} has been re-sent. Amount due: EUR {inv.get('total_amount')}.")
-    except Exception:
-        pass
-    return {"ok": True, "last_sent_at": now_iso, "invoice_number": inv["invoice_number"]}
 
 
-@api_router.get("/admin/settings/invoicing")
-async def admin_get_invoicing_settings(user: dict = Depends(get_admin_user)):
-    return await get_invoicing_settings()
 
 
 class InvoicingSettingsRequest(BaseModel):
@@ -5995,55 +2903,10 @@ class InvoicingSettingsRequest(BaseModel):
     net_days: int = 14
 
 
-@api_router.post("/admin/settings/invoicing")
-async def admin_update_invoicing_settings(body: InvoicingSettingsRequest, user: dict = Depends(get_admin_user)):
-    await db.settings.update_one(
-        {"key": "invoicing"},
-        {"$set": {"key": "invoicing", "invoice_fee": max(0.0, float(body.invoice_fee)), "net_days": max(1, int(body.net_days))}},
-        upsert=True,
-    )
-    return await get_invoicing_settings()
 
 
 # ---------- Vehicles overview ----------
 
-@api_router.get("/admin/manage/vehicles")
-async def admin_list_vehicles(
-    user: dict = Depends(get_admin_user), search: str = "", vehicle_type: str = "all"
-):
-    """Flatten all vehicles across drivers into one admin list."""
-    rows = []
-    async for d in db.drivers.find({}, {"_id": 0, "password_hash": 0}):
-        vehicles = d.get("vehicles", []) or []
-        if not vehicles and d.get("vehicle_type"):
-            vehicles = [{
-                "id": str(d["id"]) + "-primary",
-                "vehicle_type": d.get("vehicle_type"),
-                "label": d.get("vehicle", ""),
-                "plate": d.get("plate", ""),
-                "capacity_kg": d.get("vehicle_capacity_kg", 0),
-                "is_primary": True,
-            }]
-        for v in vehicles:
-            if vehicle_type != "all" and v.get("vehicle_type") != vehicle_type:
-                continue
-            row = {
-                "id": v.get("id"),
-                "vehicle_type": v.get("vehicle_type"),
-                "label": v.get("label", ""),
-                "plate": v.get("plate", ""),
-                "capacity_kg": v.get("capacity_kg", 0),
-                "is_primary": v.get("is_primary", False),
-                "driver_id": d["id"],
-                "driver_name": d.get("name", ""),
-                "driver_suspended": d.get("is_suspended", False),
-            }
-            if search:
-                hay = f"{row['plate']} {row['label']} {row['driver_name']} {row['vehicle_type']}".lower()
-                if search.lower() not in hay:
-                    continue
-            rows.append(row)
-    return {"items": rows, "total": len(rows)}
 
 
 
@@ -6510,66 +3373,9 @@ async def websocket_driver_location(websocket: WebSocket, driver_id: str):
 
 
 # API endpoint to update driver location (fallback for HTTP polling)
-@api_router.post("/driver/location")
-async def update_driver_location(
-    request: Request,
-    user: dict = Depends(get_current_user)
-):
-    """Update driver location via HTTP (fallback when WebSocket not available)."""
-    if user.get("type") != "driver":
-        raise HTTPException(403, "Only drivers can update location")
-    
-    data = await request.json()
-    driver_id = user["id"]
-    location = data.get("location", {})
-    order_id = data.get("order_id")
-    
-    await db.drivers.update_one(
-        {"id": driver_id},
-        {"$set": {
-            "current_location": location,
-            "location_updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
-    
-    # Broadcast to WebSocket subscribers if there's an active order
-    if order_id:
-        await ws_manager.broadcast_driver_location(driver_id, location, order_id)
-    
-    return {"status": "ok"}
 
 
 # API endpoint to get driver location (for shippers polling)
-@api_router.get("/orders/{order_id}/driver-location")
-async def get_driver_location(order_id: str, user: dict = Depends(get_current_user)):
-    """Get the current driver location for an order."""
-    order = await db.orders.find_one({"id": order_id})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    
-    if not order.get("driver_id"):
-        return {"driver_location": None, "message": "No driver assigned yet"}
-    
-    driver = await db.drivers.find_one({"id": order["driver_id"]})
-    if not driver:
-        return {"driver_location": None, "message": "Driver not found"}
-
-    loc = driver.get("current_location")
-    tracking = compute_live_tracking(order, loc) if loc else {
-        "eta_minutes": None, "remaining_km": None, "target": None, "off_route": False
-    }
-
-    return {
-        "driver_id": driver["id"],
-        "driver_name": driver.get("name"),
-        "driver_location": loc,
-        "location_updated_at": driver.get("location_updated_at"),
-        "status": order.get("status"),
-        "eta_minutes": tracking["eta_minutes"],
-        "remaining_km": tracking["remaining_km"],
-        "target": tracking["target"],
-        "off_route": tracking["off_route"],
-    }
 
 
 # ===================== Chat System =====================
@@ -6745,47 +3551,9 @@ async def websocket_chat(websocket: WebSocket, order_id: str, user_id: str, user
 
 
 # API endpoint to get chat history (fallback)
-@api_router.get("/orders/{order_id}/chat")
-async def get_chat_history(order_id: str, user: dict = Depends(get_current_user)):
-    """Get chat history for an order."""
-    messages = await db.chat_messages.find({"order_id": order_id}).sort("timestamp", 1).to_list(100)
-    return [{
-        "id": str(m.get("_id", m.get("id", ""))),
-        "order_id": m["order_id"],
-        "sender_id": m["sender_id"],
-        "sender_type": m["sender_type"],
-        "sender_name": m["sender_name"],
-        "message": m["message"],
-        "timestamp": m["timestamp"],
-        "read": m.get("read", False),
-    } for m in messages]
 
 
 # API endpoint to send a chat message (fallback)
-@api_router.post("/orders/{order_id}/chat")
-async def send_chat_message(order_id: str, request: Request, user: dict = Depends(get_current_user)):
-    """Send a chat message (HTTP fallback when WebSocket not available)."""
-    data = await request.json()
-    message = data.get("message", "")
-    
-    if not message.strip():
-        raise HTTPException(400, "Message cannot be empty")
-    
-    # Determine sender info
-    sender_id = user["id"]
-    sender_type = user.get("type", "driver")
-    
-    if sender_type == "driver":
-        driver = await db.drivers.find_one({"id": sender_id})
-        sender_name = driver.get("name", "Driver") if driver else "Driver"
-    elif sender_type == "shipper":
-        shipper = await db.shippers.find_one({"id": sender_id})
-        sender_name = shipper.get("company_name", "Business") if shipper else "Business"
-    else:
-        sender_name = "User"
-    
-    msg_doc = await chat_manager.send_message(order_id, sender_id, sender_type, sender_name, message)
-    return msg_doc
 
 
 # ===================== Payments (Stripe Auth -> Capture) =====================
@@ -6848,46 +3616,8 @@ class SetupCheckoutBody(BaseModel):
     cancel_url: Optional[str] = None
 
 
-@api_router.post("/shipper/payment-methods/setup-checkout")
-async def shipper_setup_card_checkout(
-    body: SetupCheckoutBody,
-    request: Request,
-    shipper: dict = Depends(get_current_shipper),
-):
-    """Start a hosted Checkout (setup mode) so the shipper can save a card."""
-    if not payments.is_configured():
-        raise HTTPException(503, "Payments are not configured")
-    customer_id = await _get_or_create_shipper_customer(shipper)
-    base = _public_base(request)
-    success = body.success_url or f"{base}/api/payments/return?status=success&redirect="
-    cancel = body.cancel_url or f"{base}/api/payments/return?status=cancel&redirect="
-    try:
-        session = payments.create_setup_checkout_session(
-            customer_id=customer_id,
-            success_url=success,
-            cancel_url=cancel,
-            metadata={"shipper_id": shipper.get("id")},
-        )
-    except Exception as exc:
-        logger.error(f"Stripe setup checkout failed for shipper {shipper.get('id')}: {exc}")
-        raise HTTPException(502, "Could not start card setup")
-    return {"url": session.url, "session_id": session.id}
 
 
-@api_router.get("/shipper/payment-methods")
-async def shipper_list_payment_methods(shipper: dict = Depends(get_current_shipper)):
-    """List the shipper's saved cards (default first)."""
-    sid = shipper.get("id")
-    doc = await db.shippers.find_one({"id": sid}, {"_id": 0, "stripe_customer_id": 1})
-    customer_id = (doc or {}).get("stripe_customer_id")
-    if not customer_id:
-        return {"customer_id": None, "payment_methods": []}
-    try:
-        pms = payments.list_payment_methods(customer_id)
-    except Exception as exc:
-        logger.warning(f"list payment methods failed for shipper {sid}: {exc}")
-        pms = []
-    return {"customer_id": customer_id, "payment_methods": pms}
 
 
 async def _assert_pm_owned(shipper: dict, payment_method_id: str) -> str:
@@ -6905,18 +3635,8 @@ async def _assert_pm_owned(shipper: dict, payment_method_id: str) -> str:
     return customer_id
 
 
-@api_router.post("/shipper/payment-methods/{payment_method_id}/default")
-async def shipper_set_default_card(payment_method_id: str, shipper: dict = Depends(get_current_shipper)):
-    customer_id = await _assert_pm_owned(shipper, payment_method_id)
-    payments.set_default_payment_method(customer_id, payment_method_id)
-    return {"ok": True, "default_payment_method_id": payment_method_id}
 
 
-@api_router.delete("/shipper/payment-methods/{payment_method_id}")
-async def shipper_delete_card(payment_method_id: str, shipper: dict = Depends(get_current_shipper)):
-    await _assert_pm_owned(shipper, payment_method_id)
-    payments.detach_payment_method(payment_method_id)
-    return {"ok": True}
 
 
 
@@ -7088,562 +3808,44 @@ async def compute_driver_balance(driver_id: str) -> dict:
     }
 
 
-@api_router.get("/payments/config")
-async def payments_config():
-    return {
-        "configured": payments.is_configured(),
-        "test_mode": payments.is_test_key(),
-        "currency": "EUR",
-    }
 
 
-@api_router.post("/payments/orders/{order_id}/checkout")
-async def create_payment_checkout(
-    order_id: str,
-    body: CheckoutBody,
-    request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-):
-    """Shipper authorizes payment for an order via Stripe Checkout (manual capture)."""
-    payload = _auth_payload(credentials)
-    if payload.get("type") not in ("shipper", "admin"):
-        raise HTTPException(403, "Shipper access required")
-
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if payload.get("type") == "shipper" and order.get("shipper_id") != payload.get("sub"):
-        raise HTTPException(403, "Not your order")
-
-    if order.get("payment_status") in ("authorized", "captured"):
-        raise HTTPException(400, f"Payment already {order.get('payment_status')}")
-
-    amount = float(order.get("price_quote") or order.get("payment_amount") or 0)
-    if amount <= 0:
-        raise HTTPException(400, "Order has no payable amount")
-
-    base = _public_base(request)
-    success_url = body.success_url or f"{base}/api/payments/return?status=success&order_id={order_id}&session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = body.cancel_url or f"{base}/api/payments/return?status=cancel&order_id={order_id}"
-
-    try:
-        session = payments.create_checkout_session(
-            order_id=order_id,
-            order_number=order.get("order_number", order_id),
-            amount_eur=amount,
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata={
-                "order_id": order_id,
-                "shipper_id": order.get("shipper_id"),
-                "driver_id": order.get("driver_id"),
-            },
-        )
-    except Exception as exc:
-        logger.error(f"Stripe checkout creation failed for {order_id}: {exc}")
-        raise HTTPException(502, f"Could not start payment: {exc}")
-
-    intent_id = getattr(session, "payment_intent", None)
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {
-            "payment_status": "pending",
-            "stripe_checkout_session_id": session.id,
-            "stripe_payment_intent_id": intent_id,
-            "payment_amount": round(amount, 2),
-        }},
-    )
-    return {"url": session.url, "session_id": session.id, "payment_status": "pending"}
 
 
 class PayWithCardBody(BaseModel):
     payment_method_id: str
 
 
-@api_router.post("/payments/orders/{order_id}/pay-with-saved-card")
-async def pay_order_with_saved_card(
-    order_id: str,
-    body: PayWithCardBody,
-    shipper: dict = Depends(get_current_shipper),
-):
-    """One-tap: authorize an order's payment off-session using a saved card.
-
-    Mirrors the hosted-Checkout flow but skips the redirect — the saved card is
-    authorized immediately (manual capture), publishing the order to the driver
-    marketplace. Funds are captured on delivery like every other payment.
-    """
-    if not payments.is_configured():
-        raise HTTPException(503, "Payments are not configured")
-
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if order.get("shipper_id") != shipper.get("id"):
-        raise HTTPException(403, "Not your order")
-    if order.get("payment_status") in ("authorized", "captured"):
-        raise HTTPException(400, f"Payment already {order.get('payment_status')}")
-
-    amount = float(order.get("price_quote") or order.get("payment_amount") or 0)
-    if amount <= 0:
-        raise HTTPException(400, "Order has no payable amount")
-
-    # Validates the card belongs to this shipper's Stripe customer.
-    customer_id = await _assert_pm_owned(shipper, body.payment_method_id)
-
-    try:
-        intent = payments.create_offsession_authorization(
-            customer_id=customer_id,
-            payment_method_id=body.payment_method_id,
-            amount_eur=amount,
-            metadata={
-                "order_id": order_id,
-                "shipper_id": order.get("shipper_id"),
-                "driver_id": order.get("driver_id"),
-            },
-        )
-    except payments.stripe.error.CardError as e:
-        err = e.error
-        code = getattr(err, "code", None)
-        msg = getattr(err, "user_message", None) or getattr(err, "message", None) or "Your card was declined."
-        if code == "authentication_required":
-            msg = "This card needs 3D Secure authentication. Please pay with the card form instead."
-        logger.warning(f"Saved-card auth declined for order {order_id}: {code} / {msg}")
-        raise HTTPException(402, msg)
-    except Exception as exc:
-        logger.error(f"Saved-card authorization failed for {order_id}: {exc}")
-        raise HTTPException(502, "Could not charge the saved card. Please try again.")
-
-    if getattr(intent, "status", "") not in ("requires_capture", "succeeded"):
-        raise HTTPException(402, "Card could not be authorized. Please try another card.")
-
-    await _apply_intent_to_order(order, intent)
-    fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _payment_summary(fresh)
 
 
-@api_router.post("/payments/orders/{order_id}/authorize-test")
-async def authorize_payment_test(
-    order_id: str,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-):
-    """TEST-ONLY: authorize an order's payment server-side using a Stripe test card.
-
-    Lets QA/automation drive the full authorize -> capture flow without
-    completing the hosted Checkout page. Disabled for live keys.
-    """
-    payload = _auth_payload(credentials)
-    if payload.get("type") not in ("shipper", "admin"):
-        raise HTTPException(403, "Shipper access required")
-    if not payments.is_test_key():
-        raise HTTPException(403, "Test authorization is only available with a Stripe test key")
-
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if order.get("payment_status") in ("authorized", "captured"):
-        raise HTTPException(400, f"Payment already {order.get('payment_status')}")
-
-    amount = float(order.get("price_quote") or 0)
-    if amount <= 0:
-        raise HTTPException(400, "Order has no payable amount")
-
-    try:
-        intent = payments.create_test_authorization(amount, metadata={"order_id": order_id})
-    except Exception as exc:
-        logger.error(f"Test authorization failed for {order_id}: {exc}")
-        raise HTTPException(502, f"Authorization failed: {exc}")
-
-    await _apply_intent_to_order(order, intent)
-    fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _payment_summary(fresh)
 
 
-@api_router.get("/payments/orders/{order_id}/status")
-async def get_payment_status(
-    order_id: str,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-):
-    """Return the order's payment status, reconciled with Stripe."""
-    payload = _auth_payload(credentials)
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-
-    utype = payload.get("type")
-    uid = payload.get("sub")
-    if utype == "shipper" and order.get("shipper_id") != uid:
-        raise HTTPException(403, "Not your order")
-    if utype == "driver" and order.get("driver_id") != uid:
-        raise HTTPException(403, "Not your order")
-
-    if order.get("payment_status") in ("pending", "authorized") and (
-        order.get("stripe_payment_intent_id") or order.get("stripe_checkout_session_id")
-    ):
-        await _sync_order_payment(order)
-        order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _payment_summary(order)
 
 
-@api_router.post("/payments/orders/{order_id}/capture")
-async def capture_payment(
-    order_id: str,
-    body: CaptureBody,
-    user: dict = Depends(get_admin_user),
-):
-    """Admin manually captures an authorized payment (e.g. on delivery confirmation)."""
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-
-    if order.get("payment_status") == "captured":
-        return _payment_summary(order)
-
-    if order.get("payment_status") != "authorized":
-        # try a sync first in case the hold just landed
-        await _sync_order_payment(order)
-        order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-        if order.get("payment_status") != "authorized":
-            raise HTTPException(400, f"Order is not authorized (status: {order.get('payment_status')})")
-
-    intent_id = order.get("stripe_payment_intent_id")
-    if not intent_id:
-        raise HTTPException(400, "No PaymentIntent on this order")
-
-    amount_cents = payments.to_cents(body.amount) if body.amount else None
-    try:
-        intent = payments.capture_payment_intent(intent_id, amount_cents)
-    except Exception as exc:
-        logger.error(f"Capture failed for {order_id}: {exc}")
-        raise HTTPException(502, f"Capture failed: {exc}")
-
-    await _apply_intent_to_order(order, intent)
-    fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _payment_summary(fresh)
 
 
-@api_router.post("/payments/orders/{order_id}/cancel-authorization")
-async def cancel_authorization(
-    order_id: str,
-    user: dict = Depends(get_admin_user),
-):
-    """Admin releases an authorization hold (e.g. cancelled before delivery)."""
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    intent_id = order.get("stripe_payment_intent_id")
-    if not intent_id or order.get("payment_status") not in ("authorized", "pending"):
-        raise HTTPException(400, "No releasable authorization on this order")
-    try:
-        payments.cancel_payment_intent(intent_id)
-    except Exception as exc:
-        raise HTTPException(502, f"Could not release hold: {exc}")
-    await db.orders.update_one({"id": order_id}, {"$set": {"payment_status": "canceled"}})
-    fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return _payment_summary(fresh)
 
 
-@api_router.get("/payments/return", response_class=HTMLResponse)
-async def payment_return(status: str = "success", order_id: str = "", session_id: str = "", redirect: str = ""):
-    """Lightweight landing page Stripe redirects to after hosted Checkout."""
-    ok = status == "success"
-    title = "Payment authorized" if ok else "Payment cancelled"
-    color = "#16a34a" if ok else "#dc2626"
-    emoji = "✅" if ok else "⚠️"
-    msg = ("Your payment has been authorized. You can return to the NadaRuns app."
-           if ok else "The payment was not completed. You can return to the app and try again.")
-
-    # If the native app supplied a deep link, bounce straight back to it so the
-    # in-app browser auto-closes (no manual "Done" tap needed).
-    if redirect:
-        sep = "&" if "?" in redirect else "?"
-        target = f"{redirect}{sep}status={status}&order_id={order_id}"
-        js_target = json.dumps(target)
-        html = f"""<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'>
-<meta http-equiv='refresh' content='0;url={target}'>
-<title>{title}</title>
-<script>setTimeout(function(){{window.location.replace({js_target});}},60);</script></head>
-<body style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1220;color:#e5e7eb;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0'>
-<div style='text-align:center;padding:24px;max-width:420px'>
-<div style='font-size:56px'>{emoji}</div>
-<h2 style='color:{color}'>{title}</h2>
-<p style='color:#9ca3af'>Returning to the app…</p>
-<p><a href='{target}' style='color:#60a5fa'>Tap here if not redirected</a></p>
-</div></body></html>"""
-        return HTMLResponse(content=html)
-
-    html = f"""<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'>
-<title>{title}</title></head>
-<body style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1220;color:#e5e7eb;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0'>
-<div style='text-align:center;padding:24px;max-width:420px'>
-<div style='font-size:56px'>{emoji}</div>
-<h2 style='color:{color}'>{title}</h2>
-<p style='color:#9ca3af;line-height:1.5'>{msg}</p>
-</div></body></html>"""
-    return HTMLResponse(content=html)
 
 
-@api_router.post("/payments/webhook")
-async def stripe_webhook(request: Request):
-    """Stripe webhook: verifies signature (when configured) and reconciles orders."""
-    payload = await request.body()
-    sig = request.headers.get("stripe-signature", "")
-
-    event = None
-    if payments.STRIPE_WEBHOOK_SECRET:
-        try:
-            event = payments.construct_webhook_event(payload, sig)
-        except Exception as exc:
-            logger.warning(f"Webhook signature verification failed: {exc}")
-            raise HTTPException(400, "Invalid signature")
-    else:
-        # Dev fallback when no signing secret is configured.
-        try:
-            event = json.loads(payload.decode("utf-8"))
-        except Exception:
-            raise HTTPException(400, "Invalid payload")
-
-    etype = event.get("type") if isinstance(event, dict) else event["type"]
-    obj = (event.get("data", {}) or {}).get("object", {}) if isinstance(event, dict) else event["data"]["object"]
-
-    intent_id = None
-    if etype.startswith("payment_intent."):
-        intent_id = obj.get("id")
-    elif etype == "checkout.session.completed":
-        intent_id = obj.get("payment_intent")
-
-    if intent_id:
-        order = await db.orders.find_one({"stripe_payment_intent_id": intent_id}, {"_id": 0})
-        if not order:
-            md = obj.get("metadata", {}) or {}
-            if md.get("order_id"):
-                order = await db.orders.find_one({"id": md["order_id"]}, {"_id": 0})
-        if order:
-            try:
-                intent = payments.retrieve_payment_intent(intent_id)
-                await _apply_intent_to_order(order, intent)
-            except Exception as exc:
-                logger.warning(f"Webhook reconcile failed for {intent_id}: {exc}")
-
-    return {"received": True}
 
 
 # ===================== Driver Wallet & Cash-out =====================
 
-@api_router.get("/wallet/driver")
-async def wallet_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    payload = _auth_payload(credentials)
-    if payload.get("type") != "driver":
-        raise HTTPException(403, "Driver access required")
-    driver_id = payload["sub"]
-
-    balance = await compute_driver_balance(driver_id)
-
-    txns = await db.payment_transactions.find(
-        {"driver_id": driver_id, "type": "capture"}, {"_id": 0}
-    ).sort("created_at", -1).limit(50).to_list(50)
-
-    withdrawals = await db.withdrawal_requests.find(
-        {"driver_id": driver_id}, {"_id": 0}
-    ).sort("requested_at", -1).limit(50).to_list(50)
-
-    return {
-        **balance,
-        "earnings": [
-            {
-                "order_id": t.get("order_id"),
-                "order_number": t.get("order_number"),
-                "amount": t.get("driver_amount"),
-                "gross_amount": t.get("gross_amount"),
-                "commission_amount": t.get("commission_amount"),
-                "created_at": t.get("created_at"),
-            } for t in txns
-        ],
-        "withdrawals": withdrawals,
-    }
 
 
-@api_router.post("/wallet/withdraw")
-async def wallet_withdraw(body: WithdrawalCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    payload = _auth_payload(credentials)
-    if payload.get("type") != "driver":
-        raise HTTPException(403, "Driver access required")
-    driver_id = payload["sub"]
-
-    amount = round(float(body.amount or 0), 2)
-    if amount < 10:
-        raise HTTPException(400, "Minimum cash-out is €10.00")
-
-    balance = await compute_driver_balance(driver_id)
-    if amount > balance["available_balance"]:
-        raise HTTPException(400, f"Amount exceeds available balance (€{balance['available_balance']:.2f})")
-
-    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "name": 1})
-    wr = WithdrawalRequest(
-        driver_id=driver_id,
-        driver_name=(driver or {}).get("name"),
-        amount=amount,
-        method=body.method,
-        account_details=body.account_details,
-    )
-    await db.withdrawal_requests.insert_one(wr.model_dump())
-
-    # Auto-generate + email a withdrawal invoice (idempotent, non-blocking).
-    asyncio.create_task(_create_withdrawal_doc(wr.model_dump(), "withdrawal_invoice"))
-
-    await db.notifications.insert_one(Notification(
-        recipient_id=driver_id,
-        recipient_type="driver",
-        type="payment",
-        title="Cash-out requested",
-        message=f"Your cash-out of €{amount:.2f} is pending admin approval.",
-        data={"withdrawal_id": wr.id},
-    ).model_dump())
-
-    new_balance = await compute_driver_balance(driver_id)
-    return {"withdrawal": wr.model_dump(), **new_balance}
 
 
-@api_router.get("/wallet/withdrawals")
-async def wallet_withdrawals(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    payload = _auth_payload(credentials)
-    if payload.get("type") != "driver":
-        raise HTTPException(403, "Driver access required")
-    items = await db.withdrawal_requests.find(
-        {"driver_id": payload["sub"]}, {"_id": 0}
-    ).sort("requested_at", -1).limit(100).to_list(100)
-    return {"withdrawals": items}
 
 
 # ===================== Admin: Financial Management =====================
 
-@api_router.get("/admin/financials/overview")
-async def admin_financials_overview(user: dict = Depends(get_admin_user)):
-    now = datetime.now(timezone.utc)
-    days = 14
-    since = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    since_iso = since.isoformat()
-
-    cap = await db.orders.aggregate([
-        {"$match": {"payment_status": "captured"}},
-        {"$group": {"_id": None,
-                    "revenue": {"$sum": "$payment_amount"},
-                    "commission": {"$sum": "$commission_amount"},
-                    "driver_payouts": {"$sum": "$driver_payout_amount"},
-                    "count": {"$sum": 1}}},
-    ]).to_list(1)
-    captured = cap[0] if cap else {}
-    total_revenue = round(float(captured.get("revenue", 0) or 0), 2)
-    total_commission = round(float(captured.get("commission", 0) or 0), 2)
-    total_driver_payouts = round(float(captured.get("driver_payouts", 0) or 0), 2)
-    captured_count = captured.get("count", 0)
-
-    auth = await db.orders.aggregate([
-        {"$match": {"payment_status": "authorized"}},
-        {"$group": {"_id": None, "amount": {"$sum": "$payment_amount"}, "count": {"$sum": 1}}},
-    ]).to_list(1)
-    authorized_amount = round(float(auth[0]["amount"], ) if auth else 0.0, 2)
-    authorized_count = auth[0]["count"] if auth else 0
-
-    wd_pending = await db.withdrawal_requests.aggregate([
-        {"$match": {"status": {"$in": ["pending", "approved"]}}},
-        {"$group": {"_id": None, "amount": {"$sum": "$amount"}, "count": {"$sum": 1}}},
-    ]).to_list(1)
-    pending_withdrawals = round(float(wd_pending[0]["amount"]) if wd_pending else 0.0, 2)
-    pending_withdrawals_count = wd_pending[0]["count"] if wd_pending else 0
-
-    wd_paid = await db.withdrawal_requests.aggregate([
-        {"$match": {"status": "paid"}},
-        {"$group": {"_id": None, "amount": {"$sum": "$amount"}, "count": {"$sum": 1}}},
-    ]).to_list(1)
-    paid_withdrawals = round(float(wd_paid[0]["amount"]) if wd_paid else 0.0, 2)
-    paid_withdrawals_count = wd_paid[0]["count"] if wd_paid else 0
-
-    day_keys = [(since + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
-    rows = {r["_id"]: r for r in await db.orders.aggregate([
-        {"$match": {"payment_status": "captured", "captured_at": {"$gte": since_iso}}},
-        {"$group": {"_id": {"$substr": ["$captured_at", 0, 10]},
-                    "revenue": {"$sum": "$payment_amount"},
-                    "commission": {"$sum": "$commission_amount"},
-                    "count": {"$sum": 1}}},
-    ]).to_list(1000)}
-    series = []
-    for k in day_keys:
-        r = rows.get(k, {})
-        series.append({
-            "date": k,
-            "revenue": round(float(r.get("revenue", 0) or 0), 2),
-            "commission": round(float(r.get("commission", 0) or 0), 2),
-            "captures": r.get("count", 0),
-        })
-
-    return {
-        "kpis": {
-            "total_revenue": total_revenue,
-            "total_commission": total_commission,
-            "total_driver_payouts": total_driver_payouts,
-            "captured_payments": captured_count,
-            "authorized_amount": authorized_amount,
-            "authorized_count": authorized_count,
-            "pending_withdrawals_amount": pending_withdrawals,
-            "pending_withdrawals_count": pending_withdrawals_count,
-            "paid_withdrawals_amount": paid_withdrawals,
-            "paid_withdrawals_count": paid_withdrawals_count,
-            "net_platform": round(total_commission, 2),
-        },
-        "series": series,
-        "currency": "EUR",
-    }
 
 
-@api_router.get("/admin/financials/transactions")
-async def admin_financials_transactions(
-    page: int = 1, limit: int = 25, type: Optional[str] = None,
-    user: dict = Depends(get_admin_user),
-):
-    page = max(1, page)
-    limit = max(1, min(100, limit))
-    query: dict = {}
-    if type:
-        query["type"] = type
-    total = await db.payment_transactions.count_documents(query)
-    items = await db.payment_transactions.find(query, {"_id": 0}).sort("created_at", -1) \
-        .skip((page - 1) * limit).limit(limit).to_list(limit)
-    return {"items": items, "total": total, "page": page, "limit": limit}
 
 
-@api_router.get("/admin/payments/authorized")
-async def admin_payments_authorized(user: dict = Depends(get_admin_user)):
-    """Orders with funds authorized and awaiting capture."""
-    items = []
-    async for o in db.orders.find({"payment_status": "authorized"}, {"_id": 0}).sort("authorized_at", -1).limit(100):
-        items.append({
-            "order_id": o.get("id"),
-            "order_number": o.get("order_number"),
-            "status": o.get("status"),
-            "payment_amount": o.get("payment_amount"),
-            "commission_amount": o.get("commission_amount"),
-            "driver_payout_amount": o.get("driver_payout_amount"),
-            "shipper_id": o.get("shipper_id"),
-            "driver_id": o.get("driver_id"),
-            "authorized_at": o.get("authorized_at"),
-        })
-    return {"items": items, "total": len(items)}
 
 
-@api_router.get("/admin/financials/withdrawals")
-async def admin_list_withdrawals(
-    status: Optional[str] = None, page: int = 1, limit: int = 25,
-    user: dict = Depends(get_admin_user),
-):
-    page = max(1, page)
-    limit = max(1, min(100, limit))
-    query: dict = {}
-    if status:
-        query["status"] = status
-    total = await db.withdrawal_requests.count_documents(query)
-    items = await db.withdrawal_requests.find(query, {"_id": 0}).sort("requested_at", -1) \
-        .skip((page - 1) * limit).limit(limit).to_list(limit)
-    return {"items": items, "total": total, "page": page, "limit": limit}
 
 
 async def _process_withdrawal(withdrawal_id: str, new_status: str, admin_id: str,
@@ -7679,103 +3881,14 @@ async def _process_withdrawal(withdrawal_id: str, new_status: str, admin_id: str
     return wr
 
 
-@api_router.post("/admin/financials/withdrawals/{withdrawal_id}/approve")
-async def admin_approve_withdrawal(withdrawal_id: str, user: dict = Depends(get_admin_user)):
-    return await _process_withdrawal(withdrawal_id, "approved", user["id"])
 
 
-@api_router.post("/admin/financials/withdrawals/{withdrawal_id}/pay")
-async def admin_pay_withdrawal(withdrawal_id: str, body: WithdrawalPayBody, user: dict = Depends(get_admin_user)):
-    return await _process_withdrawal(withdrawal_id, "paid", user["id"], reference=body.reference, note=body.note)
 
 
-@api_router.post("/admin/financials/withdrawals/{withdrawal_id}/reject")
-async def admin_reject_withdrawal(withdrawal_id: str, body: WithdrawalRejectBody, user: dict = Depends(get_admin_user)):
-    return await _process_withdrawal(withdrawal_id, "rejected", user["id"], note=body.reason)
 
 
 # ===================== Admin: Live Dispatch Map =====================
 
-@api_router.get("/admin/dispatch/map")
-async def admin_dispatch_map(user: dict = Depends(get_admin_user)):
-    """Feed for the live dispatch map: open jobs, in-transit jobs, online drivers + alerts."""
-    def _pkg(o: dict) -> str:
-        items = o.get("items") or []
-        if items:
-            names = ", ".join(f"{it.get('quantity', 1)}× {it.get('name')}" for it in items[:2] if it.get("name"))
-            if names:
-                return names
-        return o.get("cargo_type") or "Package"
-
-    jobs = []
-
-    # Open (pending) jobs — green markers
-    async for o in db.orders.find({"status": "pending"}, {"_id": 0}).limit(300):
-        p = o.get("pickup") or {}
-        d = o.get("dropoff") or {}
-        if p.get("lat") is None or p.get("lng") is None:
-            continue
-        jobs.append({
-            "id": o.get("id"), "order_number": o.get("order_number"), "status": "open",
-            "lat": p.get("lat"), "lng": p.get("lng"),
-            "dropoff_lat": d.get("lat"), "dropoff_lng": d.get("lng"),
-            "pickup_name": p.get("name") or p.get("address"),
-            "dropoff_name": d.get("name") or d.get("address"),
-            "package": _pkg(o), "earnings": o.get("earnings"),
-            "vehicle_type": o.get("vehicle_type"), "distance_km": o.get("distance_km"),
-        })
-
-    # In-transit jobs — blue markers (use live driver location when available)
-    async for o in db.orders.find({"status": {"$in": list(sm.ACTIVE_STATES)}}, {"_id": 0}).limit(300):
-        p = o.get("pickup") or {}
-        d = o.get("dropoff") or {}
-        loc = None
-        if o.get("driver_id"):
-            drv = await db.drivers.find_one({"id": o["driver_id"]}, {"_id": 0, "current_location": 1})
-            loc = (drv or {}).get("current_location")
-        lat = (loc or {}).get("lat") if loc else p.get("lat")
-        lng = (loc or {}).get("lng") if loc else p.get("lng")
-        if lat is None or lng is None:
-            continue
-        jobs.append({
-            "id": o.get("id"), "order_number": o.get("order_number"), "status": "in_transit",
-            "lat": lat, "lng": lng,
-            "dropoff_lat": d.get("lat"), "dropoff_lng": d.get("lng"),
-            "pickup_name": p.get("name") or p.get("address"),
-            "dropoff_name": d.get("name") or d.get("address"),
-            "package": _pkg(o), "earnings": o.get("earnings"),
-            "vehicle_type": o.get("vehicle_type"), "order_status": o.get("status"),
-        })
-
-    # Online drivers — car markers
-    drivers = []
-    async for drv in db.drivers.find({"is_online": True}, {"_id": 0}):
-        loc = drv.get("current_location")
-        if not loc or loc.get("lat") is None or loc.get("lng") is None:
-            continue
-        drivers.append({
-            "id": drv.get("id"), "name": drv.get("name"),
-            "lat": loc.get("lat"), "lng": loc.get("lng"),
-            "vehicle_type": drv.get("vehicle_type"),
-            "updated_at": drv.get("location_updated_at"),
-        })
-
-    open_count = sum(1 for j in jobs if j["status"] == "open")
-    transit_count = sum(1 for j in jobs if j["status"] == "in_transit")
-    online_count = len(drivers)
-
-    alerts = []
-    if open_count > 0 and online_count == 0:
-        alerts.append({"severity": "high", "message": f"{open_count} open jobs but no drivers online — consider surge pricing."})
-    elif online_count > 0 and open_count / online_count > 8:
-        alerts.append({"severity": "medium", "message": f"High demand: {open_count} open jobs for only {online_count} online drivers."})
-
-    return {
-        "jobs": jobs,
-        "drivers": drivers,
-        "alerts": alerts,
-        "summary": {"open": open_count, "in_transit": transit_count, "online_drivers": online_count},
-    }
 
 
 # ===================== Admin: Stripe Settings =====================
@@ -7826,55 +3939,8 @@ async def _persist_stripe_settings(admin_id: Optional[str] = None):
     )
 
 
-@api_router.get("/admin/settings/stripe")
-async def admin_get_stripe_settings(user: dict = Depends(get_admin_user)):
-    return payments.get_status()
 
 
-@api_router.post("/admin/settings/stripe")
-async def admin_update_stripe_settings(body: StripeSettingsBody, user: dict = Depends(get_admin_user)):
-    updates: dict = {}
-
-    if body.test_secret_key:
-        key = body.test_secret_key.strip()
-        if not key.startswith("sk_test_"):
-            raise HTTPException(400, "Test secret key must start with 'sk_test_'")
-        ok, err = payments.validate_key(key)
-        if not ok:
-            raise HTTPException(400, f"Stripe rejected the test key: {err}")
-        updates["test_secret_key"] = key
-
-    if body.live_secret_key:
-        key = body.live_secret_key.strip()
-        if not key.startswith("sk_live_"):
-            raise HTTPException(400, "Live secret key must start with 'sk_live_'")
-        ok, err = payments.validate_key(key)
-        if not ok:
-            raise HTTPException(400, f"Stripe rejected the live key: {err}")
-        updates["live_secret_key"] = key
-
-    if body.webhook_secret is not None:
-        updates["webhook_secret"] = body.webhook_secret.strip()
-
-    mode = body.mode
-    if mode and mode not in ("test", "live"):
-        raise HTTPException(400, "mode must be 'test' or 'live'")
-
-    new_test = updates.get("test_secret_key", payments.STRIPE_TEST_KEY)
-    new_live = updates.get("live_secret_key", payments.STRIPE_LIVE_KEY)
-    if mode == "live" and not new_live:
-        raise HTTPException(400, "Add a live secret key before switching to LIVE mode")
-    if mode == "test" and not new_test:
-        raise HTTPException(400, "Add a test secret key before switching to TEST mode")
-
-    payments.configure(
-        test_key=updates.get("test_secret_key"),
-        live_key=updates.get("live_secret_key"),
-        mode=mode,
-        webhook_secret=updates.get("webhook_secret"),
-    )
-    await _persist_stripe_settings(user.get("id"))
-    return payments.get_status()
 
 
 # ===================== Fleet / Company Management (Phase 1) =====================
@@ -7917,111 +3983,16 @@ def _public_driver(d: dict) -> dict:
     }
 
 
-@api_router.post("/company")
-async def create_company(body: CompanyCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """An existing driver creates a company and becomes its owner."""
-    driver = await _get_driver_doc(credentials)
-    if driver.get("company_id"):
-        raise HTTPException(400, "You already belong to a company")
-    company = Company(
-        company_name=body.company_name.strip(),
-        owner_driver_id=driver["id"],
-        business_id=body.business_id,
-        phone=body.phone,
-        email=body.email,
-        address=body.address,
-    )
-    await db.companies.insert_one(company.model_dump())
-    await db.drivers.update_one(
-        {"id": driver["id"]},
-        {"$set": {"company_id": company.id, "company_role": "owner"}},
-    )
-    logger.info(f"Driver {driver['id']} created company {company.id} ({company.company_name})")
-    return {"company": company.model_dump(), "role": "owner"}
 
 
-@api_router.get("/company/me")
-async def get_my_company(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Return the company the current driver belongs to (or null = independent)."""
-    driver = await _get_driver_doc(credentials)
-    company_id = driver.get("company_id")
-    if not company_id:
-        return {"company": None, "role": None}
-    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
-    if not company:
-        await db.drivers.update_one(
-            {"id": driver["id"]}, {"$set": {"company_id": None, "company_role": None}}
-        )
-        return {"company": None, "role": None}
-    driver_count = await db.drivers.count_documents({"company_id": company_id})
-    vehicle_count = await db.fleet_vehicles.count_documents({"company_id": company_id})
-    return {
-        "company": company,
-        "role": driver.get("company_role"),
-        "driver_count": driver_count,
-        "vehicle_count": vehicle_count,
-    }
 
 
-@api_router.patch("/company")
-async def update_company(body: CompanyUpdate, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Owner updates company profile / job-acceptance mode."""
-    driver, company = await _require_company_owner(credentials)
-    updates = {k: v for k, v in body.model_dump().items() if v is not None}
-    if "company_name" in updates:
-        updates["company_name"] = updates["company_name"].strip()
-    if updates:
-        await db.companies.update_one({"id": company["id"]}, {"$set": updates})
-    fresh = await db.companies.find_one({"id": company["id"]}, {"_id": 0})
-    return {"company": fresh}
 
 
 # ---- Drivers tab ----
 
-@api_router.get("/company/drivers")
-async def list_company_drivers(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    driver, company = await _require_company_owner(credentials)
-    drivers = [_public_driver(d) async for d in db.drivers.find({"company_id": company["id"]}, {"_id": 0})]
-    drivers.sort(key=lambda d: (d.get("company_role") != "owner", (d.get("name") or "").lower()))
-    return {"drivers": drivers}
 
 
-@api_router.post("/company/drivers")
-async def invite_company_driver(body: FleetDriverInvite, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Owner creates a new driver account that belongs to the company."""
-    driver, company = await _require_company_owner(credentials)
-    email = body.email.strip()
-    if not email:
-        raise HTTPException(400, "Email is required")
-    existing = await db.drivers.find_one({"email": email})
-    if existing:
-        raise HTTPException(400, "A driver with this email already exists")
-    vehicle_type = body.vehicle_type if body.vehicle_type in VEHICLE_TYPES else "cargo_van"
-    vinfo = VEHICLE_TYPES[vehicle_type]
-    new_id = str(uuid.uuid4())
-    full_name = (body.first_name.strip() + " " + (body.last_name or "").strip()).strip()
-    new_driver = Driver(
-        id=new_id,
-        name=full_name,
-        rating=5.0,
-        avatar="https://api.dicebear.com/7.x/avataaars/png?seed=" + new_id,
-        vehicle=f"{vinfo['name']} • —",
-        vehicle_type=vehicle_type,
-        vehicle_capacity_kg=vinfo["max_weight_kg"],
-        plate="",
-        email=email,
-        phone=body.phone or "",
-        password_hash=hash_password(body.password),
-        company_id=company["id"],
-        company_role="driver",
-    )
-    await db.drivers.insert_one(new_driver.model_dump())
-    await db.kyc_status.insert_one({
-        "driver_id": new_id, "license_front": None, "license_back": None,
-        "selfie": None, "overall_status": "incomplete", "submitted_at": None, "reviewed_at": None,
-    })
-    logger.info(f"Company {company['id']} added driver {email} ({new_id})")
-    return {"driver": _public_driver(new_driver.model_dump())}
 
 
 async def _get_company_driver(company_id: str, driver_id: str) -> dict:
@@ -8031,79 +4002,16 @@ async def _get_company_driver(company_id: str, driver_id: str) -> dict:
     return target
 
 
-@api_router.patch("/company/drivers/{driver_id}/suspend")
-async def suspend_company_driver(driver_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    owner, company = await _require_company_owner(credentials)
-    target = await _get_company_driver(company["id"], driver_id)
-    if target.get("company_role") == "owner":
-        raise HTTPException(400, "The company owner cannot be suspended")
-    await db.drivers.update_one({"id": driver_id}, {"$set": {"is_suspended": True, "is_online": False}})
-    return {"success": True}
 
 
-@api_router.patch("/company/drivers/{driver_id}/activate")
-async def activate_company_driver(driver_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    owner, company = await _require_company_owner(credentials)
-    await _get_company_driver(company["id"], driver_id)
-    await db.drivers.update_one({"id": driver_id}, {"$set": {"is_suspended": False}})
-    return {"success": True}
 
 
-@api_router.delete("/company/drivers/{driver_id}")
-async def remove_company_driver(driver_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Detach a driver from the company (account is kept → becomes independent)."""
-    owner, company = await _require_company_owner(credentials)
-    target = await _get_company_driver(company["id"], driver_id)
-    if target.get("company_role") == "owner":
-        raise HTTPException(400, "The company owner cannot be removed")
-    await db.drivers.update_one({"id": driver_id}, {"$set": {"company_id": None, "company_role": None}})
-    await db.fleet_vehicles.update_many(
-        {"company_id": company["id"], "assigned_driver_id": driver_id},
-        {"$set": {"assigned_driver_id": None}},
-    )
-    return {"success": True}
 
 
 # ---- Vehicles tab ----
 
-@api_router.get("/company/vehicles")
-async def list_company_vehicles(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    driver, company = await _require_company_owner(credentials)
-    vehicles = [v async for v in db.fleet_vehicles.find({"company_id": company["id"]}, {"_id": 0})]
-    assigned_ids = [v["assigned_driver_id"] for v in vehicles if v.get("assigned_driver_id")]
-    names: dict = {}
-    if assigned_ids:
-        async for d in db.drivers.find({"id": {"$in": assigned_ids}}, {"_id": 0, "id": 1, "name": 1}):
-            names[d["id"]] = d["name"]
-    for v in vehicles:
-        v["assigned_driver_name"] = names.get(v.get("assigned_driver_id"))
-    vehicles.sort(key=lambda v: (v.get("registration_number") or ""))
-    return {"vehicles": vehicles}
 
 
-@api_router.post("/company/vehicles")
-async def add_company_vehicle(body: FleetVehicleCreate, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    driver, company = await _require_company_owner(credentials)
-    reg = body.registration_number.strip().upper()
-    if not reg:
-        raise HTTPException(400, "Registration number is required")
-    dup = await db.fleet_vehicles.find_one({"company_id": company["id"], "registration_number": reg})
-    if dup:
-        raise HTTPException(400, "A vehicle with this registration already exists")
-    vtype = body.vehicle_type if body.vehicle_type in VEHICLE_TYPES else "cargo_van"
-    vinfo = VEHICLE_TYPES[vtype]
-    vehicle = FleetVehicle(
-        company_id=company["id"],
-        registration_number=reg,
-        vehicle_type=vtype,
-        capacity_kg=body.capacity_kg or vinfo["max_weight_kg"],
-        max_weight_kg=body.max_weight_kg or vinfo["max_weight_kg"],
-        length_cm=body.length_cm,
-        width_cm=body.width_cm,
-        height_cm=body.height_cm,
-    )
-    await db.fleet_vehicles.insert_one(vehicle.model_dump())
-    return {"vehicle": vehicle.model_dump()}
 
 
 async def _get_company_vehicle(company_id: str, vehicle_id: str) -> dict:
@@ -8113,299 +4021,38 @@ async def _get_company_vehicle(company_id: str, vehicle_id: str) -> dict:
     return v
 
 
-@api_router.patch("/company/vehicles/{vehicle_id}")
-async def update_company_vehicle(vehicle_id: str, body: FleetVehicleUpdate, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    driver, company = await _require_company_owner(credentials)
-    await _get_company_vehicle(company["id"], vehicle_id)
-    updates = {k: v for k, v in body.model_dump().items() if v is not None}
-    if "registration_number" in updates:
-        updates["registration_number"] = updates["registration_number"].strip().upper()
-        dup = await db.fleet_vehicles.find_one({
-            "company_id": company["id"],
-            "registration_number": updates["registration_number"],
-            "id": {"$ne": vehicle_id},
-        })
-        if dup:
-            raise HTTPException(400, "A vehicle with this registration already exists")
-    if "vehicle_type" in updates and updates["vehicle_type"] not in VEHICLE_TYPES:
-        updates.pop("vehicle_type")
-    if updates:
-        await db.fleet_vehicles.update_one({"id": vehicle_id}, {"$set": updates})
-    fresh = await db.fleet_vehicles.find_one({"id": vehicle_id}, {"_id": 0})
-    return {"vehicle": fresh}
 
 
-@api_router.post("/company/vehicles/{vehicle_id}/assign")
-async def assign_vehicle_driver(vehicle_id: str, body: AssignDriverRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    driver, company = await _require_company_owner(credentials)
-    await _get_company_vehicle(company["id"], vehicle_id)
-    await _get_company_driver(company["id"], body.driver_id)
-    await db.fleet_vehicles.update_one({"id": vehicle_id}, {"$set": {"assigned_driver_id": body.driver_id}})
-    fresh = await db.fleet_vehicles.find_one({"id": vehicle_id}, {"_id": 0})
-    return {"vehicle": fresh}
 
 
-@api_router.post("/company/vehicles/{vehicle_id}/unassign")
-async def unassign_vehicle_driver(vehicle_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    driver, company = await _require_company_owner(credentials)
-    await _get_company_vehicle(company["id"], vehicle_id)
-    await db.fleet_vehicles.update_one({"id": vehicle_id}, {"$set": {"assigned_driver_id": None}})
-    fresh = await db.fleet_vehicles.find_one({"id": vehicle_id}, {"_id": 0})
-    return {"vehicle": fresh}
 
 
-@api_router.delete("/company/vehicles/{vehicle_id}")
-async def delete_company_vehicle(vehicle_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    driver, company = await _require_company_owner(credentials)
-    res = await db.fleet_vehicles.delete_one({"id": vehicle_id, "company_id": company["id"]})
-    if res.deleted_count == 0:
-        raise HTTPException(404, "Vehicle not found in your company")
-    return {"success": True}
 
 
 # ---- Company jobs visibility & owner assignment (Phase 2) ----
 
-@api_router.get("/company/jobs")
-async def list_company_jobs(
-    status: Optional[str] = None,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-):
-    """All jobs belonging to the company (across every company driver)."""
-    driver, company = await _require_company_owner(credentials)
-    query: dict = {"assigned_company_id": company["id"]}
-    if status:
-        query["status"] = status
-    raw = [o async for o in db.orders.find(query, {"_id": 0}).sort("created_at", -1).limit(200)]
-
-    drv_ids = list({o.get("assigned_driver_id") for o in raw if o.get("assigned_driver_id")})
-    veh_ids = list({o.get("assigned_vehicle_id") for o in raw if o.get("assigned_vehicle_id")})
-    dnames: dict = {}
-    if drv_ids:
-        async for d in db.drivers.find({"id": {"$in": drv_ids}}, {"_id": 0, "id": 1, "name": 1}):
-            dnames[d["id"]] = d["name"]
-    vregs: dict = {}
-    if veh_ids:
-        async for v in db.fleet_vehicles.find({"id": {"$in": veh_ids}}, {"_id": 0, "id": 1, "registration_number": 1}):
-            vregs[v["id"]] = v["registration_number"]
-
-    def _name(p):
-        return p.get("name") if isinstance(p, dict) else None
-
-    jobs = [{
-        "id": o["id"],
-        "order_number": o.get("order_number"),
-        "status": o.get("status"),
-        "pickup": _name(o.get("pickup")),
-        "dropoff": _name(o.get("dropoff")),
-        "earnings": round(float(o.get("earnings", 0) or 0), 2),
-        "distance_km": o.get("distance_km"),
-        "driver_id": o.get("assigned_driver_id"),
-        "driver_name": dnames.get(o.get("assigned_driver_id")),
-        "vehicle_id": o.get("assigned_vehicle_id"),
-        "vehicle_reg": vregs.get(o.get("assigned_vehicle_id")),
-        "created_at": o.get("created_at"),
-        "completed_at": o.get("completed_at"),
-    } for o in raw]
-
-    active = sum(1 for o in raw if o.get("status") in sm.ACTIVE_STATES)
-    completed = sum(1 for o in raw if o.get("status") == sm.DELIVERED)
-    earnings = round(sum(float(o.get("earnings", 0) or 0) for o in raw if o.get("status") == sm.DELIVERED), 2)
-    return {
-        "jobs": jobs,
-        "stats": {"total": len(jobs), "active": active, "completed": completed, "completed_earnings": earnings},
-    }
 
 
-@api_router.post("/company/jobs/{order_id}/assign")
-async def owner_assign_job(
-    order_id: str,
-    body: AssignJobRequest,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-):
-    """Owner assigns a still-pending order to one of their drivers (owner_assign / hybrid)."""
-    owner, company = await _require_company_owner(credentials)
-    target = await _get_company_driver(company["id"], body.driver_id)
-    if target.get("is_suspended"):
-        raise HTTPException(400, "That driver is suspended")
-
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if order["status"] != "pending":
-        raise HTTPException(400, "Order is no longer available")
-
-    vehicle_id = None
-    if body.vehicle_id:
-        veh = await _get_company_vehicle(company["id"], body.vehicle_id)
-        vehicle_id = veh["id"]
-    else:
-        veh = await db.fleet_vehicles.find_one(
-            {"company_id": company["id"], "assigned_driver_id": body.driver_id, "status": "active"},
-            {"_id": 0, "id": 1},
-        )
-        vehicle_id = veh["id"] if veh else None
-
-    set_fields = {
-        "status": sm.ACCEPTED,
-        "driver_id": body.driver_id,
-        "assigned_company_id": company["id"],
-        "assigned_driver_id": body.driver_id,
-        "assigned_vehicle_id": vehicle_id,
-    }
-    res = await db.orders.update_one({"id": order_id, "status": "pending"}, {"$set": set_fields})
-    if res.modified_count == 0:
-        raise HTTPException(409, "Order already accepted by another driver")
-    await audit.record_event(
-        db, order_id, "status_change",
-        from_status="pending", to_status=sm.ACCEPTED,
-        actor_id=owner["id"], actor_type="driver",
-    )
-    order.update(set_fields)
-    asyncio.create_task(push_status_to_shipper(order, "accepted"))
-    return {"success": True, "order_id": order_id, "driver_id": body.driver_id, "vehicle_id": vehicle_id}
 
 
 # ---- Company wallet & payouts (Phase 3/4, owner) ----
 
-@api_router.get("/company/wallet")
-async def get_company_wallet(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    driver, company = await _require_company_owner(credentials)
-    wallet = await _get_or_create_company_wallet(company["id"])
-    txns = [
-        t async for t in db.company_wallet_txns.find({"company_id": company["id"]}, {"_id": 0})
-        .sort("created_at", -1).limit(50)
-    ]
-    payouts = [
-        p async for p in db.company_payouts.find({"company_id": company["id"]}, {"_id": 0})
-        .sort("created_at", -1).limit(50)
-    ]
-    return {"wallet": wallet, "transactions": txns, "payouts": payouts}
 
 
-@api_router.post("/company/payouts")
-async def request_company_payout(
-    body: CompanyPayoutCreate,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-):
-    driver, company = await _require_company_owner(credentials)
-    wallet = await _get_or_create_company_wallet(company["id"])
-    amount = round(float(body.amount), 2)
-    if amount <= 0:
-        raise HTTPException(400, "Amount must be greater than zero")
-    if amount > round(float(wallet.get("available_balance", 0)), 2):
-        raise HTTPException(400, "Amount exceeds available balance")
-    payout = CompanyPayout(
-        company_id=company["id"],
-        company_name=company.get("company_name"),
-        amount=amount,
-        method=body.method or "bank_transfer",
-        account_details=body.account_details,
-        reference="PO-" + uuid.uuid4().hex[:8].upper(),
-    )
-    await db.company_payouts.insert_one(payout.model_dump())
-    # Move funds from available -> pending (locked while the request is processed).
-    await db.company_wallets.update_one(
-        {"company_id": company["id"]},
-        {"$inc": {"available_balance": -amount, "pending_balance": amount},
-         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
-    )
-    return {"payout": payout.model_dump()}
 
 
-@api_router.get("/company/payouts")
-async def list_company_payouts(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    driver, company = await _require_company_owner(credentials)
-    payouts = [
-        p async for p in db.company_payouts.find({"company_id": company["id"]}, {"_id": 0})
-        .sort("created_at", -1).limit(100)
-    ]
-    return {"payouts": payouts}
 
 
 # ---- Admin Fleet dashboard (Phase 5) ----
 
-@api_router.get("/admin/fleet/companies")
-async def admin_list_companies(
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    user: dict = Depends(get_admin_user),
-):
-    query: dict = {}
-    if status:
-        query["status"] = status
-    if search:
-        query["company_name"] = {"$regex": re.escape(search), "$options": "i"}
-    companies = [c async for c in db.companies.find(query, {"_id": 0}).sort("created_at", -1).limit(200)]
-    out = []
-    for c in companies:
-        wallet = await db.company_wallets.find_one({"company_id": c["id"]}, {"_id": 0}) or {}
-        owner = await db.drivers.find_one({"id": c["owner_driver_id"]}, {"_id": 0, "name": 1, "email": 1})
-        out.append({
-            **c,
-            "owner_name": (owner or {}).get("name"),
-            "owner_email": (owner or {}).get("email"),
-            "driver_count": await db.drivers.count_documents({"company_id": c["id"]}),
-            "vehicle_count": await db.fleet_vehicles.count_documents({"company_id": c["id"]}),
-            "available_balance": round(float(wallet.get("available_balance", 0)), 2),
-            "pending_balance": round(float(wallet.get("pending_balance", 0)), 2),
-            "total_earnings": round(float(wallet.get("total_earnings", 0)), 2),
-            "total_withdrawn": round(float(wallet.get("total_withdrawn", 0)), 2),
-        })
-    return {"items": out, "total": len(out)}
 
 
-@api_router.get("/admin/fleet/companies/{company_id}")
-async def admin_company_detail(company_id: str, user: dict = Depends(get_admin_user)):
-    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
-    if not company:
-        raise HTTPException(404, "Company not found")
-    wallet = await _get_or_create_company_wallet(company_id)
-    drivers = [_public_driver(d) async for d in db.drivers.find({"company_id": company_id}, {"_id": 0})]
-    drivers.sort(key=lambda d: (d.get("company_role") != "owner", (d.get("name") or "").lower()))
-    vehicles = [v async for v in db.fleet_vehicles.find({"company_id": company_id}, {"_id": 0})]
-    payouts = [
-        p async for p in db.company_payouts.find({"company_id": company_id}, {"_id": 0})
-        .sort("created_at", -1).limit(100)
-    ]
-    completed = await db.orders.count_documents({"assigned_company_id": company_id, "status": sm.DELIVERED})
-    active = await db.orders.count_documents({"assigned_company_id": company_id, "status": {"$in": list(sm.ACTIVE_STATES)}})
-    return {
-        "company": company, "wallet": wallet, "drivers": drivers, "vehicles": vehicles,
-        "payouts": payouts, "stats": {"completed_jobs": completed, "active_jobs": active},
-    }
 
 
-@api_router.post("/admin/fleet/companies/{company_id}/suspend")
-async def admin_suspend_company(company_id: str, user: dict = Depends(get_admin_user)):
-    res = await db.companies.update_one({"id": company_id}, {"$set": {"status": "suspended"}})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Company not found")
-    return {"success": True}
 
 
-@api_router.post("/admin/fleet/companies/{company_id}/activate")
-async def admin_activate_company(company_id: str, user: dict = Depends(get_admin_user)):
-    res = await db.companies.update_one({"id": company_id}, {"$set": {"status": "active"}})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Company not found")
-    return {"success": True}
 
 
-@api_router.get("/admin/fleet/payouts")
-async def admin_list_company_payouts(
-    status: Optional[str] = None,
-    user: dict = Depends(get_admin_user),
-):
-    query: dict = {}
-    if status:
-        query["status"] = status
-    payouts = [p async for p in db.company_payouts.find(query, {"_id": 0}).sort("created_at", -1).limit(300)]
-    totals = {
-        "pending": sum(1 for p in payouts if p["status"] == "pending"),
-        "approved": sum(1 for p in payouts if p["status"] == "approved"),
-        "paid_amount": round(sum(float(p["amount"]) for p in payouts if p["status"] == "paid"), 2),
-    }
-    return {"payouts": payouts, "totals": totals}
 
 
 async def _get_company_payout(payout_id: str) -> dict:
@@ -8415,66 +4062,40 @@ async def _get_company_payout(payout_id: str) -> dict:
     return p
 
 
-@api_router.post("/admin/fleet/payouts/{payout_id}/approve")
-async def admin_approve_company_payout(payout_id: str, user: dict = Depends(get_admin_user)):
-    p = await _get_company_payout(payout_id)
-    if p["status"] != "pending":
-        raise HTTPException(400, f"Cannot approve a {p['status']} payout")
-    await db.company_payouts.update_one(
-        {"id": payout_id},
-        {"$set": {"status": "approved", "reviewed_at": datetime.now(timezone.utc).isoformat()}},
-    )
-    return {"success": True}
 
 
-@api_router.post("/admin/fleet/payouts/{payout_id}/pay")
-async def admin_pay_company_payout(
-    payout_id: str, body: PayoutRefRequest, user: dict = Depends(get_admin_user)
-):
-    p = await _get_company_payout(payout_id)
-    if p["status"] not in ("approved", "pending"):
-        raise HTTPException(400, f"Cannot pay a {p['status']} payout")
-    amount = round(float(p["amount"]), 2)
-    updates = {"status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}
-    if body.reference:
-        updates["reference"] = body.reference
-    await db.company_payouts.update_one({"id": payout_id}, {"$set": updates})
-    # Settle: remove from pending, add to total_withdrawn.
-    await db.company_wallets.update_one(
-        {"company_id": p["company_id"]},
-        {"$inc": {"pending_balance": -amount, "total_withdrawn": amount},
-         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
-    )
-    await db.company_wallet_txns.insert_one(CompanyWalletTxn(
-        company_id=p["company_id"], type="payout", amount=-amount,
-        note=f"Payout {p.get('reference') or payout_id} paid",
-    ).model_dump())
-    return {"success": True}
 
 
-@api_router.post("/admin/fleet/payouts/{payout_id}/reject")
-async def admin_reject_company_payout(
-    payout_id: str, body: PayoutReasonRequest, user: dict = Depends(get_admin_user)
-):
-    p = await _get_company_payout(payout_id)
-    if p["status"] in ("paid", "rejected"):
-        raise HTTPException(400, f"Cannot reject a {p['status']} payout")
-    amount = round(float(p["amount"]), 2)
-    await db.company_payouts.update_one(
-        {"id": payout_id},
-        {"$set": {"status": "rejected", "reviewed_at": datetime.now(timezone.utc).isoformat(),
-                  "note": body.reason}},
-    )
-    # Refund the locked funds back to available.
-    await db.company_wallets.update_one(
-        {"company_id": p["company_id"]},
-        {"$inc": {"pending_balance": -amount, "available_balance": amount},
-         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
-    )
-    return {"success": True}
 
 
 # ===================== Lifecycle =====================
+
+
+# ---- Modular routers (auto-extracted from this monolith) ----
+from routes import misc as _r_misc
+from routes import driver as _r_driver
+from routes import orders as _r_orders
+from routes import shipper as _r_shipper
+from routes import notifications as _r_notifications
+from routes import auth as _r_auth
+from routes import admin as _r_admin
+from routes import receipts as _r_receipts
+from routes import invoices as _r_invoices
+from routes import payments as _r_payments
+from routes import wallet as _r_wallet
+from routes import company as _r_company
+api_router.include_router(_r_misc.router)
+api_router.include_router(_r_driver.router)
+api_router.include_router(_r_orders.router)
+api_router.include_router(_r_shipper.router)
+api_router.include_router(_r_notifications.router)
+api_router.include_router(_r_auth.router)
+api_router.include_router(_r_admin.router)
+api_router.include_router(_r_receipts.router)
+api_router.include_router(_r_invoices.router)
+api_router.include_router(_r_payments.router)
+api_router.include_router(_r_wallet.router)
+api_router.include_router(_r_company.router)
 
 app.include_router(api_router)
 
