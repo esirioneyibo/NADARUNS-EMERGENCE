@@ -402,9 +402,9 @@ export default function SettingsScreen() {
         {/* Support */}
         <SectionTitle title={t("settings.support")} theme={theme} />
         <Animated.View entering={FadeInUp.delay(340)} style={[styles.card, shadows.sm]}>
-          <LinkRow icon="help-circle-outline" label={t("settings.helpSupport")} testID="link-support" theme={theme} />
+          <LinkRow icon="help-circle-outline" label={t("settings.helpSupport")} testID="link-support" onPress={() => router.push("/help-support")} theme={theme} />
           <Divider theme={theme} />
-          <LinkRow icon="shield-checkmark-outline" label={t("settings.privacyTerms")} testID="link-privacy" theme={theme} />
+          <LinkRow icon="shield-checkmark-outline" label={t("settings.privacyTerms")} testID="link-privacy" onPress={() => router.push("/legal")} theme={theme} />
         </Animated.View>
 
         {/* Sign out */}

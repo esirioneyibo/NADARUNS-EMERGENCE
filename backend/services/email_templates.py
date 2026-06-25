@@ -11,7 +11,7 @@ BRAND_NAME = "Nadaruns"
 BRAND_COLOR = "#0B6E4F"      # Nadaruns green
 BRAND_DARK = "#0A2540"
 ACCENT = "#0B6E4F"
-SUPPORT_EMAIL = "support@nadaruns.com"
+SUPPORT_EMAIL = "care@nadaruns.com"
 
 
 def _rows(pairs: list[tuple[str, str]]) -> str:

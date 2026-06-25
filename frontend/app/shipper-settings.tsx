@@ -427,6 +427,24 @@ export default function ShipperSettingsScreen() {
           </TouchableOpacity>
         </Animated.View>
 
+        {/* Support */}
+        <Animated.View entering={FadeInUp.delay(350)}>
+          <Text style={styles.sectionTitle}>{t("settings.support")}</Text>
+          <View style={[styles.card, shadows.sm]}>
+            <TouchableOpacity style={styles.accountRow} onPress={() => router.push("/help-support")} testID="shipper-link-support">
+              <Ionicons name="help-circle-outline" size={20} color={theme.textSecondary} />
+              <Text style={styles.accountRowLabel}>{t("settings.helpSupport")}</Text>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.accountRow} onPress={() => router.push("/legal")} testID="shipper-link-privacy">
+              <Ionicons name="shield-checkmark-outline" size={20} color={theme.textSecondary} />
+              <Text style={styles.accountRowLabel}>{t("settings.privacyTerms")}</Text>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+
         {/* Sign Out */}
         <Animated.View entering={FadeInUp.delay(400)}>
           <TouchableOpacity style={styles.signOutBtn} onPress={handleLogout}>

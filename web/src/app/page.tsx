@@ -41,15 +41,15 @@ export default function Home() {
               {/* Stats */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'clamp(12px, 4vw, 32px)', borderTop: '1px solid #E5E7EB', paddingTop: '32px' }}>
                 <div>
-                  <div className="stat-number">10K+</div>
+                  <div className="stat-number">1,200+</div>
                   <div className="stat-label">{c.statDrivers}</div>
                 </div>
                 <div>
-                  <div className="stat-number">500K+</div>
+                  <div className="stat-number">2.4M km</div>
                   <div className="stat-label">{c.statDeliveries}</div>
                 </div>
                 <div>
-                  <div className="stat-number">4.9★</div>
+                  <div className="stat-number">18%</div>
                   <div className="stat-label">{c.statRating}</div>
                 </div>
               </div>
@@ -96,7 +96,7 @@ export default function Home() {
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.2)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
-                      🚴
+                      🚛
                     </div>
                     <div>
                       <div style={{ fontWeight: '600' }}>{c.delivering}</div>
@@ -290,3 +290,4 @@ export default function Home() {
     </>
   );
 }
+

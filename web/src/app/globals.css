@@ -312,13 +312,16 @@ body {
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 40px;
+  gap: 26px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .nav-cta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .nav-link {
@@ -327,6 +330,7 @@ body {
   color: var(--gray-600);
   text-decoration: none;
   transition: color 0.2s ease;
+  white-space: nowrap;
 }
 
 .nav-link:hover {
@@ -403,7 +407,7 @@ body {
   line-height: 1;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1080px) {
   .nav-links,
   .nav-cta {
     display: none;

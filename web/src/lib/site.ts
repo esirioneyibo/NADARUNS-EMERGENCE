@@ -7,9 +7,9 @@
 
 export const site = {
   name: "NadaRuns",
-  tagline: "Fast & Reliable Delivery",
+  tagline: "The marketplace for empty transport capacity",
   description:
-    "NadaRuns connects drivers with businesses for fast, reliable deliveries across Finland. Drive to earn on your schedule, or ship your products with real-time tracking.",
+    "NadaRuns matches available transport capacity and return trips with freight in real time — turning empty kilometers into revenue for carriers and faster, more competitive transport for shippers across Finland.",
   url: "https://nadaruns.com",
   city: "Helsinki, Finland",
 
@@ -20,8 +20,8 @@ export const site = {
   },
 
   contact: {
-    email: "hello@nadaruns.com",
-    supportEmail: "support@nadaruns.com",
+    email: "care@nadaruns.com",
+    supportEmail: "care@nadaruns.com",
     phone: "+358 40 123 4567",
     phoneHref: "tel:+358401234567",
     address: {
@@ -51,10 +51,10 @@ export const site = {
   },
 
   stats: {
-    drivers: "10K+",
-    deliveries: "500K+",
-    rating: "4.9★",
-    cities: "5",
+    drivers: "1,200+",
+    deliveries: "2.4M km",
+    rating: "18%",
+    cities: "20+",
   },
 };
 
