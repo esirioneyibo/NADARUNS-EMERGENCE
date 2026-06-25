@@ -197,6 +197,8 @@ function TabsNavigator() {
         <Tabs.Screen name="driver-vehicles" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="fleet" options={{ href: null, tabBarStyle: { display: "none" } }} />
         <Tabs.Screen name="shipper-edit" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="help-support" options={{ href: null, tabBarStyle: { display: "none" } }} />
+        <Tabs.Screen name="legal" options={{ href: null, tabBarStyle: { display: "none" } }} />
       </Tabs>
     </>
   );

@@ -1,0 +1,40 @@
+{
+  "summary": "Frontend-only regression test for bottom-tab bar fix. Verified the two stray tabs ('legal' and 'help-support') are no longer present in either driver or shipper bottom navigation, and that the Settings -> Help & Support / Privacy & Terms links still navigate correctly to /help-support and /legal for both roles. All 3 acceptance criteria pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_results": {
+    "driver_bottom_nav": {
+      "expected_tabs": ["Home", "History", "Wallet", "Profile"],
+      "actual_tabs": ["Home", "History", "Wallet", "Profile"],
+      "forbidden_tabs_found": [],
+      "status": "PASS"
+    },
+    "shipper_bottom_nav": {
+      "expected_tabs": ["Home", "New", "Profile"],
+      "actual_tabs": ["Home", "New", "Profile"],
+      "forbidden_tabs_found": [],
+      "status": "PASS"
+    },
+    "driver_help_support_link": {"target": "/help-support", "actual_url": "https://nadaruns-logistics.preview.emergentagent.com/help-support", "status": "PASS"},
+    "driver_privacy_terms_link": {"target": "/legal", "actual_url": "https://nadaruns-logistics.preview.emergentagent.com/legal", "status": "PASS"},
+    "shipper_help_support_link": {"target": "/help-support", "actual_url": "https://nadaruns-logistics.preview.emergentagent.com/help-support", "status": "PASS"},
+    "shipper_privacy_terms_link": {"target": "/legal", "actual_url": "https://nadaruns-logistics.preview.emergentagent.com/legal", "status": "PASS"}
+  },
+  "verification_of_fix": "Confirmed app/_layout.tsx (lines 200-201) registers help-support and legal as hidden Tabs.Screen with href:null and tabBarStyle.display:none. UI confirms only the role-specific tabs render.",
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Pre-existing (not part of this fix): console error 'The action REPLACE with payload {name:driver-home} was not handled by any navigator' on initial driver login. Navigation still completes successfully because expo-router resolves the route after the tab tree mounts, but this REPLACE-before-mount warning is noisy and should be investigated by main agent (likely fixable by routing via /driver-home only after auth state hydrates).",
+    "Pre-existing (not part of this fix): WebSocket /ws/driver/<id> handshake returns 502 (preview ingress likely not forwarding ws). Not related to nav fix."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% (6/6 criteria)"},
+  "seed_data_creation": "Triggered POST /api/seed-demo before login to ensure demo accounts exist (idempotent; 0 created this run -- already seeded).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bug fix for stray tabs in bottom nav is fully verified on mobile viewport (390x844). Both driver and shipper bottom bars now show exactly the intended tabs, and Help & Support / Privacy & Terms remain reachable from Settings. No regressions introduced. Two unrelated pre-existing console noises observed (REPLACE-driver-home navigator warning and /ws 502) and reported under critical_code_review_comments for awareness."
+}
