@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboard-controller";
+import { KeyboardAwareScrollView, KeyboardStickyView, KeyboardEvents } from "react-native-keyboard-controller";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -233,6 +233,19 @@ export default function ShipperCreateScreen() {
   const pickupPhoneRef = useRef<TextInput>(null);
   const dropoffPhoneRef = useRef<TextInput>(null);
   const cargoDescRef = useRef<TextInput>(null);
+
+  // Track keyboard visibility so the sticky bottom action bar can shrink while
+  // typing (drops the safe-area bottom padding), keeping focused inputs clear
+  // of the keyboard on Android.
+  const [kbVisible, setKbVisible] = useState(false);
+  useEffect(() => {
+    const showSub = KeyboardEvents.addListener("keyboardWillShow", () => setKbVisible(true));
+    const hideSub = KeyboardEvents.addListener("keyboardWillHide", () => setKbVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Pickup
   const [pickupAddress, setPickupAddress] = useState("");
@@ -1620,7 +1633,7 @@ export default function ShipperCreateScreen() {
         contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xl }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        bottomOffset={90}
+        bottomOffset={Platform.OS === "android" ? 130 : 100}
       >
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
@@ -1632,7 +1645,7 @@ export default function ShipperCreateScreen() {
 
       {/* Bottom Action (sticks above keyboard) */}
       <KeyboardStickyView>
-      <View style={[styles.bottomAction, { paddingBottom: insets.bottom + 16 }]}>
+      <View style={[styles.bottomAction, { paddingBottom: kbVisible ? 12 : insets.bottom + 16 }]}>
         <View style={styles.bottomRow}>
           {step > 1 && (
             <TouchableOpacity style={styles.backBtn} onPress={goBack}>

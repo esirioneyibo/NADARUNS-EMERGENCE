@@ -1,0 +1,25 @@
+{
+  "summary": "Frontend-only regression test for shipper Create-Shipment wizard after Android keyboard fixes (app.json android.softwareKeyboardLayoutMode='resize', KeyboardEvents listener in shipper-create.tsx, bottomOffset 130/100). Full 6-step flow verified on Expo web preview (390x844 mobile viewport). Login as demo.shipper -> shipper-create -> Pickup -> Dropoff -> Package -> Price (quote €45.36 loaded) -> When -> Review (Confirm & Create visible). All TextInputs accepted text; values retained across steps (Helsinki Central, Tampere Square, Alice Pickup, Bob Dropoff, 'Pallet of books, fragile' all appear on the Review step). NO page errors, NO console error referencing KeyboardEvents or keyboard-controller. Sticky bottom action bar (Back/Continue/Confirm) renders and is tappable on every step. Note: native Android soft-keyboard overlap cannot be reproduced on web; that must be verified on a physical Android device by the user.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Validate the actual Android soft-keyboard avoidance on a physical Android device / dev build (web preview has no native IME, so it cannot be verified here). Expected: focused TextInputs in Step 1 (Pickup contact name / phone / notes) and Step 3 (cargo weight / description) remain visible above the keyboard; sticky Continue button does not overlap focused inputs."
+  ],
+  "critical_code_review_comments": [
+    "shipper-create.tsx is very large (>1500 lines incl. styles). Consider splitting per-step renderers (renderStep1..renderStep6) into separate files for maintainability — non-blocking.",
+    "KeyboardEvents listener correctly uses addListener('keyboardWillShow'/'keyboardWillHide') and cleans up on unmount. On Android these events fire as keyboardDidShow/Hide via react-native-keyboard-controller, which is fine — confirmed no runtime error on mount."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped", "frontend": "100%"},
+  "seed_data_creation": "POST /api/seed-demo invoked once (200 OK) to ensure demo.shipper@nadaruns.com exists.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Shipper create-shipment wizard regression script: login at /shipper-login (2 inputs email/password then 'Sign In'), navigate to /shipper-create. Step 3 weight TextInput has placeholder 'e.g., 250' (does NOT contain 'weight'/'kg' — match by 'e.g., 250' or by position). All other inputs are identifiable by placeholder substrings: 'address manually', 'hands over', 'receives', '+358', 'loading dock', 'leave at', 'inside'. Pricing on Step 4 loads instantly via local estimate then reconciles with /api/shipper/quote.",
+  "rca_of_issue": "Not applicable — this iteration verifies a fix, not reproduces a bug. The reported bug (Android keyboard hiding inputs) is platform-native and only observable on a physical Android device; web preview behaves correctly and the new code mounts without errors."
+}

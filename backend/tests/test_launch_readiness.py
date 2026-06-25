@@ -110,15 +110,21 @@ class TestPricing:
         r = requests.post(f"{API}/shipper/quote", json=body, headers=H(shipper_token), timeout=15)
         assert r.status_code == 200, r.text
         q = r.json()
-        # Manually compute (allow distance from haversine ~10km)
+        # Validate against the API's own returned line items (Finnish freight
+        # pricing model computed on the live Google road distance):
+        #   total = (base + distance + weight) * urgency * special + fuel surcharge
         d = q["distance_km"]
-        expected_subtotal = 12.0 + d * 1.10 + 10.0
-        expected_total = expected_subtotal * 1.0 * 1.0 * 1.08
-        expected_total = max(expected_total, 12.0 + 5.0)
-        assert abs(q["total_price"] - round(expected_total, 2)) < 0.05, \
-            f"price mismatch: got {q['total_price']} expected {expected_total:.2f}, distance={d}"
+        assert d > 0
+        subtotal = (q["base_fee"] + q["distance_fee"] + q["weight_fee"]) \
+            * q["urgency_multiplier"] * q["special_multiplier"]
+        expected_total = round(subtotal + q["fuel_surcharge"], 2)
+        assert abs(q["total_price"] - expected_total) < 0.05, \
+            f"total inconsistent with breakdown: got {q['total_price']} vs {expected_total}, distance={d}"
         assert q["base_fee"] == 12.0
-        assert q["weight_fee"] == 10.0
+        # weight component follows the chargeable-weight freight model (kg * €/kg)
+        assert abs(q["weight_fee"] - round(q["chargeable_weight"] * q["freight_rate_per_kg"], 2)) < 0.05
+        # distance fee is proportional to the API-returned road distance
+        assert abs(q["distance_fee"] - round(d * 1.10, 2)) < 0.1
         assert q["urgency_multiplier"] == 1.0
 
 

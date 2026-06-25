@@ -32,6 +32,7 @@
     },
     "android": {
       "package": "com.nadaruns.driver",
+      "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",

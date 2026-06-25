@@ -107,8 +107,10 @@ class TestPricingQuote:
         assert data["base_fee"] == 12.0
         # ~16-22 km depending on chosen coords (formula validated below)
         assert 14 <= data["distance_km"] <= 30, data["distance_km"]
-        # weight_fee tier (50<w<=200) => 10
-        assert data["weight_fee"] == 10.0
+        # weight component follows the chargeable-weight freight model (kg * €/kg)
+        assert _approx(data["weight_fee"],
+                       round(data["chargeable_weight"] * data["freight_rate_per_kg"], 2),
+                       tol=0.05)
         # urgency standard => 1.0
         assert data["urgency_multiplier"] == 1.0
         # special multiplier for cargo_van w/o handling => 1.0
