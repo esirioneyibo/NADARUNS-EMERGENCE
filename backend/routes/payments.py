@@ -261,6 +261,50 @@ async def cancel_authorization(
     return _payment_summary(fresh)
 
 
+@router.post("/payments/orders/{order_id}/refund")
+async def refund_payment(
+    order_id: str,
+    body: RefundBody,
+    user: dict = Depends(get_admin_user),
+):
+    """Admin refunds a CAPTURED payment (full or partial) — e.g. dispute resolution.
+
+    Full refund flips the order to 'refunded' (excluded from the driver's
+    earnings); a partial refund keeps it 'captured' and is logged for audit.
+    """
+    if not payments.is_configured():
+        raise HTTPException(503, "Payments are not configured")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.get("payment_status") != "captured":
+        raise HTTPException(400, f"Only captured payments can be refunded (status: {order.get('payment_status')})")
+    intent_id = order.get("stripe_payment_intent_id")
+    if not intent_id:
+        raise HTTPException(400, "No PaymentIntent on this order")
+
+    captured = float(order.get("payment_amount") or 0)
+    amount_eur = body.amount if (body.amount and body.amount > 0) else None
+    if amount_eur is not None and amount_eur > captured + 0.01:
+        raise HTTPException(400, f"Refund exceeds captured amount (€{captured:.2f})")
+    amount_cents = payments.to_cents(amount_eur) if amount_eur is not None else None
+    idem = f"refund_{order_id}_{amount_cents or 'full'}"
+
+    try:
+        refund = payments.refund_payment_intent(intent_id, amount_cents, idempotency_key=idem)
+    except Exception as exc:
+        logger.error(f"Refund failed for {order_id}: {exc}")
+        raise HTTPException(502, f"Refund failed: {exc}")
+
+    await _apply_refund_to_order(order, refund)
+    if body.reason:
+        await db.orders.update_one({"id": order_id}, {"$set": {"refund_reason": body.reason}})
+    fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    summary = _payment_summary(fresh)
+    summary["refunded_amount"] = fresh.get("refunded_amount")
+    return summary
+
+
 @router.get("/payments/return", response_class=HTMLResponse)
 async def payment_return(status: str = "success", order_id: str = "", session_id: str = "", redirect: str = ""):
     """Lightweight landing page Stripe redirects to after hosted Checkout."""
@@ -303,7 +347,7 @@ async def payment_return(status: str = "success", order_id: str = "", session_id
 
 @router.post("/payments/webhook")
 async def stripe_webhook(request: Request):
-    """Stripe webhook: verifies signature (when configured) and reconciles orders."""
+    """Stripe webhook: verify signature, dedupe event ids (retries), reconcile."""
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")
 
@@ -321,9 +365,39 @@ async def stripe_webhook(request: Request):
         except Exception:
             raise HTTPException(400, "Invalid payload")
 
+    event_id = event.get("id") if isinstance(event, dict) else getattr(event, "id", None)
     etype = event.get("type") if isinstance(event, dict) else event["type"]
     obj = (event.get("data", {}) or {}).get("object", {}) if isinstance(event, dict) else event["data"]["object"]
 
+    # Idempotency: ignore retried / duplicate deliveries.
+    if event_id and await _webhook_event_seen(event_id):
+        return {"received": True, "duplicate": True}
+
+    # ---- Refunds (incl. dashboard refunds / disputes refunded) ----
+    if etype == "charge.refunded":
+        intent_id = obj.get("payment_intent")
+        refunds_data = (obj.get("refunds") or {}).get("data") or []
+        rf = refunds_data[0] if refunds_data else {"id": obj.get("id"), "amount": obj.get("amount_refunded")}
+        if intent_id:
+            order = await db.orders.find_one({"stripe_payment_intent_id": intent_id}, {"_id": 0})
+            if order:
+                shim = type("R", (), {"id": rf.get("id"), "amount": rf.get("amount"), "payment_intent": intent_id})
+                try:
+                    await _apply_refund_to_order(order, shim)
+                except Exception as exc:
+                    logger.warning(f"Webhook refund reconcile failed for {intent_id}: {exc}")
+        return {"received": True}
+
+    if etype == "charge.dispute.created":
+        intent_id = obj.get("payment_intent")
+        if intent_id:
+            await db.orders.update_one(
+                {"stripe_payment_intent_id": intent_id},
+                {"$set": {"has_dispute": True, "dispute_at": datetime.now(timezone.utc).isoformat()}},
+            )
+        return {"received": True}
+
+    # ---- Authorizations / captures / failures ----
     intent_id = None
     if etype.startswith("payment_intent."):
         intent_id = obj.get("id")
@@ -337,10 +411,15 @@ async def stripe_webhook(request: Request):
             if md.get("order_id"):
                 order = await db.orders.find_one({"id": md["order_id"]}, {"_id": 0})
         if order:
-            try:
-                intent = payments.retrieve_payment_intent(intent_id)
-                await _apply_intent_to_order(order, intent)
-            except Exception as exc:
-                logger.warning(f"Webhook reconcile failed for {intent_id}: {exc}")
+            if etype == "payment_intent.payment_failed":
+                await db.orders.update_one(
+                    {"id": order["id"]}, {"$set": {"payment_status": "payment_failed"}}
+                )
+            else:
+                try:
+                    intent = payments.retrieve_payment_intent(intent_id)
+                    await _apply_intent_to_order(order, intent)
+                except Exception as exc:
+                    logger.warning(f"Webhook reconcile failed for {intent_id}: {exc}")
 
     return {"received": True}

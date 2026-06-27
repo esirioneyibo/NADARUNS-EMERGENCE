@@ -1,0 +1,51 @@
+{
+  "summary": "Backend-only verification of Stripe refunds + webhook hardening. Wrote a dedicated pytest suite (test_iter43_refunds_and_webhook.py, 18 tests) and re-ran the 26-test payments_finance regression suite. 17/18 new tests + 26/26 regression tests pass (43/44 = 97.7%). The single failure exposes a REAL backend bug: GET /api/driver/wallet still counts fully-refunded orders in the driver's pending+available balance because it filters by status='delivered' only and never inspects payment_status, contradicting the problem statement that a full refund must drop the order from the driver's captured earnings.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/driver/wallet",
+        "issue": "Driver wallet does NOT exclude payment_status='refunded' orders. Reproduced: capture an order, mark it delivered, snapshot wallet -> balance grows; then full-refund it -> balance does NOT drop. Captured measurements before=4196.65, after_capture=4254.95, after_full_refund=4254.95 (expected ≤4196.65). Root cause: /app/backend/routes/driver.py lines 76-80 query only {'status': 'delivered', 'driver_id': driver_id}; payment_status is ignored. The canonical helper compute_driver_balance() in server.py (line 3835) does this correctly (only sums payment_status='captured') but /driver/wallet doesn't use it.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/driver/performance",
+        "issue": "Same gap as /driver/wallet: filters delivered orders by status only (routes/driver.py line 162) without excluding payment_status='refunded', so total/week/today driver earnings/deliveries get inflated by refunded orders. Not separately asserted in this run, but follows from reading the code."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter43_refunds_and_webhook.py",
+    "/app/test_reports/pytest/iter43_refunds.xml"
+  ],
+  "action_items": [
+    "Fix /api/driver/wallet so refunded orders are excluded from driver earnings. Recommended: replace the ad-hoc delivered-orders scan with a call to compute_driver_balance(driver_id) (already used by /api/wallet/driver) so the wallet is consistently derived from payment_status='captured'. As a smaller patch, add {'payment_status': {'$nin': ['refunded']}} to the find() filter at routes/driver.py:78 and emit a synthetic 'refund' transaction line so the UI stays consistent. Apply the same exclusion to /api/driver/performance (routes/driver.py:162).",
+    "Consider mirroring the refund into a negative driver_amount on the ledger as well (currently driver_amount=0 on refund rows — fine for accounting, but makes per-driver finance reports under-state the clawback if anyone aggregates from the ledger)."
+  ],
+  "critical_code_review_comments": [
+    "Refund endpoint correctly uses an idempotency key keyed on (order_id, amount). Note: this means the SAME amount partial refund retried collapses to one Stripe refund, but a re-submitted IDENTICAL refund returns Stripe's cached result — the ledger insert is guarded by stripe_refund_id dedupe, which we verified.",
+    "Webhook dedupe correctly uses Mongo unique _id constraint via insert_one() + DuplicateKeyError. The 2592000s TTL index keeps the collection bounded.",
+    "Refund route only checks payment_status=='captured' — good. It also re-validates amount<=captured (with 1c slack) before calling Stripe, so over-refund is caught locally with a 400.",
+    "_apply_refund_to_order writes a refund row only if stripe_refund_id is non-empty — good idempotency boundary.",
+    "Refund summary returned to the caller reuses _payment_summary() then overwrites refunded_amount with fresh DB value — make sure _payment_summary() already includes payment_status==refunded mapping (it does, via the order doc)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter43_refunds_and_webhook.py (new)"
+  ],
+  "success_rate": {
+    "backend": "97.7% (43/44 — new 17/18 + regression 26/26)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "seed_data_creation": "Used POST /api/seed-demo (idempotent) to create demo shipper/driver/admin. Test-created orders are tagged with TEST_Refund_ prefix in cargo_description; some test orders are intentionally left in 'refunded'/'payment_failed' state for assertion purposes — non-destructive to demo accounts.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Stripe is in TEST mode. There's no STRIPE_WEBHOOK_SECRET configured -> webhook path uses dev-fallback JSON. Use /payments/orders/{id}/authorize-test (test key only) to authorize without the hosted Checkout page. To repro the wallet-refund bug: capture+deliver an order assigned to demo.driver, snapshot /api/driver/wallet, full-refund the order, re-fetch /api/driver/wallet -> balance unchanged (BUG). Note: /api/wallet/driver (alternate route that uses compute_driver_balance) DOES drop the order correctly; only /api/driver/wallet is broken.",
+  "rca_of_issue": "Bug: /api/driver/wallet counts fully-refunded orders in driver earnings.\nReproduction (automated in TestDriverWalletAfterRefund.test_full_refund_excludes_from_driver_wallet):\n  1. POST /api/seed-demo; login demo.driver and demo.shipper and admin.\n  2. Snapshot GET /api/driver/wallet (available+pending).\n  3. Shipper creates order; POST /api/payments/orders/{id}/authorize-test; attach demo driver_id; admin POST /api/payments/orders/{id}/capture; set order.status='delivered'.\n  4. GET /api/driver/wallet -> balance increased.\n  5. Admin POST /api/payments/orders/{id}/refund (no amount = full).\n  6. GET /api/driver/wallet -> balance STILL elevated (expected: drop back to step-2 snapshot).\nRoot cause: routes/driver.py:76-80 queries {'status': 'delivered', 'driver_id': driver_id} without referencing payment_status. The canonical earning calc (compute_driver_balance in server.py:3835) correctly limits to payment_status='captured' but the /driver/wallet handler reimplements its own legacy delivered-orders aggregation.\nMitigation: refactor /driver/wallet (routes/driver.py:63) to delegate balance math to compute_driver_balance(driver_id) — this single-sources the rule that 'earnings = captured payments' and automatically fixes refund handling, dispute handling and the parallel performance endpoint if migrated together."
+}

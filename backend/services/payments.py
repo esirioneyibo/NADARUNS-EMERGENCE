@@ -214,6 +214,23 @@ def cancel_payment_intent(intent_id: str) -> stripe.PaymentIntent:
     return stripe.PaymentIntent.cancel(intent_id)
 
 
+def refund_payment_intent(
+    intent_id: str,
+    amount_cents: int | None = None,
+    idempotency_key: str | None = None,
+) -> "stripe.Refund":
+    """Refund a CAPTURED PaymentIntent (full when amount_cents is None, else partial).
+
+    Use an idempotency key so a retried HTTP request never double-refunds.
+    Only valid once funds are captured — for an authorization that has not been
+    captured yet, cancel the PaymentIntent instead.
+    """
+    params: dict = {"payment_intent": intent_id}
+    if amount_cents is not None:
+        params["amount"] = int(amount_cents)
+    return stripe.Refund.create(idempotency_key=idempotency_key, **params)
+
+
 def create_test_authorization(amount_eur: float, metadata: dict | None = None) -> stripe.PaymentIntent:
     """Create + confirm a manual-capture PaymentIntent using a Stripe test card.
 

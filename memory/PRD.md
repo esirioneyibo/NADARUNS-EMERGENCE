@@ -176,3 +176,11 @@ Split the 8513-line monolith: all 163 `@api_router` handlers extracted into per-
 Split `frontend/app/fleet.tsx` (1146 lines) by extracting its 10 prop-driven presentational components (Banner, Field, DriverCard, VehicleCard, JobCard, VehicleTypePicker, AddDriverModal, AddVehicleModal, PayoutModal, PayoutRow) + VEHICLE_TYPE_OPTIONS into `frontend/src/components/fleet/FleetComponents.tsx`. fleet.tsx now 743 lines (container + makeStyles only) and imports the components. Behavior unchanged (components were already fully prop-driven; `s` styles passed in). Lint clean (0 issues). Verified via screenshot: fleet screen renders (company header, acceptance-mode toggles, Drivers/Vehicles/Jobs/Wallet tabs, DriverCard) and AddDriverModal opens with all Field inputs + VehicleTypePicker working.
 
 ### Backend refactor Phase 2 (move models/helpers → core/models.py): NOT STARTED (optional/deferred)
+
+### Phase 1: Stripe payment + wallet hardening (Jun 2026 fork, COMPLETE)
+World-standard recommendation #1. Added on top of existing authorize->capture flow:
+- **Admin refunds** (`POST /api/payments/orders/{id}/refund`, RefundBody{amount?,reason?}): full or partial refund of a CAPTURED PaymentIntent via `payments.refund_payment_intent` (Stripe Refund.create w/ idempotency_key). Full refund -> order payment_status 'refunded' (excluded from driver earnings in compute_driver_balance); partial keeps 'captured' (platform absorbs) + logged. Validates against captured amount (over-refund rejected); only 'captured' orders refundable.
+- **Refund ledger**: negative `payment_transactions` entry (type=refund) keyed/deduped on `stripe_refund_id`; sets order refunded_amount/refunded_at/refund_reason.
+- **Webhook hardening** (`/api/payments/webhook`): event-id dedupe via `processed_webhook_events` (unique _id + 30-day TTL index) so Stripe retries never double-process; now also handles `charge.refunded` (dashboard/dispute refunds), `charge.dispute.created` (flags order has_dispute), and `payment_intent.payment_failed` (-> payment_status 'payment_failed').
+- Service: `services/payments.py` gained `refund_payment_intent(intent_id, amount_cents?, idempotency_key?)`.
+- Verified: self-tested full+partial refund lifecycle (authorize-test->capture->refund) on Stripe test key; 56 payment/webhook pytest pass; over-refund & double-refund correctly rejected.

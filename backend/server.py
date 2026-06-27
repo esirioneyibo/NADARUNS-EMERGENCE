@@ -4,6 +4,7 @@ from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 import os
 import logging
 import random
@@ -917,6 +918,11 @@ class CaptureBody(BaseModel):
     amount: Optional[float] = None  # optional partial capture (EUR)
 
 
+class RefundBody(BaseModel):
+    amount: Optional[float] = None  # optional partial refund (EUR); None = full
+    reason: Optional[str] = None    # admin note / dispute reference
+
+
 class StripeSettingsBody(BaseModel):
     test_secret_key: Optional[str] = None
     live_secret_key: Optional[str] = None
@@ -1332,6 +1338,8 @@ async def create_database_indexes():
         await db.payment_transactions.create_index("shipper_id")
         await db.payment_transactions.create_index([("stripe_payment_intent_id", 1), ("type", 1)])
         await db.payment_transactions.create_index([("created_at", -1)])
+        # Webhook event dedupe (Stripe retries) — auto-expire after 30 days.
+        await db.processed_webhook_events.create_index("created_at", expireAfterSeconds=2592000)
 
         # Driver cash-out / withdrawal requests
         await db.withdrawal_requests.create_index("driver_id")
@@ -3668,6 +3676,66 @@ async def _record_ledger(order: dict, intent, kind: str, status: str, split: dic
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.payment_transactions.insert_one(doc)
+
+
+async def _webhook_event_seen(event_id: str) -> bool:
+    """Atomically record a Stripe webhook event id. Returns True if it was
+    already processed (so retried/duplicate deliveries are ignored)."""
+    if not event_id:
+        return False
+    try:
+        await db.processed_webhook_events.insert_one(
+            {"_id": event_id, "created_at": datetime.now(timezone.utc)}
+        )
+        return False
+    except DuplicateKeyError:
+        return True
+
+
+async def _apply_refund_to_order(order: dict, refund) -> dict:
+    """Record a Stripe refund against an order + ledger and update its status.
+
+    Full refund -> payment_status 'refunded' (the delivery is excluded from the
+    driver's captured earnings). Partial refund keeps 'captured' and is logged
+    for audit (the platform absorbs the partial amount). Idempotent per refund id.
+    """
+    order_id = order["id"]
+    refund_eur = payments.from_cents(getattr(refund, "amount", 0) or 0)
+    refund_id = getattr(refund, "id", None)
+    intent_id = getattr(refund, "payment_intent", None) or order.get("stripe_payment_intent_id")
+    captured_gross = float(order.get("payment_amount") or 0)
+    is_full = refund_eur >= (captured_gross - 0.01)
+
+    if refund_id:
+        already = await db.payment_transactions.find_one({"stripe_refund_id": refund_id})
+        if not already:
+            await db.payment_transactions.insert_one({
+                "id": str(uuid.uuid4()),
+                "order_id": order_id,
+                "order_number": order.get("order_number"),
+                "shipper_id": order.get("shipper_id"),
+                "driver_id": order.get("driver_id"),
+                "type": "refund",
+                "gross_amount": -round(refund_eur, 2),
+                "commission_amount": 0.0,
+                "driver_amount": 0.0,
+                "commission_rate": 0.0,
+                "currency": "EUR",
+                "stripe_payment_intent_id": intent_id,
+                "stripe_refund_id": refund_id,
+                "status": "completed",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+    updates: dict = {
+        "refunded_amount": round(refund_eur, 2),
+        "refunded_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if is_full:
+        updates["payment_status"] = "refunded"
+    await db.orders.update_one({"id": order_id}, {"$set": updates})
+    order.update(updates)
+    return updates
 
 
 async def _apply_intent_to_order(order: dict, intent) -> dict:
