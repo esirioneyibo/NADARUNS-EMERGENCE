@@ -184,3 +184,6 @@ World-standard recommendation #1. Added on top of existing authorize->capture fl
 - **Webhook hardening** (`/api/payments/webhook`): event-id dedupe via `processed_webhook_events` (unique _id + 30-day TTL index) so Stripe retries never double-process; now also handles `charge.refunded` (dashboard/dispute refunds), `charge.dispute.created` (flags order has_dispute), and `payment_intent.payment_failed` (-> payment_status 'payment_failed').
 - Service: `services/payments.py` gained `refund_payment_intent(intent_id, amount_cents?, idempotency_key?)`.
 - Verified: self-tested full+partial refund lifecycle (authorize-test->capture->refund) on Stripe test key; 56 payment/webhook pytest pass; over-refund & double-refund correctly rejected.
+
+#### Phase 1 follow-up fix (testing iter43): driver earnings excluded refunded orders
+testing_agent found `/api/driver/wallet` and `/api/driver/performance` counted fully-refunded deliveries. Fixed in `routes/driver.py`: both delivered-order queries now filter `payment_status != 'refunded'`. Re-verified: test_iter43 18/18 pass + 98 payment/wallet/finance tests pass. (Partial refunds keep 'captured' so driver still earns full share — platform absorbs partial.)

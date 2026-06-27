@@ -73,9 +73,10 @@ async def get_driver_wallet(credentials: HTTPAuthorizationCredentials = Depends(
     if user_type != "driver":
         raise HTTPException(403, "Driver access required")
     
-    # Get all delivered orders for this driver
+    # Get all delivered orders for this driver (exclude fully-refunded ones —
+    # a refunded delivery must not count toward earnings).
     history = await db.orders.find(
-        {"status": "delivered", "driver_id": driver_id}, 
+        {"status": "delivered", "driver_id": driver_id, "payment_status": {"$ne": "refunded"}},
         {"_id": 0}
     ).sort("completed_at", -1).limit(100).to_list(100)
     
@@ -158,9 +159,10 @@ async def get_driver_performance(credentials: HTTPAuthorizationCredentials = Dep
     week_ago = now - timedelta(days=7)
     today = now.date()
 
-    # Delivered orders for THIS driver only (strict per-driver scoping).
+    # Delivered orders for THIS driver only (strict per-driver scoping); a
+    # fully-refunded delivery is excluded from earnings/performance.
     delivered = await db.orders.find(
-        {"status": "delivered", "driver_id": driver_id}, {"_id": 0}
+        {"status": "delivered", "driver_id": driver_id, "payment_status": {"$ne": "refunded"}}, {"_id": 0}
     ).sort("completed_at", -1).to_list(500)
 
     def parse_ts(ts):
