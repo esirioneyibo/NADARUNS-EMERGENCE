@@ -217,6 +217,66 @@ async def get_price_quote(request: PriceQuoteRequest):
     )
 
 
+@router.post("/shipper/quote/recommend")
+async def get_marketplace_quote(request: PriceQuoteRequest):
+    """Marketplace quote: balanced engine price + region Supply/Demand & Market
+    Heat + a 4-tier recommendation set (Budget/Balanced/Fast/Premium) with
+    estimated driver acceptance %, waiting time and savings vs traditional freight.
+    """
+    vehicle = VEHICLE_TYPES.get(request.vehicle_type)
+    if not vehicle:
+        raise HTTPException(400, f"Invalid vehicle type: {request.vehicle_type}")
+
+    route = await fetch_road_route(
+        request.pickup_lat, request.pickup_lng,
+        request.dropoff_lat, request.dropoff_lng,
+    )
+    road_km = route["road_distance_km"]
+
+    # Region Supply & Demand + Market Heat (drives the supply_demand adjustment).
+    region = marketplace.resolve_region(request.pickup_lat, request.pickup_lng)
+    sd = await marketplace.region_supply_demand(db, region)
+
+    cfg = pricing.get_config()
+    # Regional + seasonal config adjustments (admin-configurable).
+    regional_pct = float(cfg.get("regional_adjustments", {}).get(region, 0.0)) if region else 0.0
+    month = str(datetime.now(timezone.utc).month)
+    seasonal_pct = float(cfg.get("seasonal_adjustments", {}).get(month, 0.0))
+
+    breakdown = pricing.calculate_price(
+        vehicle_type=request.vehicle_type,
+        distance_km=road_km,
+        weight_kg=request.cargo_weight_kg,
+        urgency=request.urgency,
+        special_handling=request.special_handling,
+        volume_m3=request.cargo_volume_m3,
+        pallets=request.pallet_count,
+        loading_meters=request.loading_meters,
+        supply_demand_pct=sd["adjustment_pct"],
+        regional_pct=regional_pct,
+        seasonal_pct=seasonal_pct,
+    )
+
+    recommendations = marketplace.build_recommendations(
+        breakdown["total_price"], breakdown["traditional_estimate"], sd["heat"], cfg,
+    )
+
+    return {
+        "quote": breakdown,
+        "distance_km": road_km,
+        "estimated_duration_minutes": max(1, int(round(route["duration_minutes"]))),
+        "route_source": route["source"],
+        "marketplace": {
+            "region": sd["region"], "region_name": sd["region_name"],
+            "demand": sd["demand"], "supply": sd["supply"], "ratio": sd["ratio"],
+            "heat": sd["heat"],
+        },
+        "recommendations": recommendations,
+    }
+
+
+
+
 @router.post("/shipper/shipments")
 async def create_shipment(
     request: ShipmentCreateRequest,

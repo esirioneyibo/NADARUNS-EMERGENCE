@@ -214,6 +214,94 @@ async def get_history(request: Request):
     return [Order(**o) for o in items]
 
 
+@router.get("/orders/{order_id}/match")
+async def order_marketplace_match(order_id: str, request: Request, empty: bool = False):
+    """Per-driver marketplace pricing for a job: empty-run + route-match
+    discounts and the region's supply/demand, with the driver's resulting
+    earnings. `?empty=true` is the manual "returning empty" override; otherwise
+    it is auto-inferred from the driver's recent delivery + current location.
+    """
+    driver_id = await get_current_driver_id(request)
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0}) or {}
+
+    pickup = {"lat": order["pickup"]["lat"], "lng": order["pickup"]["lng"]}
+    dropoff = {"lat": order["dropoff"]["lat"], "lng": order["dropoff"]["lng"]}
+    origin = driver.get("current_location") or None
+    if origin and (origin.get("lat") is None or origin.get("lng") is None):
+        origin = None
+
+    # Driver's existing journey destination (active job drop-off), if any.
+    active = await db.orders.find_one(
+        {"driver_id": driver_id, "status": {"$in": list(sm.ACTIVE_STATES)}}, {"_id": 0})
+    driver_dest = None
+    if active and active.get("dropoff"):
+        driver_dest = {"lat": active["dropoff"]["lat"], "lng": active["dropoff"]["lng"]}
+
+    # Empty-run detection: manual override OR auto-infer from a recent delivery
+    # whose drop-off is near this job's pickup while the driver is now idle.
+    returning_empty = bool(empty)
+    auto_empty = False
+    if not returning_empty and not active and origin:
+        recent = await db.orders.find_one(
+            {"driver_id": driver_id, "status": "delivered"},
+            {"_id": 0, "dropoff": 1, "completed_at": 1}, sort=[("completed_at", -1)])
+        if recent and recent.get("dropoff"):
+            d = marketplace.haversine_km(
+                recent["dropoff"]["lat"], recent["dropoff"]["lng"], pickup["lat"], pickup["lng"])
+            if d <= 40:
+                returning_empty = True
+                auto_empty = True
+
+    region = marketplace.resolve_region(pickup["lat"], pickup["lng"])
+    sd = await marketplace.region_supply_demand(db, region)
+    rm = marketplace.route_match_discount(origin, driver_dest, pickup, dropoff)
+    empty_pct = marketplace.empty_run_discount(returning_empty)
+
+    cfg = pricing.get_config()
+    regional_pct = float(cfg.get("regional_adjustments", {}).get(region, 0.0)) if region else 0.0
+    common = dict(
+        vehicle_type=order.get("vehicle_type", "cargo_van"),
+        distance_km=order.get("road_distance_km") or order.get("distance_km") or 0,
+        weight_kg=order.get("cargo_weight_kg") or 0,
+        urgency=order.get("urgency", "standard"),
+        special_handling=order.get("special_handling", False),
+        supply_demand_pct=sd["adjustment_pct"],
+        regional_pct=regional_pct,
+    )
+    # Baseline = normal market price (NO empty-run / route-match discounts).
+    baseline = pricing.calculate_price(**common)
+    # Marketplace price = baseline with the empty-run + route-match discounts.
+    breakdown = pricing.calculate_price(
+        **common,
+        empty_run_discount_pct=empty_pct,
+        route_match_discount_pct=rm["discount_pct"],
+    )
+    tip = float(order.get("tip") or 0.0)
+    earnings = pricing.driver_earnings(breakdown["total_price"], tip)
+    standard_price = baseline["total_price"]
+    return {
+        "order_id": order_id,
+        "standard_price": standard_price,
+        "marketplace_price": breakdown["total_price"],
+        "driver_earnings": earnings,
+        "discounts": {
+            "empty_run_pct": empty_pct,
+            "route_match_pct": rm["discount_pct"],
+            "route_overlap_pct": rm["overlap_pct"],
+            "detour_km": rm["detour_km"],
+            "supply_demand_pct": sd["adjustment_pct"],
+        },
+        "returning_empty": returning_empty,
+        "empty_run_auto_detected": auto_empty,
+        "marketplace": {"region": sd["region"], "region_name": sd["region_name"], "heat": sd["heat"]},
+        "breakdown_lines": breakdown["breakdown_lines"],
+    }
+
+
+
 @router.post("/orders/{order_id}/accept", response_model=Order)
 async def accept_order(order_id: str, request: Request):
     """Atomically claim a pending order for the authenticated driver.

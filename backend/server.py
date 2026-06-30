@@ -26,6 +26,7 @@ from services import order_state_machine as sm
 from services import audit
 from services import idempotency
 from services import pricing
+from services import marketplace
 from services import payments
 from services import email_service
 from services import email_templates as email_tpl

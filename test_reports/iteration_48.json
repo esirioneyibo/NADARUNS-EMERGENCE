@@ -1,0 +1,36 @@
+{
+  "summary": "Phase B Marketplace Intelligence backend tests — 12/12 passed. Verified /api/shipper/quote/recommend (4-tier price ordering, acceptance % monotonic non-decreasing, wait>=2, region resolution for Helsinki/Tampere/Turku, heat label within allowed set & adjustment_pct bounded -0.15..+0.25, invalid vehicle → 400) and /api/orders/{id}/match (driver auth required, 404 for unknown id, default returning_empty=false with no current_location, ?empty=true forces returning_empty + empty_run_pct=0.25 + marketplace_price<standard_price, route_match capped at 0.30, driver_earnings == 85% * marketplace_price + tip). Regression on POST /api/shipper/quote (Phase A) still returns total_price. Discrepancy: spec lists shipper auth guard on /shipper/quote/recommend but the route has NO auth check (consistent with existing Phase A /shipper/quote which is also public). Flagged to main agent.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/shipper/quote/recommend", "issue": "Spec mandates shipper-auth guard but endpoint is publicly accessible without Authorization header (returns 200). Either tighten the route or update the spec. Same pre-existing behaviour as /api/shipper/quote (Phase A). Reference: /app/backend/routes/shipper.py:220-275"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter48_marketplace_phase_b.py",
+    "/app/test_reports/pytest/iter48_phase_b.xml"
+  ],
+  "action_items": [
+    "Decide whether /api/shipper/quote/recommend should require shipper auth. If yes, add `credentials: HTTPAuthorizationCredentials = Depends(security)` + decode_token shipper check (similar to /api/shipper/shipments). If no, update the Phase B spec to drop that bullet.",
+    "Optional cleanup: services/marketplace.py:49 — `return best if best_d <= 150 else best` is a no-op ternary; either return None when far from any region or simplify to `return best`."
+  ],
+  "critical_code_review_comments": [
+    "services/marketplace.py resolve_region: dead-code ternary always returns nearest region regardless of the 150 km guard. Tampere coord (61.50,23.76) still resolves to 'tampere' because nearest centre is within threshold, so callers behave correctly — but the guard suggests an intention that is not honored.",
+    "routes/orders.py order_marketplace_match: when driver has current_location but no active job, driver_dest is None so route_match_discount short-circuits to 0 (verified). This matches the spec ('route_match_pct = 0' when no current_location) but also returns 0 when there IS a current_location yet no active job. Worth a doc comment."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter48_marketplace_phase_b.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "skipped"},
+  "seed_data_creation": "Called POST /api/seed-demo (idempotent). Reused the existing pending demo order; created a new shipment only if none was found. Driver current_location was mutated for route-match test (expected per task note).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Test file: backend/tests/test_iter48_marketplace_phase_b.py is fully self-contained and idempotent. It looks up an existing pending order from the demo shipper's shipments first and falls back to creating one. The recommend endpoint is currently public (no auth) — if main agent adds shipper auth, update TestRecommend.* tests to pass Authorization header.",
+  "rca_of_issue": "N/A — no functional defects found. The only flagged item is a spec/implementation alignment question on auth-guarding the recommend endpoint."
+}
