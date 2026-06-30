@@ -256,3 +256,14 @@ New `backend/services/marketplace.py` (pure deterministic heuristics; pricing en
 - **Fix**: removed `"@sentry/react-native"` from `app.json` plugins. Kept the dependency + the DSN-gated `Sentry.init()` in `app/_layout.tsx` (no-ops without `EXPO_PUBLIC_SENTRY_DSN`), so zero runtime loss; only the failing Gradle task is removed.
 - **Verified**: testing_agent iter52 — driver + shipper flows load cleanly, no Sentry native-module/runtime errors. NOTE: the actual APK Gradle build is NOT reproducible in preview — must be re-confirmed via Publish.
 - **Escalation if it still fails**: also remove the `@sentry/react-native` npm dependency + the import + the init block (then re-add `@sentry/react-native/expo` with a real Sentry auth token only when crash reporting is wanted).
+
+### Security audit + fixes (Jun 2026) — verdict was FAIL, code fixes verified (iter53, 20/20)
+Audit found: SEC-001 default JWT secret (admin forgery), SEC-002 unauthenticated order lifecycle (force-deliver + capture card), SEC-003 forged unsigned Stripe webhooks, SEC-004 default admin password, SEC-005 committed Atlas creds (commented), + P3 hardening.
+**Fixed & verified (code/config):**
+- SEC-002: `routes/orders.py` `advance_order` now requires `get_current_driver_id` + object-level ownership (`order.driver_id == caller`, else 403); `reject_order` requires driver auth. Anonymous → 401, non-assigned → 403, assigned driver full lifecycle still works.
+- SEC-003: `routes/payments.py` webhook now REJECTS (400) when no signing secret configured or signature invalid (removed the unsigned `json.loads` fallback). No DB mutation on forged events.
+- SEC-001: rotated `backend/.env` `JWT_SECRET` to a strong 48-byte random value; all logins still work.
+**STILL REQUIRED AT DEPLOY (user/env actions — cannot be safely forced in preview):**
+- SEC-004: set a strong unique `ADMIN_PASSWORD` (still `admin123` in preview for testing).
+- SEC-005: purge the commented Atlas URI from `.env` and rotate that DB password.
+- P3 hardening backlog: login throttling/lockout on the 3 login endpoints; block `is_suspended` accounts at login; restrict CORS `allow_origins` to known origins; restrict the Google Maps key by package/SHA; remove `payments.py` `authorize-test` from prod.
