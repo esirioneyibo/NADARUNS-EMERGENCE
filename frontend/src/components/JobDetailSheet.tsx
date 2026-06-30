@@ -4,6 +4,7 @@ import {
   Animated,
   Dimensions,
   PanResponder,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,7 +18,10 @@ import SwipeToConfirm from "./SwipeToConfirm";
 import { api } from "../api";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const SHEET_HEIGHT = 450;
+// Flexible bottom sheet: caps at 85% of screen so the pinned Accept button
+// always stays visible even when marketplace / bundle cards add content.
+const SHEET_MAX_HEIGHT = Math.min(640, SCREEN_HEIGHT * 0.85);
+const SLIDE_DISTANCE = SHEET_MAX_HEIGHT;
 
 interface JobDetailSheetProps {
   orders: Order[];
@@ -38,12 +42,12 @@ export default function JobDetailSheet({
   onAccept,
   theme,
 }: JobDetailSheetProps) {
-  const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const translateY = useRef(new Animated.Value(SLIDE_DISTANCE)).current;
   const [accepting, setAccepting] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   
-  // Auto-decline timer (15 seconds)
-  const [timeLeft, setTimeLeft] = useState(15);
+  // Auto-decline timer (30 seconds)
+  const [timeLeft, setTimeLeft] = useState(30);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const styles = createStyles(theme);
@@ -85,7 +89,7 @@ export default function JobDetailSheet({
       }).start();
       
       // Start timer
-      setTimeLeft(15);
+      setTimeLeft(30);
       timerRef.current = setInterval(() => {
         setTimeLeft((t) => {
           if (t <= 1) {
@@ -99,7 +103,7 @@ export default function JobDetailSheet({
     } else {
       // Slide down
       Animated.timing(translateY, {
-        toValue: SHEET_HEIGHT,
+        toValue: SLIDE_DISTANCE,
         duration: 200,
         useNativeDriver: true,
       }).start();
@@ -164,7 +168,7 @@ export default function JobDetailSheet({
   const hasMultiple = orders.length > 1;
 
   // Calculate timer progress
-  const timerProgress = timeLeft / 15;
+  const timerProgress = timeLeft / 30;
 
   // Cargo / package summary
   const pkg = (currentOrder.items || [])
@@ -184,10 +188,9 @@ export default function JobDetailSheet({
           transform: [{ translateY }],
         },
       ]}
-      {...panResponder.panHandlers}
     >
-      {/* Handle bar */}
-      <View style={styles.handleContainer}>
+      {/* Handle bar (drag to dismiss) */}
+      <View style={styles.handleContainer} {...panResponder.panHandlers}>
         <View style={styles.handle} />
       </View>
 
@@ -197,6 +200,13 @@ export default function JobDetailSheet({
         <Text style={styles.timerText}>{timeLeft}s to accept</Text>
       </View>
 
+      {/* Scrollable body so the pinned Accept button is always reachable */}
+      <ScrollView
+        style={styles.scrollBody}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
       {/* Order count indicator (if multiple) */}
       {hasMultiple && (
         <View style={styles.countRow}>
@@ -315,6 +325,7 @@ export default function JobDetailSheet({
           </View>
         </View>
       </View>
+      </ScrollView>
 
       {/* Action buttons - swipe to accept prevents accidental taps */}
       <View style={styles.actions}>
@@ -352,11 +363,17 @@ const createStyles = (theme: any) =>
       bottom: 0,
       left: 0,
       right: 0,
-      height: SHEET_HEIGHT,
+      maxHeight: SHEET_MAX_HEIGHT,
       backgroundColor: theme.surface,
       borderTopLeftRadius: radius.xxl,
       borderTopRightRadius: radius.xxl,
       ...shadows.lg,
+    },
+    scrollBody: {
+      flexShrink: 1,
+    },
+    scrollContent: {
+      paddingBottom: spacing.sm,
     },
     handleContainer: {
       alignItems: "center",
@@ -524,6 +541,8 @@ const createStyles = (theme: any) =>
     },
     actions: {
       paddingHorizontal: spacing.lg,
+      paddingTop: spacing.xs,
+      paddingBottom: spacing.lg,
       gap: 10,
     },
     acceptingRow: {
