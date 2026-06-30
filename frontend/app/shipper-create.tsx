@@ -618,7 +618,7 @@ export default function ShipperCreateScreen() {
           dropoff_contact_phone: dropoffPhone || "",
           dropoff_notes: dropoffNotes || null,
           vehicle_type: vehicleType,
-          cargo_weight_kg: weightNum || 100,
+          cargo_weight_kg: weightNum,
           cargo_dimensions: dims,
           cargo_volume_m3: volM3,
           pallet_count: parseInt(palletCount) || 0,

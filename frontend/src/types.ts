@@ -152,6 +152,13 @@ export interface Vehicle {
   is_primary: boolean;
 }
 
+export interface BankDetails {
+  account_holder?: string | null;
+  iban?: string | null;
+  bank_name?: string | null;
+  swift_bic?: string | null;
+}
+
 export interface Driver {
   id: string;
   name: string;
@@ -172,6 +179,7 @@ export interface Driver {
   notifications: NotificationPrefs;
   company_id?: string | null;
   company_role?: "owner" | "driver" | null;
+  bank_details?: BankDetails | null;
 }
 
 export type JobAcceptanceMode = "self_accept" | "owner_assign" | "hybrid";
@@ -315,6 +323,7 @@ export interface DriverUpdate {
   phone?: string;
   avatar?: string;
   notifications?: NotificationPrefs;
+  bank_details?: BankDetails;
 }
 
 export interface RoutePoint {

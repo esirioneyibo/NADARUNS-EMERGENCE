@@ -50,6 +50,7 @@ export default function WalletScreen() {
   const [modalOpen, setModalOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [account, setAccount] = useState("");
+  const [savedIban, setSavedIban] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
@@ -62,6 +63,13 @@ export default function WalletScreen() {
       setError(null);
       const w = await api.getDriverWallet();
       setWallet(w);
+      // Prefill cash-out IBAN from saved bank details (set once on first load).
+      try {
+        const d = await api.getDriver();
+        const iban = d.bank_details?.iban || null;
+        setSavedIban(iban);
+        if (iban) setAccount((prev) => prev || iban);
+      } catch {}
     } catch (e: any) {
       console.warn("wallet load failed", e);
       setError(e.message || t("wallet.loadError"));
@@ -87,9 +95,13 @@ export default function WalletScreen() {
     try {
       const res = await api.requestWithdrawal({ amount: amt, method: "bank_transfer", account_details: account || undefined });
       setWallet((prev) => prev ? { ...prev, ...res } : prev);
+      // Persist the IBAN so it's pre-filled next time (no re-typing).
+      const cleanIban = account.trim().replace(/\s+/g, "").toUpperCase();
+      if (cleanIban && cleanIban !== savedIban) {
+        try { await api.updateDriver({ bank_details: { iban: cleanIban } }); setSavedIban(cleanIban); } catch {}
+      }
       setModalOpen(false);
       setAmount("");
-      setAccount("");
       setBanner({ kind: "success", text: t("wallet.cashOutRequested", { amount: amt.toFixed(2) }) });
       await load();
     } catch (e: any) {
@@ -245,6 +257,9 @@ export default function WalletScreen() {
               autoCapitalize="characters"
               testID="withdraw-account-input"
             />
+            {savedIban && account.trim().replace(/\s+/g, "").toUpperCase() === savedIban.toUpperCase() ? (
+              <Text style={styles.savedHint}>{t("wallet.usingSavedBank", { defaultValue: "Using your saved bank account" })}</Text>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.confirmBtn, submitting && { opacity: 0.6 }]}
@@ -304,6 +319,7 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: 22, fontWeight: "900", color: theme.textPrimary, letterSpacing: -0.5 },
   sheetSub: { fontSize: 13, color: theme.textSecondary, marginTop: 4, marginBottom: spacing.lg },
   inputLabel: { fontSize: 12, fontWeight: "700", color: theme.textSecondary, marginTop: spacing.md, marginBottom: 6 },
+  savedHint: { fontSize: 12, color: theme.primary, fontWeight: "700", marginTop: 8 },
   input: { backgroundColor: theme.surface, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: theme.textPrimary, borderWidth: 1, borderColor: theme.border },
   confirmBtn: { marginTop: spacing.xl, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: radius.pill, alignItems: "center" },
   confirmBtnText: { color: "#fff", fontWeight: "800", fontSize: 16 },

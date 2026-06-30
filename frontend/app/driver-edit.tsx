@@ -32,6 +32,11 @@ export default function DriverEditScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [avatar, setAvatar] = useState("");
+  // Payout bank details (saved so drivers don't re-type on every cash-out)
+  const [accountHolder, setAccountHolder] = useState("");
+  const [iban, setIban] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [swiftBic, setSwiftBic] = useState("");
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -49,6 +54,10 @@ export default function DriverEditScreen() {
       setEmail(d.email);
       setPhone(d.phone);
       setAvatar(d.avatar);
+      setAccountHolder(d.bank_details?.account_holder || "");
+      setIban(d.bank_details?.iban || "");
+      setBankName(d.bank_details?.bank_name || "");
+      setSwiftBic(d.bank_details?.swift_bic || "");
     } catch (e) {
       console.warn("driver-edit load failed", e);
     }
@@ -97,7 +106,18 @@ export default function DriverEditScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setSaving(true);
     try {
-      await api.updateDriver({ name: name.trim(), email: email.trim(), phone: phone.trim(), avatar });
+      await api.updateDriver({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        avatar,
+        bank_details: {
+          account_holder: accountHolder.trim() || null,
+          iban: iban.trim().replace(/\s+/g, "").toUpperCase() || null,
+          bank_name: bankName.trim() || null,
+          swift_bic: swiftBic.trim().toUpperCase() || null,
+        },
+      });
       flash("Profile updated");
       setTimeout(() => router.back(), 700);
     } catch (e) {
@@ -169,6 +189,19 @@ export default function DriverEditScreen() {
             <Field label="Phone" icon="call-outline" value={phone} onChangeText={setPhone} keyboardType="phone-pad" theme={theme} />
           </View>
 
+          {/* Payout bank details */}
+          <Text style={styles.sectionTitle}>PAYOUT / BANK DETAILS</Text>
+          <Text style={styles.avatarHint}>Saved securely so you don&apos;t re-type them on every cash-out.</Text>
+          <View style={[styles.card, shadows.sm]}>
+            <Field label="Account holder name" icon="person-circle-outline" value={accountHolder} onChangeText={setAccountHolder} placeholder="e.g. Eero Virtanen" theme={theme} />
+            <Divider theme={theme} />
+            <Field label="IBAN" icon="card-outline" value={iban} onChangeText={setIban} placeholder="FI00 0000 0000 0000" autoCapitalize="characters" theme={theme} />
+            <Divider theme={theme} />
+            <Field label="Bank name" icon="business-outline" value={bankName} onChangeText={setBankName} placeholder="e.g. Nordea" theme={theme} />
+            <Divider theme={theme} />
+            <Field label="SWIFT / BIC" icon="globe-outline" value={swiftBic} onChangeText={setSwiftBic} placeholder="NDEAFIHH" autoCapitalize="characters" theme={theme} />
+          </View>
+
           <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} onPress={save} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save changes</Text>}
           </TouchableOpacity>
@@ -204,6 +237,7 @@ function Field(props: any) {
           keyboardType={props.keyboardType}
           autoCapitalize={props.autoCapitalize}
           secureTextEntry={props.secureTextEntry}
+          placeholder={props.placeholder}
           placeholderTextColor={props.theme.textSecondary}
         />
       </View>

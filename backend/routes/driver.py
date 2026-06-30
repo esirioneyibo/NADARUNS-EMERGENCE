@@ -305,6 +305,13 @@ async def update_driver(update: DriverUpdate, request: Request):
     payload = {k: v for k, v in update.model_dump(exclude_unset=True).items() if v is not None}
     if payload.get("notifications") is not None:
         payload["notifications"] = update.notifications.model_dump()
+
+    # Merge bank_details per-field (dot notation) so a partial update (e.g. the
+    # wallet sending only the IBAN) never wipes other saved fields.
+    if "bank_details" in payload and isinstance(payload["bank_details"], dict):
+        bank = payload.pop("bank_details")
+        for bk, bv in bank.items():
+            payload[f"bank_details.{bk}"] = bv
     
     # Update vehicle string if vehicle_type or plate is updated
     if "vehicle_type" in payload or "plate" in payload:

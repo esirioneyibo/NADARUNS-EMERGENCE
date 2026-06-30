@@ -111,7 +111,7 @@ export default function Settings({ notify }: { notify: (m: string, t?: "ok" | "e
 
         <div className="adm-field" style={{ marginBottom: 18 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Webhook size={15} /> Webhook signing secret {status.webhook_configured && <span style={{ color: "#16A34A", fontWeight: 700 }}>· set</span>}
+            <Webhook size={15} /> Webhook signing secret {status.webhook_configured && <span style={{ color: "#16A34A", fontWeight: 700 }}>· set{status.webhook_secret_masked ? ` (${status.webhook_secret_masked})` : ""}</span>}
           </label>
           <input className="adm-input" data-testid="webhook-input" type="password" placeholder="whsec_..." value={webhook} onChange={(e) => setWebhook(e.target.value)} autoComplete="off" />
         </div>
