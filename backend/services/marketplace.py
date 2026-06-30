@@ -46,7 +46,7 @@ def resolve_region(lat: Optional[float], lng: Optional[float]) -> Optional[str]:
         d = haversine_km(lat, lng, r["lat"], r["lng"])
         if d < best_d:
             best, best_d = key, d
-    return best if best_d <= 150 else best  # always return nearest; callers may inspect
+    return best  # always nearest region (Finland-wide coverage)
 
 
 def region_name(region: Optional[str]) -> Optional[str]:
