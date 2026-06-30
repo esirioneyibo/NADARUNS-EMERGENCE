@@ -183,4 +183,14 @@ export const adminApi = {
     req<any>(`/admin/fleet/payouts/${id}/pay`, { method: "POST", body: JSON.stringify({ reference }) }),
   rejectCompanyPayout: (id: string, reason?: string) =>
     req<any>(`/admin/fleet/payouts/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+
+  // ---- Pricing console (versioned) ----
+  getPricing: () => req<any>("/admin/pricing"),
+  getPricingDefaults: () => req<any>("/admin/pricing/defaults"),
+  savePricing: (config: any, note?: string) =>
+    req<any>("/admin/pricing", { method: "POST", body: JSON.stringify({ config, note }) }),
+  activatePricing: (version: number) =>
+    req<any>(`/admin/pricing/activate/${version}`, { method: "POST" }),
+  previewPricing: (config: any, sample: any) =>
+    req<any>("/admin/pricing/preview", { method: "POST", body: JSON.stringify({ config, sample }) }),
 };

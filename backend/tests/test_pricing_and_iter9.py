@@ -231,7 +231,7 @@ class TestCreateShipment:
         order = r2.json()
         # tip should equal offer
         assert _approx(float(order.get("tip", 0)), offer, tol=0.01)
-        expected_earnings = round(data["base_price"] * 0.8 + offer, 2)
+        expected_earnings = round(data["base_price"] * 0.85 + offer, 2)
         assert _approx(float(order.get("earnings", 0)), expected_earnings, tol=0.02), (
             f"earnings={order.get('earnings')} expected={expected_earnings}"
         )

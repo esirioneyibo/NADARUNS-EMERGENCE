@@ -1,6 +1,6 @@
 """Auto-extracted admin routes. Handler bodies are unchanged; shared names
 (db, models, helpers, FastAPI symbols) are injected from the server module."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Body
 import server as _srv
 
 _g = globals()
@@ -1196,6 +1196,75 @@ async def admin_update_stripe_settings(body: StripeSettingsBody, user: dict = De
     )
     await _persist_stripe_settings(user.get("id"))
     return payments.get_status()
+
+
+# ===================== Admin: Pricing Console (versioned) =====================
+
+@router.get("/admin/pricing")
+async def admin_get_pricing(user: dict = Depends(get_admin_user)):
+    """Active pricing config + full version history (for rollback)."""
+    active = await db.pricing_configs.find_one({"active": True}, {"_id": 0})
+    versions = await db.pricing_configs.find(
+        {}, {"_id": 0, "config": 0}
+    ).sort("version", -1).to_list(200)
+    return {
+        "active_version": (active or {}).get("version"),
+        "config": (active or {}).get("config") or pricing.DEFAULT_CONFIG,
+        "versions": versions,
+        "vehicle_types": list(VEHICLE_TYPES.keys()),
+    }
+
+
+@router.get("/admin/pricing/defaults")
+async def admin_pricing_defaults(user: dict = Depends(get_admin_user)):
+    """The built-in default config (for a 'reset to defaults' action)."""
+    return {"config": pricing.DEFAULT_CONFIG}
+
+
+@router.post("/admin/pricing")
+async def admin_save_pricing(body: dict = Body(...), user: dict = Depends(get_admin_user)):
+    """Create a NEW active pricing version (history preserved; never overwrites)."""
+    config = body.get("config")
+    if not isinstance(config, dict) or not config.get("base_fees"):
+        raise HTTPException(400, "A full 'config' object with base_fees is required")
+    note = (body.get("note") or "").strip()
+    doc = await _srv.save_pricing_version(config, note, user.get("id"))
+    return {"saved": True, "version": doc["version"], "config": doc["config"], "note": doc["note"]}
+
+
+@router.post("/admin/pricing/activate/{version}")
+async def admin_activate_pricing(version: int, user: dict = Depends(get_admin_user)):
+    """Roll back to / activate an existing pricing version."""
+    target = await _srv.activate_pricing_version(version, user.get("id"))
+    return {"activated": True, "version": version, "config": target.get("config")}
+
+
+@router.post("/admin/pricing/preview")
+async def admin_preview_pricing(body: dict = Body(...), user: dict = Depends(get_admin_user)):
+    """Run the engine against a sample shipment WITHOUT persisting — lets admins
+    see the effect of config changes (including marketplace adjustments) live."""
+    cfg = body.get("config") or pricing.get_config()
+    s = body.get("sample") or {}
+    result = pricing.compute(
+        vehicle_type=s.get("vehicle_type", "cargo_van"),
+        distance_km=float(s.get("distance_km", 50) or 0),
+        actual_weight_kg=float(s.get("cargo_weight_kg", 500) or 0),
+        volume_m3=float(s.get("cargo_volume_m3", 0) or 0),
+        pallets=int(s.get("pallet_count", 0) or 0),
+        loading_meters=float(s.get("loading_meters", 0) or 0),
+        urgency=s.get("urgency", "standard"),
+        special_handling=bool(s.get("special_handling", False)),
+        capacity_utilization_pct=s.get("capacity_utilization_pct"),
+        supply_demand_pct=float(s.get("supply_demand_pct", 0) or 0),
+        empty_run_discount_pct=float(s.get("empty_run_discount_pct", 0) or 0),
+        route_match_discount_pct=float(s.get("route_match_discount_pct", 0) or 0),
+        regional_pct=float(s.get("regional_pct", 0) or 0),
+        seasonal_pct=float(s.get("seasonal_pct", 0) or 0),
+        reputation_pct=float(s.get("reputation_pct", 0) or 0),
+        config=cfg,
+    )
+    return {"quote": result}
+
 
 
 @router.get("/admin/fleet/companies")

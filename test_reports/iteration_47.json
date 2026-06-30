@@ -1,0 +1,35 @@
+{
+  "summary": "Phase A pricing engine + admin pricing console fully verified. 22/22 pytest cases pass against the public preview URL covering auth guards, GET active/defaults, save validation (400 without base_fees), preview engine correctness (empty-run discount line negative, urgency emergency > standard, refrigerated/hazmat special-vehicle surcharge lines, weight bands light vs very-heavy on semi_truck, min-price floor line for tiny distance, fuel line always present, supply/demand surge +, route-match discount -), versioning (new version increments + becomes active, prior versions stay inactive, preview does NOT persist, activate/{unknown} -> 404, rollback to v1 restores defaults immediately), and live shipper /api/shipper/quote subtotal (base+distance) matches engine + active config has 85/15 driver/platform split. Active pricing config was rolled back to version 1 (defaults) at the end of testing as requested.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter47_pricing_engine.py",
+    "/app/test_reports/pytest/iter47_pricing.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "pricing.py compute() exposes back-compat aliases freight_fee/weight_fee/freight_rate_per_kg as zero — fine for now but the shipper /quote response still surfaces weight_surcharge=0 / freight_fee=0; if the mobile UI still renders a 'Weight surcharge' line it will always show €0.00. Consider removing or replacing with weight_category + weight_adjustment_pct on the response model.",
+    "admin_save_pricing only validates presence of base_fees; it accepts arbitrary unknown keys / wrong types inside the config (e.g. fuel_pct as a string would crash at preview/quote time with a 500). Add lightweight schema validation (pydantic model) for safer admin edits.",
+    "save_pricing_version persists the raw incoming config without merging over DEFAULT_CONFIG, so if an admin saves a config missing e.g. weight_bands, the engine still works (it falls back to DEFAULT inside configure()) but the stored doc is incomplete and the UI 'view this version' would show holes. Consider storing the merged config."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter47_pricing_engine.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "seed_data_creation": "None. Two sentinel pricing versions were created during testing (v2/v3 with fuel_pct=0.123, cargo_van base=19.99) — version history is preserved as designed; active version rolled back to v1 (defaults) at the end so demo pricing stays unchanged.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Active pricing config is on version 1 (defaults). pricing_configs collection now has ≥3 docs (v1 default + sentinel v2/v3). Tests at /app/backend/tests/test_iter47_pricing_engine.py are idempotent: each save adds a new version, and the final test rolls back to v1, so it is safe to re-run repeatedly.",
+  "rca_of_issue": "N/A — no bug. Phase A re-architecture verified end-to-end (engine math, versioning, rollback, preview no-persist, live quote integration, 85% driver share)."
+}

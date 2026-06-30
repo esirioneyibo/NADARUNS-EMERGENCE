@@ -4041,6 +4041,64 @@ async def _persist_stripe_settings(admin_id: Optional[str] = None):
     )
 
 
+# ===================== Pricing config (versioned, admin-editable) =====================
+
+async def load_pricing_config():
+    """Load the ACTIVE pricing config version from DB on startup, or seed v1."""
+    try:
+        active = await db.pricing_configs.find_one({"active": True}, {"_id": 0})
+        if active:
+            pricing.configure(active.get("config"), version=active.get("version"))
+            logger.info("Loaded pricing config v%s from DB", active.get("version"))
+        else:
+            doc = {
+                "version": 1,
+                "active": True,
+                "config": pricing.DEFAULT_CONFIG,
+                "note": "Initial seed (defaults)",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": "system",
+            }
+            await db.pricing_configs.insert_one(dict(doc))
+            pricing.configure(pricing.DEFAULT_CONFIG, version=1)
+            logger.info("Seeded pricing config v1 from defaults")
+    except Exception as exc:
+        logger.warning("Could not load pricing config: %s", exc)
+        pricing.configure(pricing.DEFAULT_CONFIG, version=None)
+
+
+async def save_pricing_version(config: dict, note: str, admin_id: Optional[str] = None) -> dict:
+    """Create a NEW active pricing version (never overwrites history)."""
+    last = await db.pricing_configs.find_one({}, {"_id": 0, "version": 1}, sort=[("version", -1)])
+    next_version = int((last or {}).get("version", 0)) + 1
+    doc = {
+        "version": next_version,
+        "active": True,
+        "config": config,
+        "note": note or f"Version {next_version}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": admin_id or "admin",
+    }
+    await db.pricing_configs.update_many({"active": True}, {"$set": {"active": False}})
+    await db.pricing_configs.insert_one(dict(doc))
+    pricing.configure(config, version=next_version)
+    doc.pop("_id", None)
+    return doc
+
+
+async def activate_pricing_version(version: int, admin_id: Optional[str] = None) -> dict:
+    """Roll back / activate an existing version (history preserved)."""
+    target = await db.pricing_configs.find_one({"version": version}, {"_id": 0})
+    if not target:
+        raise HTTPException(404, f"Pricing version {version} not found")
+    await db.pricing_configs.update_many({"active": True}, {"$set": {"active": False}})
+    await db.pricing_configs.update_one({"version": version}, {"$set": {"active": True}})
+    pricing.configure(target.get("config"), version=version)
+    logger.info("Activated pricing config v%s (rollback by %s)", version, admin_id)
+    return target
+
+
+
 
 
 
@@ -4228,6 +4286,7 @@ async def backfill_pickup_locations():
 async def on_startup():
     await ensure_seed()
     await load_stripe_settings()
+    await load_pricing_config()
     await backfill_pickup_locations()
 
 

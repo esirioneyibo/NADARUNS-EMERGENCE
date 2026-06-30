@@ -256,9 +256,9 @@ class TestPayments:
         com = d.get("commission_amount") or 0
         payout = d.get("driver_payout_amount") or 0
         assert abs((com + payout) - gross) < 0.05, f"commission+payout={com+payout} gross={gross}"
-        # 80/20 split on the BASE (no offer here), so payout ~= 80% of gross
-        assert abs(payout - round(gross * 0.80, 2)) < 0.10, \
-            f"expected ~80% payout. payout={payout} gross={gross}"
+        # 85/15 split on the BASE (no offer here), so payout ~= 85% of gross
+        assert abs(payout - round(gross * 0.85, 2)) < 0.10, \
+            f"expected ~85% payout. payout={payout} gross={gross}"
 
     def test_auto_capture_on_delivery(self, shipper_token, driver_token):
         order = _create_shipment(shipper_token)
