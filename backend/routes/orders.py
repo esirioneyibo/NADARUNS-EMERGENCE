@@ -480,7 +480,7 @@ async def accept_order(order_id: str, request: Request):
 
 @router.post("/orders/{order_id}/reject", response_model=Order)
 async def reject_order(order_id: str, request: Request):
-    driver_id = await get_optional_driver_id(request)
+    driver_id = await get_current_driver_id(request)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
@@ -506,10 +506,14 @@ async def advance_order(order_id: str, body: AdvanceRequest, request: Request):
     - Credits the AUTHENTICATED driver on delivery (fixes the legacy bug that
       always credited a hardcoded driver id).
     """
-    driver_id = await get_optional_driver_id(request)
+    driver_id = await get_current_driver_id(request)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
+    # Object-level authorization: only the assigned driver may advance the order
+    # (advancing triggers payment capture on delivery).
+    if order.get("driver_id") and order["driver_id"] != driver_id:
+        raise HTTPException(403, "You are not the assigned driver for this order")
 
     current = order["status"]
 

@@ -352,18 +352,17 @@ async def stripe_webhook(request: Request):
     sig = request.headers.get("stripe-signature", "")
 
     event = None
-    if payments.STRIPE_WEBHOOK_SECRET:
-        try:
-            event = payments.construct_webhook_event(payload, sig)
-        except Exception as exc:
-            logger.warning(f"Webhook signature verification failed: {exc}")
-            raise HTTPException(400, "Invalid signature")
-    else:
-        # Dev fallback when no signing secret is configured.
-        try:
-            event = json.loads(payload.decode("utf-8"))
-        except Exception:
-            raise HTTPException(400, "Invalid payload")
+    if not payments.STRIPE_WEBHOOK_SECRET:
+        # Without a signing secret we cannot verify authenticity — reject rather
+        # than trust an attacker-supplied event. Configure the secret in
+        # Admin -> Pricing/Settings (or STRIPE_WEBHOOK_SECRET) to enable webhooks.
+        logger.error("Stripe webhook received but no signing secret configured — rejecting")
+        raise HTTPException(400, "Webhook signing secret not configured")
+    try:
+        event = payments.construct_webhook_event(payload, sig)
+    except Exception as exc:
+        logger.warning(f"Webhook signature verification failed: {exc}")
+        raise HTTPException(400, "Invalid signature")
 
     event_id = event.get("id") if isinstance(event, dict) else getattr(event, "id", None)
     etype = event.get("type") if isinstance(event, dict) else event["type"]
