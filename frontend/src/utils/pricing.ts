@@ -77,6 +77,20 @@ const URGENCY_MULTIPLIERS: Record<string, number> = {
   emergency: 2.0,
 };
 
+// Weight CATEGORY adjustments (mirrors backend weight_bands). Weight no longer
+// charges per-kg; the chargeable weight just selects a small % bump.
+const WEIGHT_BANDS: { maxKg: number | null; pct: number }[] = [
+  { maxKg: 500, pct: 0.0 },
+  { maxKg: 2000, pct: 0.05 },
+  { maxKg: 8000, pct: 0.1 },
+  { maxKg: 16000, pct: 0.18 },
+  { maxKg: null, pct: 0.25 },
+];
+const weightAdjustmentPct = (kg: number): number => {
+  for (const b of WEIGHT_BANDS) if (b.maxKg === null || kg <= b.maxKg) return b.pct;
+  return 0.25;
+};
+
 export interface PriceBreakdown {
   distance_km: number;
   estimated_duration_minutes: number;
@@ -169,22 +183,24 @@ export function calculatePrice({
 }: EstimateInput): PriceBreakdown {
   const baseFee = BASE_FEES[vehicleType] ?? BASE_FEES.other;
   const kmRate = KM_RATES[vehicleType] ?? KM_RATES.other;
-  const freightRate = FREIGHT_KG_RATES[vehicleType] ?? FREIGHT_KG_RATES.other;
   const dist = Math.max(0, Number(distanceKm) || 0);
 
   const distanceFee = dist * kmRate;
   const cw = chargeableWeight(weightKg, volumeM3, pallets, loadingMeters);
-  const freightFee = cw.weight * freightRate;
-  const subtotal = baseFee + distanceFee + freightFee;
+  // Distance is the primary driver; weight is only a category % adjustment.
+  const core = baseFee + distanceFee;
+  const weightPct = weightAdjustmentPct(cw.weight);
 
   const urgencyMult = URGENCY_MULTIPLIERS[urgency] ?? 1.0;
   let specialMult = 1.0 + (SPECIAL_VEHICLE_SURCHARGE[vehicleType] ?? 0.0);
   if (specialHandling) specialMult += OVERSIZED_SURCHARGE;
 
-  const preFuel = subtotal * urgencyMult * specialMult;
+  const preFuel = core * (1 + weightPct) * urgencyMult * specialMult;
   const fuel = preFuel * FUEL_SURCHARGE_PCT;
   let total = preFuel + fuel;
   total = Math.max(total, baseFee + 5.0);
+  // weight_fee retained for the breakdown fallback = euro effect of the category.
+  const freightFee = core * weightPct;
 
   const durationMinutes = Math.max(30, Math.round(dist));
 
@@ -198,7 +214,7 @@ export function calculatePrice({
     distance_fee: round2(distanceFee),
     weight_fee: round2(freightFee),
     freight_fee: round2(freightFee),
-    freight_rate_per_kg: freightRate,
+    freight_rate_per_kg: 0,
     chargeable_weight: cw.weight,
     chargeable_basis: cw.basis,
     actual_weight_kg: round2(weightKg || 0),

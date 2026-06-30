@@ -181,6 +181,14 @@ interface Quote {
   fuel_surcharge?: number;
   estimate_low?: number;
   estimate_high?: number;
+  // Phase B/C marketplace intelligence (present when the recommend endpoint replies)
+  breakdown_lines?: { key: string; label: string; type: string; amount: number; detail?: string | null }[];
+  traditional_estimate?: number;
+  savings?: number;
+  savings_pct?: number;
+  marketplace?: { region?: string; region_name?: string; heat?: { label: string; icon: string; adjustment_pct: number } };
+  recommendations?: { tier: string; label: string; price: number; acceptance_pct: number; wait_minutes: number; savings: number; savings_pct: number; recommended?: boolean }[];
+  environment?: { empty_km_eliminated: number; co2_saved_kg: number; fuel_saved_l: number };
 }
 
 export default function ShipperCreateScreen() {
@@ -426,7 +434,7 @@ export default function ShipperCreateScreen() {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 7000);
       const token = getAuthToken();
-      const res = await fetch(`${BASE}/api/shipper/quote`, {
+      const res = await fetch(`${BASE}/api/shipper/quote/recommend`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -447,22 +455,30 @@ export default function ShipperCreateScreen() {
       clearTimeout(timer);
       if (res.ok) {
         const data = await res.json();
+        const q = data.quote || {};
         setQuote({
           distance_km: data.distance_km,
           estimated_duration_minutes: data.estimated_duration_minutes,
-          base_price: data.base_price,
-          weight_surcharge: data.weight_surcharge,
-          total_price: data.total_price,
-          base_fee: data.base_fee,
-          distance_fee: data.distance_fee,
-          weight_fee: data.weight_fee,
-          freight_fee: data.freight_fee,
-          chargeable_weight: data.chargeable_weight,
-          chargeable_basis: data.chargeable_basis,
-          actual_weight_kg: data.actual_weight_kg,
-          fuel_surcharge: data.fuel_surcharge,
-          estimate_low: data.estimate_low,
-          estimate_high: data.estimate_high,
+          base_price: q.subtotal ?? (q.base_fee + q.distance_fee),
+          weight_surcharge: 0,
+          total_price: q.total_price,
+          base_fee: q.base_fee,
+          distance_fee: q.distance_fee,
+          weight_fee: 0,
+          freight_fee: 0,
+          chargeable_weight: q.chargeable_weight,
+          chargeable_basis: q.chargeable_basis,
+          actual_weight_kg: q.actual_weight_kg,
+          fuel_surcharge: q.fuel_surcharge,
+          estimate_low: q.estimate_low,
+          estimate_high: q.estimate_high,
+          breakdown_lines: q.breakdown_lines,
+          traditional_estimate: q.traditional_estimate,
+          savings: q.savings,
+          savings_pct: q.savings_pct,
+          marketplace: data.marketplace,
+          recommendations: data.recommendations,
+          environment: data.environment,
         });
       }
     } catch (e) {
@@ -1287,9 +1303,44 @@ export default function ShipperCreateScreen() {
               </View>
             </View>
 
+            {quote.marketplace?.heat ? (
+              <View style={styles.heatChip}>
+                <Text style={styles.heatChipText}>{quote.marketplace.heat.icon} {quote.marketplace.region_name || "Market"} · {quote.marketplace.heat.label}</Text>
+              </View>
+            ) : null}
+
+            {(quote.savings ?? 0) > 0 ? (
+              <View style={styles.savingsBox}>
+                <Text style={styles.savingsText}>You save €{quote.savings?.toFixed(0)} ({quote.savings_pct?.toFixed(0)}%) vs typical freight (€{quote.traditional_estimate?.toFixed(0)})</Text>
+                {quote.environment ? (
+                  <Text style={styles.envText}>🌱 ~{quote.environment.co2_saved_kg} kg CO₂ · {quote.environment.empty_km_eliminated} empty km · {quote.environment.fuel_saved_l} L fuel saved</Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {quote.breakdown_lines ? (
+              <View style={styles.breakdown}>
+                {quote.breakdown_lines.filter((l) => l.key !== "total").map((l, i) => (
+                  <View key={i} style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>{l.label}{l.detail ? ` · ${l.detail}` : ""}</Text>
+                    <Text style={[styles.breakdownValue, l.type === "discount" && { color: "#15803D" }]}>{l.amount >= 0 ? "" : "−"}€{Math.abs(l.amount).toFixed(2)}</Text>
+                  </View>
+                ))}
+                {offerNum > 0 && (
+                  <View style={styles.breakdownRow}>
+                    <Text style={[styles.breakdownLabel, { color: ACCENT }]}>{tu("yourBonus")}</Text>
+                    <Text style={[styles.breakdownValue, { color: ACCENT }]}>+€{offerNum.toFixed(2)}</Text>
+                  </View>
+                )}
+                <View style={[styles.breakdownRow, styles.breakdownTotalRow]}>
+                  <Text style={styles.breakdownTotalLabel}>{tu("total")}</Text>
+                  <Text style={styles.breakdownTotalValue}>€{finalTotal.toFixed(2)}</Text>
+                </View>
+              </View>
+            ) : (
             <View style={styles.breakdown}>
               <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>{tu("baseFee")}</Text>
+                <Text style={styles.breakdownLabel}>{tu("baseFee", { defaultValue: "Base fee" })}</Text>
                 <Text style={styles.breakdownValue}>€{(quote.base_fee ?? 0).toFixed(2)}</Text>
               </View>
               <View style={styles.breakdownRow}>
@@ -1328,6 +1379,7 @@ export default function ShipperCreateScreen() {
                 <Text style={styles.breakdownTotalValue}>€{finalTotal.toFixed(2)}</Text>
               </View>
             </View>
+            )}
 
             {/* Optional shipper bonus */}
             <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>{tu("addBonus")}</Text>
@@ -2059,6 +2111,11 @@ const createStyles = (theme: any) =>
     breakdownTotalRow: { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 8, marginTop: 2 },
     breakdownTotalLabel: { fontSize: 15, color: theme.textPrimary, fontWeight: "800" },
     breakdownTotalValue: { fontSize: 17, color: ACCENT, fontWeight: "800" },
+    heatChip: { alignSelf: "center", backgroundColor: theme.surfaceAlt || "#F1F5F9", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginTop: 8, marginBottom: 4 },
+    heatChipText: { fontSize: 12.5, fontWeight: "700", color: theme.text },
+    savingsBox: { backgroundColor: "#ECFDF5", borderRadius: 12, padding: 12, marginTop: 8, marginBottom: 4, borderWidth: 1, borderColor: "#A7F3D0" },
+    savingsText: { fontSize: 13.5, fontWeight: "800", color: "#047857", textAlign: "center" },
+    envText: { fontSize: 12, color: "#059669", textAlign: "center", marginTop: 4, fontWeight: "600" },
 
     lockNote: {
       flexDirection: "row",

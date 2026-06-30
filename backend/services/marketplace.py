@@ -138,6 +138,21 @@ def empty_run_discount(returning_empty: bool, cfg: Optional[dict] = None) -> flo
     return round(float(cfg.get("discount_pct", 0.25)), 4)
 
 
+def env_savings(distance_km: float, cfg: Optional[dict] = None, empty_km: Optional[float] = None) -> Dict[str, Any]:
+    """Estimated environmental benefit of filling a run that would otherwise be
+    empty/under-utilised. `empty_km` defaults to the trip distance.
+    """
+    env = (cfg or pricing.get_config()).get("environment", {})
+    km = float(empty_km if empty_km is not None else (distance_km or 0))
+    co2 = float(env.get("co2_kg_per_km", 0.90))
+    fuel = float(env.get("fuel_l_per_km", 0.32))
+    return {
+        "empty_km_eliminated": round(km, 1),
+        "co2_saved_kg": round(km * co2, 1),
+        "fuel_saved_l": round(km * fuel, 1),
+    }
+
+
 def build_recommendations(balanced_total: float, traditional_estimate: float,
                           heat: Dict[str, Any], cfg: Optional[dict] = None) -> List[Dict[str, Any]]:
     """4 price tiers with estimated acceptance %, wait time and savings.

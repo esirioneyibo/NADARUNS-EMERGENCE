@@ -272,6 +272,7 @@ async def get_marketplace_quote(request: PriceQuoteRequest):
             "heat": sd["heat"],
         },
         "recommendations": recommendations,
+        "environment": marketplace.env_savings(road_km, cfg),
     }
 
 

@@ -297,6 +297,8 @@ async def order_marketplace_match(order_id: str, request: Request, empty: bool =
         "returning_empty": returning_empty,
         "empty_run_auto_detected": auto_empty,
         "marketplace": {"region": sd["region"], "region_name": sd["region_name"], "heat": sd["heat"]},
+        "environment": marketplace.env_savings(
+            order.get("road_distance_km") or order.get("distance_km") or 0, cfg),
         "breakdown_lines": breakdown["breakdown_lines"],
     }
 
