@@ -223,3 +223,12 @@ New `backend/services/marketplace.py` (pure deterministic heuristics; pricing en
 - **Endpoints**: `POST /api/shipper/quote/recommend` (balanced quote + marketplace heat + 4 tiers; public like /shipper/quote) and `GET /api/orders/{id}/match` (driver: standard vs marketplace price, empty-run + route-match + supply/demand discounts, driver earnings 85%, transparent breakdown_lines).
 - Verified: testing_agent iter48 (12/12) — tier ordering, region resolution, heat bounds, empty=true (0.25) lowers price below standard, route_match ≤0.30, earnings=85%·price+tip, Phase A regression intact.
 - Regional & seasonal config adjustments are now applied in the recommend/match flows.
+
+### Phase C — Frontend wiring + environmental metrics (shipper side DONE & tested; driver UI deferred)
+- **Backend**: `marketplace.env_savings(distance, cfg, empty_km)` → {empty_km_eliminated, co2_saved_kg, fuel_saved_l}; added `environment` block to both `/shipper/quote/recommend` and `/orders/{id}/match` responses.
+- **Mobile shipper** (`app/shipper-create.tsx`): `fetchQuote` now calls `POST /shipper/quote/recommend`; price step renders a **Market Heat chip** (e.g. "🟢 Uusimaa · Normal"), a green **savings box** ("You save €X (Y%) vs typical freight") with a **CO₂/empty-km/fuel-saved** line (hidden when distance≈0), and a **transparent line-by-line breakdown** (base, distance, weight category, supply/demand, fuel, total) that reconciles to the total. Bonus still adds on top. New styles: heatChip/savingsBox/envText.
+- **Client estimator** (`src/utils/pricing.ts`): rewritten to the new **weight-CATEGORY** model (WEIGHT_BANDS) — no more linear weight×€/kg; instant estimate now matches the server engine shape.
+- Verified: testing_agent iter49 — full shipper create flow shows heat chip, savings box, env line, transparent breakdown (no linear weight surcharge), bonus adds to total. (testing agent fixed a JSX error I introduced in the fallback breakdown branch.)
+- **DEFERRED to next round**: DRIVER-side marketplace UI (show empty-run/route-match price + earnings + heat on the job feed/detail via `GET /orders/{id}/match`). Backend is ready & tested; only the driver screen wiring remains.
+
+**Pending phases:** Phase C driver-UI (above), D = capture pricing signals + deterministic self-tuning (NO LLM for price), E = reputation-based pricing, F = smart load bundling.

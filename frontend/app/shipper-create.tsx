@@ -1312,7 +1312,7 @@ export default function ShipperCreateScreen() {
             {(quote.savings ?? 0) > 0 ? (
               <View style={styles.savingsBox}>
                 <Text style={styles.savingsText}>You save €{quote.savings?.toFixed(0)} ({quote.savings_pct?.toFixed(0)}%) vs typical freight (€{quote.traditional_estimate?.toFixed(0)})</Text>
-                {quote.environment ? (
+                {quote.environment && quote.environment.empty_km_eliminated > 0 ? (
                   <Text style={styles.envText}>🌱 ~{quote.environment.co2_saved_kg} kg CO₂ · {quote.environment.empty_km_eliminated} empty km · {quote.environment.fuel_saved_l} L fuel saved</Text>
                 ) : null}
               </View>
