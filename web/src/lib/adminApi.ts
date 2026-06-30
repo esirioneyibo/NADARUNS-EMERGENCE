@@ -75,6 +75,7 @@ export const adminApi = {
     req<any>(`/admin/manage/drivers/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   suspendDriver: (id: string) => req<any>(`/admin/manage/drivers/${id}/suspend`, { method: "POST" }),
   activateDriver: (id: string) => req<any>(`/admin/manage/drivers/${id}/activate`, { method: "POST" }),
+  deleteDriver: (id: string) => req<any>(`/admin/manage/drivers/${id}`, { method: "DELETE" }),
 
   // Shippers
   shippers: (p: { search?: string; status?: string; page?: number; limit?: number }) =>
@@ -84,6 +85,7 @@ export const adminApi = {
     req<any>(`/admin/manage/shippers/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   suspendShipper: (id: string) => req<any>(`/admin/manage/shippers/${id}/suspend`, { method: "POST" }),
   activateShipper: (id: string) => req<any>(`/admin/manage/shippers/${id}/activate`, { method: "POST" }),
+  deleteShipper: (id: string) => req<any>(`/admin/manage/shippers/${id}`, { method: "DELETE" }),
 
   // Orders
   orders: (p: { search?: string; status?: string; page?: number; limit?: number }) =>

@@ -96,6 +96,7 @@ function ShipperDrawer({ id, onClose, onChanged, notify }: { id: string | null; 
             (det.recent_orders || []).slice(0, 8).map((o: any) => (<div key={o.id} className="adm-row-info"><span><StatusBadge status={o.status} /> #{o.order_number || (o.id || "").slice(0, 6)}</span><span>{money(o.price_quote || o.earnings)} · {fmtDate(o.created_at)}</span></div>))}
         </div>
         <button data-testid="shipper-suspend-toggle" className={`adm-btn ${det.shipper.is_suspended ? "adm-btn-success" : "adm-btn-danger"}`} onClick={toggle} style={{ justifyContent: "center" }}>{det.shipper.is_suspended ? "Reactivate shipper" : "Suspend shipper"}</button>
+        <button data-testid="shipper-delete" className="adm-btn adm-btn-danger" style={{ justifyContent: "center", marginTop: 8 }} onClick={async () => { if (!id || !window.confirm("Permanently delete this shipper? This cannot be undone.")) return; try { await adminApi.deleteShipper(id); notify("Shipper deleted"); onClose(); onChanged(); } catch (e: any) { notify(e.message, "err"); } }}>Delete shipper</button>
       </>)}
     </Drawer>
   );

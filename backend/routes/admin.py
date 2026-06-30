@@ -361,6 +361,22 @@ async def admin_activate_driver(driver_id: str, user: dict = Depends(get_admin_u
     return {"status": "active", "driver_id": driver_id}
 
 
+@router.delete("/admin/manage/drivers/{driver_id}")
+async def admin_delete_driver(driver_id: str, user: dict = Depends(get_admin_user)):
+    """Permanently delete a driver. Blocked while they have in-progress orders."""
+    d = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "id": 1})
+    if not d:
+        raise HTTPException(404, "Driver not found")
+    active_states = ["accepted", "enroute_pickup", "arrived_pickup", "picked_up", "enroute_dropoff", "arrived_dropoff"]
+    active = await db.orders.count_documents({"driver_id": driver_id, "status": {"$in": active_states}})
+    if active:
+        raise HTTPException(400, f"Driver has {active} active order(s). Reassign or complete them before deleting.")
+    await db.drivers.delete_one({"id": driver_id})
+    await db.vehicles.delete_many({"driver_id": driver_id})
+    logger.info("Admin %s deleted driver %s", user.get("id"), driver_id)
+    return {"status": "deleted", "driver_id": driver_id}
+
+
 @router.get("/admin/manage/shippers")
 async def admin_list_shippers(
     user: dict = Depends(get_admin_user),
@@ -437,6 +453,23 @@ async def admin_activate_shipper(shipper_id: str, user: dict = Depends(get_admin
     if res.matched_count == 0:
         raise HTTPException(404, "Shipper not found")
     return {"status": "active", "shipper_id": shipper_id}
+
+
+@router.delete("/admin/manage/shippers/{shipper_id}")
+async def admin_delete_shipper(shipper_id: str, user: dict = Depends(get_admin_user)):
+    """Permanently delete a shipper. Blocked while they have in-progress orders.
+    Their unassigned (pending) jobs are removed so they don't orphan in the feed."""
+    s = await db.shippers.find_one({"id": shipper_id}, {"_id": 0, "id": 1})
+    if not s:
+        raise HTTPException(404, "Shipper not found")
+    active_states = ["accepted", "enroute_pickup", "arrived_pickup", "picked_up", "enroute_dropoff", "arrived_dropoff"]
+    active = await db.orders.count_documents({"shipper_id": shipper_id, "status": {"$in": active_states}})
+    if active:
+        raise HTTPException(400, f"Shipper has {active} active order(s). Resolve them before deleting.")
+    await db.shippers.delete_one({"id": shipper_id})
+    removed = await db.orders.delete_many({"shipper_id": shipper_id, "status": "pending"})
+    logger.info("Admin %s deleted shipper %s (+%s pending orders)", user.get("id"), shipper_id, removed.deleted_count)
+    return {"status": "deleted", "shipper_id": shipper_id, "removed_pending_orders": removed.deleted_count}
 
 
 @router.get("/admin/manage/orders")

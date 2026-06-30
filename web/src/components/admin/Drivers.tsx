@@ -121,6 +121,7 @@ function DriverDrawer({ id, onClose, onChanged, notify }: { id: string | null; o
               ))}
           </div>
           <button data-testid="driver-suspend-toggle" className={`adm-btn ${det.driver.is_suspended ? "adm-btn-success" : "adm-btn-danger"}`} onClick={toggle} style={{ justifyContent: "center" }}>{det.driver.is_suspended ? "Reactivate driver" : "Suspend driver"}</button>
+          <button data-testid="driver-delete" className="adm-btn adm-btn-danger" style={{ justifyContent: "center", marginTop: 8 }} onClick={async () => { if (!id || !window.confirm("Permanently delete this driver? This cannot be undone.")) return; try { await adminApi.deleteDriver(id); notify("Driver deleted"); onClose(); onChanged(); } catch (e: any) { notify(e.message, "err"); } }}>Delete driver</button>
         </>
       )}
     </Drawer>
