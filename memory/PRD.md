@@ -195,3 +195,11 @@ testing_agent found `/api/driver/wallet` and `/api/driver/performance` counted f
 - Verified: testing_agent iter44 — 18/18 new + 44/44 regression backend pass; frontend bundle compiles with Sentry, report-issue button renders.
 - KNOWN (platform): dispute reason picker uses Alert.alert (buttons don't render on RN-Web; works on native iOS/Android). Web parity would need an in-app modal.
 - PRODUCTION TODO: set SENTRY_DSN (backend) + EXPO_PUBLIC_SENTRY_DSN (frontend) to enable Sentry; add Stripe webhook + STRIPE_WEBHOOK_SECRET.
+
+### Final 3 requests — Frontend wiring (Jun 2026 fork, COMPLETE)
+Completed the UI for the 3 backend-verified features:
+- **Driver bank details**: `driver-edit.tsx` gains a "PAYOUT / BANK DETAILS" card (account_holder/iban/bank_name/swift_bic) saved via `PATCH /api/driver/me`. `wallet.tsx` cash-out modal pre-fills the IBAN from saved `driver.bank_details.iban` ("Using your saved bank account" hint) and persists the entered IBAN back on withdraw. `types.ts` adds `BankDetails` + `bank_details` on Driver/DriverUpdate. Backend `routes/driver.py::update_driver` now flattens `bank_details` to dotted `$set` keys so a partial (iban-only) update never wipes the other saved fields.
+- **Shipper cargo weight**: client validation already blocked weight<=0 (step 3); removed the silent `cargo_weight_kg: weightNum || 100` fallback so the exact entered weight is always sent.
+- **Web admin webhook secret**: `web/src/components/admin/Settings.tsx` now shows the masked value `· set (whsec_…)` (using `webhook_secret_masked`) so it no longer looks empty after saving.
+- Verified: testing_agent iter46 — backend 6/6 pytest (full + partial-merge bank_details, withdraw, weight 422/201) + frontend E2E (driver-edit save+merge, wallet prefill+persist). Lint clean.
+- DEFERRED (P2): EMERGENT_PUSH_KEY 401 on new-job push — needs user Firebase google-services.json + native build.
