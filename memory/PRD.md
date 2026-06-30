@@ -240,4 +240,12 @@ New `backend/services/marketplace.py` (pure deterministic heuristics; pricing en
 - **Phase F — smart load bundling** (`GET /orders/{id}/bundle-suggestions`): finds vehicle-compatible pending orders within a ≤25km corridor detour, payload-capacity guarded, sorted by extra distance; returns combined extra earnings.
 - New config: `auto_tune` block in pricing DEFAULT_CONFIG; `reputation` block already existed.
 - KNOWN demo-data quirks (not bugs): seeded pending orders lack `price_quote` (bundle price may show 0); some VEHICLE_TYPES lack `capacity_kg` (capacity guard then no-ops). Real created orders are unaffected.
-- DEFERRED (nice-to-have): driver-side **bundle-suggestions UI** and a **Market Heat region strip** on driver home; admin pricing-signals analytics view. Backend ready.
+- DEFERRED (nice-to-have): admin pricing-signals analytics view; driver bundle UI + heat strip. — NOW DONE (see below).
+
+### Marketplace polish round (DONE & tested — iter51)
+- **Driver-home Market Heat strip** (`src/components/MarketHeatStrip.tsx`, rendered in driver-home offline/ready view): horizontal region chips (icon + region + heat label + "X jobs · Y drivers") from `GET /api/marketplace/heat`; self-hides when no activity. Verified visible ("❄️ Uusimaa · Cold · 0 jobs · 5 drivers"), no crash.
+- **Job Detail bundle card** (`JobDetailSheet.tsx`): "🧩 Bundle N nearby load(s) · +€X" with up to 3 lines, gated on `bundle_count>0` via `api.getBundleSuggestions`. 8/25 seeded orders have bundles. (Web preview can't tap map markers — SvgMapView web branch lacks onPress; works on native. Verified via code + API.)
+- **Admin pricing-signals analytics** (`web Pricing.tsx` right rail + `GET /admin/pricing/signals` + adminApi.getPricingSignals): per-region accept-rate, accepted/total, median time-to-accept, avg price; tsc passes.
+- **Backfill**: bundle endpoint now reads `max_weight_kg` (capacity = 8000 for box_truck etc.); seed builder + bundle endpoint compute `price_quote` via the engine so bundling/analytics show real numbers (no migration needed — self-healing fallback).
+- Marketplace endpoint added: `GET /api/marketplace/heat`. New api.ts methods: getMarketHeat, getBundleSuggestions.
+- Optional future: add web map-marker tap (or `/driver-home?open=ORDER_ID` deep link) for e2e web testing; "Quiet market" subtitle when all regions demand=0.
