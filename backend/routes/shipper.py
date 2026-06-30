@@ -625,10 +625,18 @@ async def track_shipment(
     if not order:
         raise HTTPException(404, "Shipment not found")
     
-    # Get driver location if assigned and in transit
+    # Determine the driver's live position + the current target stop, and a
+    # live ETA via Google Directions. Tracking is non-billing, so routing
+    # failures fall back gracefully to the stored estimate / stop coords.
     driver_location = None
     driver_info = None
-    if order.get("driver_id") and order["status"] in ["enroute_pickup", "arrived_pickup", "picked_up", "enroute_dropoff", "arrived_dropoff"]:
+    target = None
+    eta_minutes = order.get("eta_minutes")
+    remaining_km = None
+    route_polyline = None
+
+    active_statuses = ["enroute_pickup", "arrived_pickup", "picked_up", "enroute_dropoff", "arrived_dropoff"]
+    if order.get("driver_id") and order["status"] in active_statuses:
         driver = await db.drivers.find_one({"id": order["driver_id"]}, {"_id": 0})
         if driver:
             driver_info = {
@@ -636,13 +644,30 @@ async def track_shipment(
                 "phone": driver.get("phone"),
                 "vehicle": driver.get("vehicle"),
                 "avatar": driver.get("avatar"),
+                "rating": driver.get("rating", 5.0),
+                "location_updated_at": driver.get("location_updated_at"),
             }
-            # Simulate driver location (in real app, this would come from driver's location updates)
-            if order["status"] in ["enroute_pickup", "arrived_pickup"]:
-                driver_location = {"lat": order["pickup"]["lat"], "lng": order["pickup"]["lng"]}
+            before_pickup = order["status"] in ["enroute_pickup", "arrived_pickup"]
+            target = order["pickup"] if before_pickup else order["dropoff"]
+
+            loc = driver.get("current_location") or {}
+            if loc.get("lat") is not None and loc.get("lng") is not None:
+                driver_location = {"lat": loc["lat"], "lng": loc["lng"]}
             else:
-                driver_location = {"lat": order["dropoff"]["lat"], "lng": order["dropoff"]["lng"]}
-    
+                # No live ping yet — fall back to the relevant stop coordinates.
+                driver_location = {"lat": target["lat"], "lng": target["lng"]}
+
+            try:
+                route = await fetch_road_route(
+                    driver_location["lat"], driver_location["lng"],
+                    target["lat"], target["lng"],
+                )
+                eta_minutes = int(round(route["duration_minutes"]))
+                remaining_km = route["road_distance_km"]
+                route_polyline = route.get("polyline")
+            except Exception:
+                pass
+
     # Status descriptions
     status_messages = {
         "pending": "Waiting for driver assignment",
@@ -655,19 +680,65 @@ async def track_shipment(
         "delivered": "Delivery completed",
         "rejected": "Shipment cancelled",
     }
-    
+
     return {
         "order_id": order_id,
         "status": order["status"],
         "status_message": status_messages.get(order["status"], "Unknown status"),
         "pickup": order["pickup"],
         "dropoff": order["dropoff"],
+        "target": target,
         "driver": driver_info,
         "driver_location": driver_location,
-        "eta_minutes": order.get("eta_minutes"),
+        "eta_minutes": eta_minutes,
+        "remaining_km": remaining_km,
+        "route_polyline": route_polyline,
         "created_at": order.get("created_at"),
         "completed_at": order.get("completed_at"),
     }
+
+
+@router.post("/shipper/shipments/{order_id}/dispute")
+async def shipper_open_dispute(
+    order_id: str,
+    body: DisputeRequest,
+    shipper: dict = Depends(get_current_shipper),
+):
+    """Shipper raises a dispute on a shipment (tied to POP/POD evidence)."""
+    if not (body.reason or "").strip():
+        raise HTTPException(400, "A reason is required to open a dispute")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.get("shipper_id") != shipper["id"]:
+        raise HTTPException(403, "This order does not belong to you")
+    if order.get("status") not in ("picked_up", "enroute_dropoff", "arrived_dropoff", "delivered"):
+        raise HTTPException(400, "Disputes can be raised once a shipment is in delivery or completed")
+    existing = await db.disputes.find_one(
+        {"order_id": order_id, "status": {"$in": ["open", "under_review"]}}, {"_id": 0, "id": 1}
+    )
+    if existing:
+        raise HTTPException(400, "A dispute is already open for this shipment")
+    now = datetime.now(timezone.utc).isoformat()
+    dispute = {
+        "id": str(uuid.uuid4()),
+        "order_id": order_id,
+        "order_number": order.get("order_number"),
+        "shipper_id": shipper["id"],
+        "shipper_name": shipper.get("name") or shipper.get("company_name"),
+        "driver_id": order.get("driver_id"),
+        "reason": body.reason.strip(),
+        "description": (body.description or "").strip() or None,
+        "photos": body.photos or [],
+        "status": "open",
+        "resolution": None,
+        "created_at": now,
+    }
+    await db.disputes.insert_one(dict(dispute))
+    await db.orders.update_one(
+        {"id": order_id}, {"$set": {"has_dispute": True, "dispute_at": now}}
+    )
+    return dispute
 
 
 @router.get("/shipper/receipts")

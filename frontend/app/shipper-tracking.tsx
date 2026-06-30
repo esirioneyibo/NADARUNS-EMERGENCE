@@ -303,6 +303,41 @@ export default function ShipperTrackingScreen() {
     }
   }, [id, rateStars, rateReview, loadShipment]);
 
+  const [disputeBusy, setDisputeBusy] = useState(false);
+  const reportIssue = useCallback(() => {
+    if (!id) return;
+    const reasons = [
+      t("tracking.disputeReasons.damaged", { defaultValue: "Damaged cargo" }),
+      t("tracking.disputeReasons.late", { defaultValue: "Late / missed delivery" }),
+      t("tracking.disputeReasons.wrong", { defaultValue: "Wrong or incomplete delivery" }),
+      t("tracking.disputeReasons.other", { defaultValue: "Other" }),
+    ];
+    const submit = async (reason: string) => {
+      setDisputeBusy(true);
+      try {
+        await api.openDispute(id, reason);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Alert.alert(
+          t("tracking.disputeOpenedTitle", { defaultValue: "Issue reported" }),
+          t("tracking.disputeOpenedMsg", { defaultValue: "Our team will review your shipment and get back to you." }),
+        );
+        loadShipment();
+      } catch (e: any) {
+        Alert.alert(t("common.error", { defaultValue: "Error" }), e?.message || "Failed to report issue");
+      } finally {
+        setDisputeBusy(false);
+      }
+    };
+    Alert.alert(
+      t("tracking.reportIssue", { defaultValue: "Report an issue" }),
+      t("tracking.reportIssuePrompt", { defaultValue: "What went wrong with this shipment?" }),
+      [
+        ...reasons.map((r) => ({ text: r, onPress: () => submit(r) })),
+        { text: t("common.cancel", { defaultValue: "Cancel" }), style: "cancel" as const },
+      ],
+    );
+  }, [id, loadShipment, t]);
+
   const handleCancel = () => {
     Alert.alert(
       t("tracking.cancelTitle"),
@@ -462,6 +497,20 @@ export default function ShipperTrackingScreen() {
               <Text style={styles.etaLiveText}>{t("tracking.live")}</Text>
             </View>
           </Animated.View>
+        )}
+
+        {(isActive || shipment.status === "delivered") && !(shipment as any).has_dispute && (
+          <TouchableOpacity
+            onPress={reportIssue}
+            disabled={disputeBusy}
+            testID="report-issue-btn"
+            style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginHorizontal: 16, marginTop: 12, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" }}
+          >
+            <Ionicons name="alert-circle-outline" size={18} color="#DC2626" />
+            <Text style={{ color: "#DC2626", fontWeight: "700", fontSize: 14 }}>
+              {disputeBusy ? "…" : t("tracking.reportIssue", { defaultValue: "Report an issue" })}
+            </Text>
+          </TouchableOpacity>
         )}
 
         {/* Status Card */}

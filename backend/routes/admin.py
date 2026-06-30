@@ -702,6 +702,71 @@ async def admin_list_email_templates(user: dict = Depends(get_admin_user)):
             "configured": email_service.is_configured()}
 
 
+@router.get("/admin/disputes")
+async def admin_list_disputes(status: Optional[str] = None, user: dict = Depends(get_admin_user)):
+    """List shipment disputes (optionally filtered by status), with POP/POD
+    evidence and payment context attached for review."""
+    q = {} if not status else {"status": status}
+    rows = await db.disputes.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for d in rows:
+        o = await db.orders.find_one(
+            {"id": d["order_id"]},
+            {"_id": 0, "pickup_photo": 1, "delivery_photo": 1, "payment_status": 1,
+             "payment_amount": 1, "price_quote": 1, "driver_name": 1},
+        )
+        if o:
+            d["pickup_photo"] = o.get("pickup_photo")
+            d["delivery_photo"] = o.get("delivery_photo")
+            d["order_payment_status"] = o.get("payment_status")
+            d["order_amount"] = o.get("payment_amount") or o.get("price_quote")
+            d["driver_name"] = o.get("driver_name")
+    return rows
+
+
+@router.post("/admin/disputes/{dispute_id}/resolve")
+async def admin_resolve_dispute(
+    dispute_id: str, body: DisputeResolveRequest, user: dict = Depends(get_admin_user)
+):
+    """Resolve a dispute: 'refunded' (full/partial Stripe refund) or 'rejected'."""
+    dispute = await db.disputes.find_one({"id": dispute_id}, {"_id": 0})
+    if not dispute:
+        raise HTTPException(404, "Dispute not found")
+    if dispute.get("status") == "resolved":
+        raise HTTPException(400, "Dispute already resolved")
+    if body.resolution not in ("refunded", "rejected"):
+        raise HTTPException(400, "resolution must be 'refunded' or 'rejected'")
+
+    refund_summary = None
+    if body.resolution == "refunded":
+        order = await db.orders.find_one({"id": dispute["order_id"]}, {"_id": 0})
+        if not order:
+            raise HTTPException(404, "Order not found")
+        if order.get("payment_status") != "captured":
+            raise HTTPException(400, f"Only captured payments can be refunded (status: {order.get('payment_status')})")
+        intent_id = order.get("stripe_payment_intent_id")
+        if not intent_id:
+            raise HTTPException(400, "No PaymentIntent on this order")
+        amount_cents = payments.to_cents(body.refund_amount) if (body.refund_amount and body.refund_amount > 0) else None
+        try:
+            refund = payments.refund_payment_intent(intent_id, amount_cents, idempotency_key=f"dispute_{dispute_id}")
+        except Exception as exc:
+            logger.error(f"Dispute refund failed for {dispute_id}: {exc}")
+            raise HTTPException(502, f"Refund failed: {exc}")
+        await _apply_refund_to_order(order, refund)
+        refund_summary = {"amount": payments.from_cents(getattr(refund, "amount", 0) or 0)}
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.disputes.update_one(
+        {"id": dispute_id},
+        {"$set": {"status": "resolved", "resolution": body.resolution,
+                  "resolution_note": (body.note or "").strip() or None, "resolved_at": now}},
+    )
+    await db.orders.update_one(
+        {"id": dispute["order_id"]}, {"$set": {"has_dispute": False, "dispute_resolved_at": now}}
+    )
+    return {"success": True, "dispute_id": dispute_id, "resolution": body.resolution, "refund": refund_summary}
+
+
 @router.get("/admin/email-templates/{key}/preview")
 async def admin_preview_email_template(key: str, user: dict = Depends(get_admin_user)):
     reg = _email_template_registry()

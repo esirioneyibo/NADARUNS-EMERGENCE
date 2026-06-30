@@ -187,3 +187,11 @@ World-standard recommendation #1. Added on top of existing authorize->capture fl
 
 #### Phase 1 follow-up fix (testing iter43): driver earnings excluded refunded orders
 testing_agent found `/api/driver/wallet` and `/api/driver/performance` counted fully-refunded deliveries. Fixed in `routes/driver.py`: both delivered-order queries now filter `payment_status != 'refunded'`. Re-verified: test_iter43 18/18 pass + 98 payment/wallet/finance tests pass. (Partial refunds keep 'captured' so driver still earns full share — platform absorbs partial.)
+
+### Phases 2-4 (Jun 2026 fork, COMPLETE — world-standard roadmap)
+- **Phase 2 Live tracking + ETA**: `GET /api/orders/{id}/driver-location` now returns a REAL road ETA via Google Directions (`fetch_road_route`, graceful straight-line fallback, never 500); `GET /api/shipper/shipments/{id}/tracking` enriched (real `current_location`, target stop, eta_minutes, remaining_km, route_polyline). Frontend `shipper-tracking.tsx` already consumed these.
+- **Phase 3 Ratings + Disputes**: shipper->driver star rating already existed (`/shipper/shipments/{id}/rate-driver` at shipper.py L14 — removed a duplicate I accidentally added). NEW dispute flow: shipper `POST /shipper/shipments/{id}/dispute` (sets order.has_dispute, gated to in-delivery/delivered, dedupes open disputes), admin `GET /admin/disputes?status=` (attaches POP/POD + payment context), admin `POST /admin/disputes/{id}/resolve` ('rejected' or 'refunded' -> Stripe refund via _apply_refund_to_order). Models DisputeRequest/DisputeResolveRequest in server.py. Frontend: "Report an issue" button + reason picker on tracking screen (api.openDispute).
+- **Phase 4 Sentry**: backend `sentry_sdk` init in server.py (gated on SENTRY_DSN env); frontend `@sentry/react-native` init in app/_layout.tsx (gated on EXPO_PUBLIC_SENTRY_DSN). No-op until DSN provided. requirements.txt updated (sentry-sdk 2.63.0).
+- Verified: testing_agent iter44 — 18/18 new + 44/44 regression backend pass; frontend bundle compiles with Sentry, report-issue button renders.
+- KNOWN (platform): dispute reason picker uses Alert.alert (buttons don't render on RN-Web; works on native iOS/Android). Web parity would need an in-app modal.
+- PRODUCTION TODO: set SENTRY_DSN (backend) + EXPO_PUBLIC_SENTRY_DSN (frontend) to enable Sentry; add Stripe webhook + STRIPE_WEBHOOK_SECRET.

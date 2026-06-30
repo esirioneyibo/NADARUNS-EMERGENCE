@@ -309,6 +309,12 @@ export const api = {
       `/shipper/shipments/${id}/rate-driver`,
       { method: "POST", body: JSON.stringify({ rating, review }) },
     ),
+  // Shipper opens a dispute on a shipment (tied to POP/POD evidence)
+  openDispute: (id: string, reason: string, description?: string) =>
+    request<{ id: string; status: string }>(
+      `/shipper/shipments/${id}/dispute`,
+      { method: "POST", body: JSON.stringify({ reason, description }) },
+    ),
   // Driver rates the shipper (1-5 stars, one-time)
   rateShipper: (id: string, rating: number, review?: string) =>
     request<{ success: boolean; shipper_rating: number; shipper_average_rating: number | null }>(

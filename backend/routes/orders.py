@@ -609,6 +609,16 @@ async def get_driver_location(order_id: str, user: dict = Depends(get_current_us
     tracking = compute_live_tracking(order, loc) if loc else {
         "eta_minutes": None, "remaining_km": None, "target": None, "off_route": False
     }
+    # Upgrade ETA to a real road estimate via Google Directions when possible;
+    # fall back to the straight-line estimate on any routing error/quota.
+    if loc and tracking.get("target"):
+        tgt = order.get("dropoff") if tracking["target"] == "dropoff" else order.get("pickup")
+        try:
+            route = await fetch_road_route(loc["lat"], loc["lng"], tgt["lat"], tgt["lng"])
+            tracking["eta_minutes"] = int(round(route["duration_minutes"]))
+            tracking["remaining_km"] = route["road_distance_km"]
+        except Exception:
+            pass
 
     return {
         "driver_id": driver["id"],

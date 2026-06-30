@@ -55,6 +55,18 @@ security = HTTPBearer(auto_error=False)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# ---- Sentry observability (no-op unless SENTRY_DSN is set) ----
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "").strip()
+if SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        environment=os.environ.get("APP_ENV", "production"),
+        send_default_pii=False,
+    )
+    logger.info("Sentry initialized")
+
 
 # ===================== Transactional Email =====================
 
@@ -921,6 +933,18 @@ class CaptureBody(BaseModel):
 class RefundBody(BaseModel):
     amount: Optional[float] = None  # optional partial refund (EUR); None = full
     reason: Optional[str] = None    # admin note / dispute reference
+
+
+class DisputeRequest(BaseModel):
+    reason: str
+    description: Optional[str] = None
+    photos: Optional[List[str]] = None  # base64 data URLs or image URLs
+
+
+class DisputeResolveRequest(BaseModel):
+    resolution: str                       # 'refunded' | 'rejected'
+    refund_amount: Optional[float] = None  # EUR; None = full refund when 'refunded'
+    note: Optional[str] = None
 
 
 class StripeSettingsBody(BaseModel):

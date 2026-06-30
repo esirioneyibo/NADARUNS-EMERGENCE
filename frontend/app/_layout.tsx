@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import * as Sentry from "@sentry/react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
@@ -228,6 +229,16 @@ function LoadingScreen() {
       <Text style={styles.loadingText}>Loading NadaRuns...</Text>
     </View>
   );
+}
+
+// Sentry observability — no-op unless EXPO_PUBLIC_SENTRY_DSN is provided.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    tracesSampleRate: 0.1,
+    environment: process.env.EXPO_PUBLIC_APP_ENV || "production",
+  });
 }
 
 export default function RootLayout() {
