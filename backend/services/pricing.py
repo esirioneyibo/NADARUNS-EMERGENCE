@@ -124,6 +124,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     # CO2 / environmental model (Phase C)
     "environment": {"co2_kg_per_km": 0.90, "fuel_l_per_km": 0.32},
+    # Phase D: deterministic self-tuning bounds (NO model decides price; this only
+    # nudges recommended prices within admin limits based on accept-rate signals).
+    "auto_tune": {"enabled": True, "max_pct": 0.05, "min_samples": 8, "window_days": 30},
 }
 
 # Module-level active config (loaded from DB on startup, falls back to default).

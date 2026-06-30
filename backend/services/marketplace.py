@@ -153,6 +153,113 @@ def env_savings(distance_km: float, cfg: Optional[dict] = None, empty_km: Option
     }
 
 
+def reputation_adjustment(driver: Optional[dict], cfg: Optional[dict] = None) -> float:
+    """Phase E: reputation-based pricing. High-rated, reliable drivers can command
+    a small uplift; poor performers a small discount. Bounded by config.
+    """
+    rcfg = (cfg or get_config_safe()).get("reputation", {})
+    if not rcfg.get("enabled", True) or not driver:
+        return 0.0
+    rating = float(driver.get("rating") or 0)
+    if rating <= 0:
+        return 0.0  # no ratings yet → neutral
+    max_up = float(rcfg.get("max_uplift_pct", 0.08))
+    max_dn = float(rcfg.get("max_discount_pct", 0.05))
+    if rating >= 4.0:
+        pct = min((rating - 4.0) / 1.0, 1.0) * max_up
+    else:
+        pct = -min((4.0 - rating) / 1.0, 1.0) * max_dn
+    return round(pct, 4)
+
+
+def get_config_safe():
+    return pricing.get_config()
+
+
+async def record_pricing_signal(db, *, order_id: str, region: Optional[str], vehicle_type: str,
+                                urgency: str, price: float, heat: Dict[str, Any]) -> None:
+    """Phase D: capture a pricing signal when a quote becomes a real shipment."""
+    try:
+        from datetime import datetime, timezone
+        await db.pricing_signals.insert_one({
+            "order_id": order_id, "region": region, "vehicle_type": vehicle_type,
+            "urgency": urgency, "price": round(float(price or 0), 2),
+            "heat_label": (heat or {}).get("label"), "ratio": (heat or {}).get("ratio"),
+            "accepted": None, "time_to_accept_seconds": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+
+
+async def mark_signal_accepted(db, order_id: str) -> None:
+    """Phase D: when a driver accepts, record acceptance + time-to-accept."""
+    try:
+        from datetime import datetime, timezone
+        sig = await db.pricing_signals.find_one({"order_id": order_id}, {"_id": 0, "created_at": 1})
+        secs = None
+        if sig and sig.get("created_at"):
+            try:
+                created = datetime.fromisoformat(sig["created_at"])
+                secs = max(0, int((datetime.now(timezone.utc) - created).total_seconds()))
+            except Exception:
+                secs = None
+        await db.pricing_signals.update_one(
+            {"order_id": order_id},
+            {"$set": {"accepted": True, "time_to_accept_seconds": secs}})
+    except Exception:
+        pass
+
+
+async def auto_tune_adjustment(db, region: Optional[str], vehicle_type: str,
+                               cfg: Optional[dict] = None) -> Dict[str, Any]:
+    """Phase D: deterministic, bounded self-tuning. Looks at recent acceptance
+    signals for this region+vehicle and nudges price within admin limits.
+    Low acceptance → small discount to fill capacity; very high acceptance with
+    fast accepts → small uplift. NO model decides the price; this is explainable.
+    """
+    cfg = cfg or get_config_safe()
+    tcfg = cfg.get("auto_tune", {})
+    if not tcfg.get("enabled", True) or not region:
+        return {"adjustment_pct": 0.0, "samples": 0, "acceptance_rate": None}
+    q = {"region": region, "vehicle_type": vehicle_type, "accepted": {"$ne": None}}
+    sigs = await db.pricing_signals.find(q, {"_id": 0, "accepted": 1}).sort("created_at", -1).to_list(200)
+    n = len(sigs)
+    min_samples = int(tcfg.get("min_samples", 8))
+    if n < min_samples:
+        return {"adjustment_pct": 0.0, "samples": n, "acceptance_rate": None}
+    acc = sum(1 for s in sigs if s.get("accepted")) / n
+    max_pct = float(tcfg.get("max_pct", 0.05))
+    if acc >= 0.9:
+        pct = max_pct                       # jobs fill easily → can charge a bit more
+    elif acc >= 0.7:
+        pct = max_pct * 0.4
+    elif acc <= 0.4:
+        pct = -max_pct                      # hard to fill → discount to move capacity
+    elif acc <= 0.6:
+        pct = -max_pct * 0.4
+    else:
+        pct = 0.0
+    return {"adjustment_pct": round(pct, 4), "samples": n, "acceptance_rate": round(acc, 3)}
+
+
+def corridor_bundle_match(main_pickup: dict, main_dropoff: dict,
+                          cand_pickup: dict, cand_dropoff: dict, max_detour_km: float = 25.0) -> Optional[float]:
+    """Phase F: returns the extra distance (km) to bundle a candidate shipment
+    into the main route, or None if it doesn't fit the corridor.
+    Order assumed: main_pickup → cand_pickup → cand_dropoff → main_dropoff.
+    """
+    def km(a, b):
+        return haversine_km(a["lat"], a["lng"], b["lat"], b["lng"])
+    direct = km(main_pickup, main_dropoff)
+    bundled = (km(main_pickup, cand_pickup) + km(cand_pickup, cand_dropoff) + km(cand_dropoff, main_dropoff))
+    detour = bundled - direct
+    if detour <= max_detour_km:
+        return round(max(0.0, detour), 1)
+    return None
+
+
+
 def build_recommendations(balanced_total: float, traditional_estimate: float,
                           heat: Dict[str, Any], cfg: Optional[dict] = None) -> List[Dict[str, Any]]:
     """4 price tiers with estimated acceptance %, wait time and savings.

@@ -362,6 +362,10 @@ export const api = {
   
   // Get orders matched to driver's vehicle type and capacity
   getMatchedOrders: () => request<Order[]>("/orders/available/matched"),
+
+  // Phase B/C: per-driver marketplace pricing (empty-run + route-match + heat)
+  getJobMatch: (orderId: string, empty?: boolean) =>
+    request<any>(`/orders/${orderId}/match${empty ? "?empty=true" : ""}`),
   
   // Wallet
   getWallet: () => request<Wallet>("/driver/wallet"),

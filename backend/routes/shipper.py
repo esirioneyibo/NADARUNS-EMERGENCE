@@ -236,6 +236,8 @@ async def get_marketplace_quote(request: PriceQuoteRequest):
     # Region Supply & Demand + Market Heat (drives the supply_demand adjustment).
     region = marketplace.resolve_region(request.pickup_lat, request.pickup_lng)
     sd = await marketplace.region_supply_demand(db, region)
+    at = await marketplace.auto_tune_adjustment(db, region, request.vehicle_type)
+    market_pct = sd["adjustment_pct"] + at["adjustment_pct"]
 
     cfg = pricing.get_config()
     # Regional + seasonal config adjustments (admin-configurable).
@@ -252,7 +254,7 @@ async def get_marketplace_quote(request: PriceQuoteRequest):
         volume_m3=request.cargo_volume_m3,
         pallets=request.pallet_count,
         loading_meters=request.loading_meters,
-        supply_demand_pct=sd["adjustment_pct"],
+        supply_demand_pct=market_pct,
         regional_pct=regional_pct,
         seasonal_pct=seasonal_pct,
     )
@@ -269,7 +271,7 @@ async def get_marketplace_quote(request: PriceQuoteRequest):
         "marketplace": {
             "region": sd["region"], "region_name": sd["region_name"],
             "demand": sd["demand"], "supply": sd["supply"], "ratio": sd["ratio"],
-            "heat": sd["heat"],
+            "heat": sd["heat"], "auto_tune": at,
         },
         "recommendations": recommendations,
         "environment": marketplace.env_savings(road_km, cfg),
@@ -415,6 +417,19 @@ async def create_shipment(
     )
     
     await db.orders.insert_one(new_order.model_dump())
+
+    # Phase D: capture a pricing signal for self-tuning (best-effort).
+    try:
+        _od = new_order.model_dump()
+        _pk = _od.get("pickup") or {}
+        _region = marketplace.resolve_region(_pk.get("lat"), _pk.get("lng"))
+        await marketplace.record_pricing_signal(
+            db, order_id=order_id, region=_region,
+            vehicle_type=_od.get("vehicle_type", "cargo_van"),
+            urgency=_od.get("urgency", "standard"),
+            price=round(total_price, 2), heat={})
+    except Exception:
+        pass
     
     # Update shipper stats
     await db.shippers.update_one(

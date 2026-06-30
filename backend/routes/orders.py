@@ -270,6 +270,7 @@ async def order_marketplace_match(order_id: str, request: Request, empty: bool =
         special_handling=order.get("special_handling", False),
         supply_demand_pct=sd["adjustment_pct"],
         regional_pct=regional_pct,
+        reputation_pct=marketplace.reputation_adjustment(driver),
     )
     # Baseline = normal market price (NO empty-run / route-match discounts).
     baseline = pricing.calculate_price(**common)
@@ -300,6 +301,63 @@ async def order_marketplace_match(order_id: str, request: Request, empty: bool =
         "environment": marketplace.env_savings(
             order.get("road_distance_km") or order.get("distance_km") or 0, cfg),
         "breakdown_lines": breakdown["breakdown_lines"],
+    }
+
+
+@router.get("/orders/{order_id}/bundle-suggestions")
+async def order_bundle_suggestions(order_id: str, request: Request):
+    """Phase F: smart load bundling. For a candidate job, find other pending,
+    vehicle-compatible shipments that fit along the same corridor (small detour),
+    so a driver can combine them into one profitable route.
+    """
+    await get_current_driver_id(request)
+    main = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not main:
+        raise HTTPException(404, "Order not found")
+    m_pickup = {"lat": main["pickup"]["lat"], "lng": main["pickup"]["lng"]}
+    m_dropoff = {"lat": main["dropoff"]["lat"], "lng": main["dropoff"]["lng"]}
+    vt = main.get("vehicle_type", "cargo_van")
+    capacity = float((VEHICLE_TYPES.get(vt) or {}).get("capacity_kg") or 0)
+    main_weight = float(main.get("cargo_weight_kg") or 0)
+
+    candidates = await db.orders.find(
+        {"status": "pending", "vehicle_type": vt, "id": {"$ne": order_id}}, {"_id": 0},
+    ).limit(50).to_list(50)
+
+    suggestions = []
+    combined_weight = main_weight
+    for c in candidates:
+        try:
+            c_pickup = {"lat": c["pickup"]["lat"], "lng": c["pickup"]["lng"]}
+            c_dropoff = {"lat": c["dropoff"]["lat"], "lng": c["dropoff"]["lng"]}
+        except Exception:
+            continue
+        detour = marketplace.corridor_bundle_match(m_pickup, m_dropoff, c_pickup, c_dropoff)
+        if detour is None:
+            continue
+        c_weight = float(c.get("cargo_weight_kg") or 0)
+        if capacity and (combined_weight + c_weight) > capacity:
+            continue  # would exceed payload
+        c_price = float(c.get("price_quote") or 0)
+        suggestions.append({
+            "order_id": c["id"],
+            "pickup_name": (c.get("pickup") or {}).get("name"),
+            "dropoff_name": (c.get("dropoff") or {}).get("name"),
+            "cargo_weight_kg": c_weight,
+            "extra_distance_km": detour,
+            "price": round(c_price, 2),
+            "driver_earnings": pricing.driver_earnings(c_price, float(c.get("tip") or 0)),
+        })
+    suggestions.sort(key=lambda s: s["extra_distance_km"])
+    suggestions = suggestions[:5]
+    extra_earnings = round(sum(s["driver_earnings"] for s in suggestions), 2)
+    return {
+        "order_id": order_id,
+        "vehicle_type": vt,
+        "payload_capacity_kg": capacity,
+        "bundle_count": len(suggestions),
+        "extra_earnings_if_all": extra_earnings,
+        "suggestions": suggestions,
     }
 
 
@@ -393,6 +451,8 @@ async def accept_order(order_id: str, request: Request):
     )
     # Background push to the shipper: a driver has been assigned.
     asyncio.create_task(push_status_to_shipper(order, "accepted"))
+    # Phase D: record the accepted pricing signal (time-to-accept).
+    await marketplace.mark_signal_accepted(db, order_id)
     return Order(**order)
 
 

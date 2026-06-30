@@ -1,0 +1,31 @@
+{
+  "summary": "Phase C/D/E/F backend + frontend (code+API) verification. Backend: 9/9 pytest cases passed (test_iter50_phase_def.py). Phase E reputation: breakdown_lines now includes {key:'reputation', label:'Driver reputation', amount:20.69, detail:'+5.4%'} for the demo driver (~rating 4.5 in seed, bounded <= +8% / >= -5%). Phase F bundling: /orders/{id}/bundle-suggestions returns {bundle_count, payload_capacity_kg, extra_earnings_if_all, suggestions[]} sorted ascending by extra_distance_km, each <=25 km detour; 404 for unknown order. Phase D auto_tune: /shipper/quote/recommend.marketplace.auto_tune = {adjustment_pct, samples, acceptance_rate}, neutral 0.0 with samples<min_samples; pricing signal capture path (create shipment + accept) is wired in shipper.py:421-432 (record_pricing_signal) and orders.py:455 (mark_signal_accepted) and stays bounded (|adjustment_pct|<=0.05). Regression OK: recommend → 4 recommendations + heat + environment; match → standard vs marketplace price + 85% driver_earnings. Phase C frontend: JobDetailSheet.tsx (lines 51-65, 229-244) correctly fetches api.getJobMatch on sheet open + on emptyOverride change, renders Market Heat line ('🟢/❄️/🔥 Region · Label'), empty-run / route-match tag (♻️ / 🧭 · you earn €X), and an 'I'm returning empty' toggle with testID='empty-run-toggle'. Direct API exercised via in-page fetch: heat={'label':'Cold','icon':'❄️','adjustment_pct':-0.15}, empty toggle flips marketplace_price 439.31→329.48 (empty_run_pct=0.25). Full E2E UI tap of the sheet could not be exercised because the demo driver currently has an ACTIVE delivery (Job accepted state) — driver-home then shows the active-delivery card instead of the available-jobs feed. JobDetailSheet code is correct and the backend it talks to (GET /orders/{id}/match) is verified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter50_phase_def.py",
+    "/app/test_reports/pytest/iter50_phase_def.xml"
+  ],
+  "action_items": [
+    "(Optional) Seed-reset the demo driver to idle (no active delivery) so the JobDetailSheet marketplace card can be exercised end-to-end via Playwright. Today the driver is mid-job, so /driver-home renders the active-delivery view and there is no available-job marker to tap.",
+    "(Optional) The /api/orders/{id}/match response uses 'detail' (string like '+5.4%') rather than a numeric 'pct' field on the reputation breakdown line. Other lines may follow the same pattern — confirm consumers (admin/analytics) don't expect 'pct' numeric.",
+    "(Already known) Seeded pending orders have no price_quote so bundle suggestion 'price' may be 0.0, and some VEHICLE_TYPES lack capacity_kg → payload_capacity_kg may be 0. Behavior is correct; capacity guard simply doesn't restrict."
+  ],
+  "critical_code_review_comments": [
+    "marketplace.py is clean and deterministic (no model decides price). reputation_adjustment bounded [-0.05, +0.08]. auto_tune_adjustment bounded by config.max_pct (default 0.05). corridor_bundle_match enforces max_detour_km=25. Good.",
+    "record_pricing_signal / mark_signal_accepted swallow all exceptions (try/except Exception: pass) which is correct for a non-critical signal path but makes silent failures invisible. Consider logger.warning so we know if the signal collection ever breaks.",
+    "orders.py:218 order_marketplace_match handler is long (~80 lines). Acceptable but a future refactor could split detection (auto-empty) and pricing assembly into helpers."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (9/9 pytest in iter50_phase_def.xml)", "frontend": "Code+API verified; end-to-end UI tap not exercised due to demo driver having an active delivery state"},
+  "seed_data_creation": "test_create_shipment_records_signal creates one TEST shipment per run (cleanup not performed; minimal demo-data noise).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Demo driver demo.driver@nadaruns.com currently has an ACTIVE delivery — to repro the JobDetailSheet marketplace card UI, first advance/deliver or reject that order, OR re-seed via POST /api/seed-demo to reset state, OR call POST /api/orders/seed-new-pending and tap a marker on the map. Token key in localStorage on web is managed by @react-native-async-storage/async-storage and is NOT directly 'nadaruns_auth_token' as plain string — go through the /login UI rather than priming localStorage.",
+  "rca_of_issue": "No regression found. Phase D/E/F endpoints all behave per spec. Note about Phase E breakdown_line shape: reputation line uses {amount, detail} where detail is a percent string (e.g. '+5.4%'); there is no separate numeric 'pct' field on this line — that is consistent with the other breakdown_lines."
+}

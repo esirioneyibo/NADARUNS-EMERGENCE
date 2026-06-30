@@ -14,6 +14,7 @@ import * as Haptics from "expo-haptics";
 import { Order } from "../types";
 import { radius, shadows, spacing } from "../theme";
 import SwipeToConfirm from "./SwipeToConfirm";
+import { api } from "../api";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SHEET_HEIGHT = 450;
@@ -46,6 +47,22 @@ export default function JobDetailSheet({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const styles = createStyles(theme);
+
+  // Phase B/C: per-driver marketplace pricing (empty-run + route-match + heat).
+  const [match, setMatch] = useState<any>(null);
+  const [emptyOverride, setEmptyOverride] = useState(false);
+  const currentOrderId = orders[currentIndex]?.id;
+  useEffect(() => { setEmptyOverride(false); }, [currentOrderId]);
+  useEffect(() => {
+    let cancelled = false;
+    setMatch(null);
+    if (visible && currentOrderId) {
+      api.getJobMatch(currentOrderId, emptyOverride)
+        .then((m) => { if (!cancelled) setMatch(m); })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [visible, currentOrderId, emptyOverride]);
 
   useEffect(() => {
     if (visible) {
@@ -207,6 +224,24 @@ export default function JobDetailSheet({
           <Text style={styles.statLabel}>ETA</Text>
         </View>
       </View>
+
+      {/* Marketplace intelligence: empty-run / route-match + market heat */}
+      {match && (match.marketplace?.heat || (match.discounts?.empty_run_pct ?? 0) > 0 || (match.discounts?.route_match_pct ?? 0) > 0) && (
+        <View style={styles.mktCard}>
+          {match.marketplace?.heat && (
+            <Text style={styles.mktHeat}>{match.marketplace.heat.icon} {match.marketplace.region_name || "Market"} · {match.marketplace.heat.label}</Text>
+          )}
+          {((match.discounts?.empty_run_pct ?? 0) > 0 || (match.discounts?.route_match_pct ?? 0) > 0) && (
+            <Text style={styles.mktTag}>
+              {(match.discounts?.empty_run_pct ?? 0) > 0 ? "♻️ Empty-run match" : "🧭 On your route"} · you earn €{match.driver_earnings?.toFixed(2)}
+            </Text>
+          )}
+          <TouchableOpacity style={styles.mktToggle} onPress={() => setEmptyOverride((v) => !v)} testID="empty-run-toggle">
+            <Ionicons name={emptyOverride ? "checkbox" : "square-outline"} size={16} color={theme.primary} />
+            <Text style={styles.mktToggleText}>I&apos;m returning empty</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Geo + payout chips */}
       {(currentOrder.pickup_distance_km != null || currentOrder.payout_per_km != null) && (
@@ -481,6 +516,11 @@ const createStyles = (theme: any) =>
       gap: 10,
     },
     acceptingText: { fontSize: 16, fontWeight: "700", color: "#10B981" },
+    mktCard: { marginTop: spacing.sm, marginHorizontal: spacing.lg, backgroundColor: "#ECFDF5", borderRadius: radius.md, padding: spacing.sm, borderWidth: 1, borderColor: "#A7F3D0" },
+    mktHeat: { fontSize: 13, fontWeight: "800", color: theme.text },
+    mktTag: { fontSize: 13, fontWeight: "700", color: "#047857", marginTop: 4 },
+    mktToggle: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
+    mktToggleText: { fontSize: 12.5, color: theme.textSecondary, fontWeight: "600" },
     declineLink: {
       flexDirection: "row",
       alignItems: "center",
