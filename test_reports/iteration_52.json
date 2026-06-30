@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend-only regression smoke after removing '@sentry/react-native' from app.json's expo.plugins (fix for Android Gradle Publish build failure). Verified app.json no longer lists '@sentry/react-native' in plugins (only expo-router, expo-location, expo-splash-screen, expo-secure-store, expo-font, expo-audio, expo-notifications, ./plugins/withSuprSendFcm, expo-localization remain). Confirmed _layout.tsx still imports '@sentry/react-native' and the Sentry.init() block is DSN-gated (lines 234-242) — EXPO_PUBLIC_SENTRY_DSN is NOT set in frontend/.env so init is a no-op as designed. Web preview boot: NadaRuns landing renders cleanly (Driver/Business cards visible), no redbox, 0 pageerrors, 0 console errors, 0 Sentry-related console messages. Driver flow: logged in via /login with demo.driver@nadaruns.com / demo1234 → redirects to /driver-home, Demo Driver header shows '4.85 · Cargo Van • DEMO-001', '25 jobs nearby', stat strip €0.00 / 0 deliveries / 95% accept rate, bottom tab bar (Home/History/Wallet/Profile) renders. No Sentry / RNSentry native-module error. Shipper flow: logged in via /shipper-login with demo.shipper@nadaruns.com / demo1234 → redirects to /shipper-home, 'Welcome back, Demo Logistics Co' header, stat cards (0 Total/Active/Completed), 'Create New Shipment' CTA + empty state, bottom tabs (Home/New/Profile). Zero page errors and zero error-level console logs on shipper home. Console warnings observed are only the pre-existing benign web-only ones (shadow* deprecation, expo-notifications web limitation) explicitly called out as ignorable in the review request. CONCLUSION: app.json plugin removal is a safe runtime no-op — neither role's home screen regressed. The Gradle/native APK build itself cannot be verified in this web-preview environment; that will be confirmed when the user re-runs the Emergent Publish pipeline.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_52.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "app.json plugins array no longer includes '@sentry/react-native' — correct for fixing the Gradle source-map upload task that required SENTRY_AUTH_TOKEN.",
+    "_layout.tsx still imports '* as Sentry from \"@sentry/react-native\"' at line 7 and calls Sentry.init only if EXPO_PUBLIC_SENTRY_DSN is set (lines 234-242). With no DSN configured, init is a no-op at runtime — verified by zero Sentry-related console output on both flows. Without the config plugin, the native @sentry/react-native module is NOT auto-linked into the Android build's expo-modules autolinking via plugin, but it IS still autolinked via the npm dependency in package.json (Expo SDK uses both react-native-community CLI autolinking AND expo-module config plugins). If the next Android Publish still fails due to native @sentry/react-native code being autolinked without proper bundle config, the cleaner fix is to also remove '@sentry/react-native' from package.json dependencies and delete the import + DSN-gated init from _layout.tsx. Flagging as a follow-up risk only — current change is the lowest-risk runtime-safe step.",
+    "Non-blocking: the auth/login UX silently lets users enter shipper credentials on /login (driver login). It returns 401 with no surfaced toast in this test — pre-existing behaviour, not related to this fix."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% — driver login + driver-home OK; shipper login + shipper-home OK; zero Sentry/native-module errors; zero pageerrors"},
+  "seed_data_creation": "None — used existing demo accounts (demo.driver / demo.shipper) already seeded.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sentry config plugin was removed from app.json to fix Android Gradle build. The @sentry/react-native npm dependency and the DSN-gated Sentry.init in app/_layout.tsx are intentionally KEPT and verified no-op on web. Driver login goes through /login (which calls /api/auth/login); shipper login goes through /shipper-login (which calls /api/auth/shipper-login). Don't mix them — /login returns 401 for shipper credentials. If the Android Publish build still fails after this fix, the next escalation is to fully remove the @sentry/react-native package and its import from _layout.tsx.",
+  "rca_of_issue": "Root cause (per main-agent): the '@sentry/react-native' expo config plugin injects a Sentry Gradle source-map upload task at android build-time; that task fails the release build when SENTRY_AUTH_TOKEN is not configured. Mitigation applied by main agent: removed the plugin entry from app.json so the Gradle task is not injected, while keeping the runtime SDK DSN-gated and inert. Web-preview regression smoke confirms no runtime regression for either role."
+}

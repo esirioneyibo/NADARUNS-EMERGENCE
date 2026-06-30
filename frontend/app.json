@@ -81,8 +81,7 @@
       "expo-audio",
       "expo-notifications",
       "./plugins/withSuprSendFcm",
-      "expo-localization",
-      "@sentry/react-native"
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true
