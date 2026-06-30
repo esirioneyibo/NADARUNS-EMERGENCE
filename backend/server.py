@@ -4274,10 +4274,15 @@ api_router.include_router(_r_company.router)
 
 app.include_router(api_router)
 
+_cors_env = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] if _cors_env else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
+    # Only allow credentialed requests when explicit origins are configured
+    # (the wildcard + credentials combo is invalid/insecure). Auth uses Bearer
+    # tokens, not cookies, so the default wildcard works without credentials.
+    allow_credentials=bool(_cors_env),
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

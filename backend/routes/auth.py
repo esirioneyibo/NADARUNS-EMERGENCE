@@ -11,6 +11,39 @@ for _k in dir(_srv):
 router = APIRouter()
 
 
+import time as _time
+
+# --- Simple in-memory login throttle (per email). Mitigates brute force.
+# NOTE: per-process only; for multi-worker prod use a shared store (Redis).
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_WINDOW_SECONDS = 300  # 5 minutes
+_login_failures: dict = {}
+
+
+def _throttle_key(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def _check_login_throttle(email: str):
+    key = _throttle_key(email)
+    now = _time.time()
+    attempts = [t for t in _login_failures.get(key, []) if now - t < _LOGIN_WINDOW_SECONDS]
+    _login_failures[key] = attempts
+    if len(attempts) >= _LOGIN_MAX_ATTEMPTS:
+        retry_in = int(_LOGIN_WINDOW_SECONDS - (now - attempts[0]))
+        raise HTTPException(429, f"Too many failed attempts. Try again in {max(1, retry_in)}s.")
+
+
+def _record_login_failure(email: str):
+    key = _throttle_key(email)
+    _login_failures.setdefault(key, []).append(_time.time())
+
+
+def _reset_login_throttle(email: str):
+    _login_failures.pop(_throttle_key(email), None)
+
+
+
 @router.post("/auth/change-password", status_code=200)
 async def change_password(
     body: ChangePasswordRequest,
@@ -54,16 +87,24 @@ async def change_password(
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """Login with email and password."""
+    _check_login_throttle(request.email)
     driver = await db.drivers.find_one({"email": request.email}, {"_id": 0})
     if not driver:
+        _record_login_failure(request.email)
         raise HTTPException(401, "Invalid email or password")
     
     if not driver.get("password_hash"):
+        _record_login_failure(request.email)
         raise HTTPException(401, "Invalid email or password")
     
     if not verify_password(request.password, driver["password_hash"]):
+        _record_login_failure(request.email)
         raise HTTPException(401, "Invalid email or password")
-    
+
+    if driver.get("is_suspended"):
+        raise HTTPException(403, "This account has been suspended. Contact support.")
+
+    _reset_login_throttle(request.email)
     token = create_token(driver["id"], "driver")
     
     logger.info(f"Driver logged in: {request.email}")
@@ -79,9 +120,12 @@ async def login(request: LoginRequest):
 @router.post("/auth/admin-login", response_model=LoginResponse)
 async def admin_login(request: AdminLoginRequest):
     """Admin login with hardcoded credentials."""
+    _check_login_throttle(request.email)
     if request.email != ADMIN_EMAIL or request.password != ADMIN_PASSWORD:
+        _record_login_failure(request.email)
         raise HTTPException(401, "Invalid admin credentials")
-    
+
+    _reset_login_throttle(request.email)
     token = create_token("admin", "admin")
     
     logger.info(f"Admin logged in: {request.email}")
@@ -227,15 +271,24 @@ async def simple_shipper_register(registration: SimpleShipperRegistration):
 @router.post("/auth/shipper-login")
 async def shipper_login(request: LoginRequest):
     """Login for shippers/businesses."""
+    _check_login_throttle(request.email)
     shipper = await db.shippers.find_one({"email": request.email}, {"_id": 0})
     if not shipper:
+        _record_login_failure(request.email)
         raise HTTPException(401, "Invalid email or password")
     
     if not shipper.get("password_hash"):
+        _record_login_failure(request.email)
         raise HTTPException(401, "Invalid email or password")
     
     if not verify_password(request.password, shipper["password_hash"]):
+        _record_login_failure(request.email)
         raise HTTPException(401, "Invalid email or password")
+
+    if shipper.get("is_suspended"):
+        raise HTTPException(403, "This account has been suspended. Contact support.")
+
+    _reset_login_throttle(request.email)
     
     token = create_token(shipper["id"], "shipper")
     
