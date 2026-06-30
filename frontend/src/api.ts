@@ -366,6 +366,11 @@ export const api = {
   // Phase B/C: per-driver marketplace pricing (empty-run + route-match + heat)
   getJobMatch: (orderId: string, empty?: boolean) =>
     request<any>(`/orders/${orderId}/match${empty ? "?empty=true" : ""}`),
+  // Phase F: smart load bundling suggestions for a candidate job
+  getBundleSuggestions: (orderId: string) =>
+    request<any>(`/orders/${orderId}/bundle-suggestions`),
+  // Market Heat Score across regions (driver-home strip)
+  getMarketHeat: () => request<any>("/marketplace/heat"),
   
   // Wallet
   getWallet: () => request<Wallet>("/driver/wallet"),

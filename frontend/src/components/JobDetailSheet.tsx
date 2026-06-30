@@ -50,6 +50,7 @@ export default function JobDetailSheet({
 
   // Phase B/C: per-driver marketplace pricing (empty-run + route-match + heat).
   const [match, setMatch] = useState<any>(null);
+  const [bundle, setBundle] = useState<any>(null);
   const [emptyOverride, setEmptyOverride] = useState(false);
   const currentOrderId = orders[currentIndex]?.id;
   useEffect(() => { setEmptyOverride(false); }, [currentOrderId]);
@@ -63,6 +64,16 @@ export default function JobDetailSheet({
     }
     return () => { cancelled = true; };
   }, [visible, currentOrderId, emptyOverride]);
+  useEffect(() => {
+    let cancelled = false;
+    setBundle(null);
+    if (visible && currentOrderId) {
+      api.getBundleSuggestions(currentOrderId)
+        .then((b) => { if (!cancelled) setBundle(b); })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [visible, currentOrderId]);
 
   useEffect(() => {
     if (visible) {
@@ -240,6 +251,15 @@ export default function JobDetailSheet({
             <Ionicons name={emptyOverride ? "checkbox" : "square-outline"} size={16} color={theme.primary} />
             <Text style={styles.mktToggleText}>I&apos;m returning empty</Text>
           </TouchableOpacity>
+        </View>
+      )}
+
+      {bundle && bundle.bundle_count > 0 && (
+        <View style={styles.mktCard}>
+          <Text style={styles.mktHeat}>🧩 Bundle {bundle.bundle_count} nearby load{bundle.bundle_count > 1 ? "s" : ""} · +€{(bundle.extra_earnings_if_all || 0).toFixed(0)}</Text>
+          {bundle.suggestions.slice(0, 3).map((s: any, i: number) => (
+            <Text key={i} style={styles.mktToggleText}>+{s.extra_distance_km} km · {s.dropoff_name || "Nearby"} · earn €{(s.driver_earnings || 0).toFixed(0)}</Text>
+          ))}
         </View>
       )}
 

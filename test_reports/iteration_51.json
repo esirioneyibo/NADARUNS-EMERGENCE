@@ -1,0 +1,29 @@
+{
+  "summary": "Final polish frontend verification of the two new driver-app pieces (MarketHeatStrip on driver-home OFFLINE/ready view + Bundle card inside JobDetailSheet). Reset demo state via DELETE+POST /api/seed-demo (cleared previous active delivery so the offline 'ready' view is reachable). Logged in via /login UI with demo.driver@nadaruns.com / demo1234 — auth flow OK, no redbox. Driver-home offline view rendered cleanly and the new Market Heat strip is visible directly below the 'Ready to start earning…' message and above the slide-to-go-online: title 'Market heat' + one chip ('❄️ Uusimaa · Cold · 0 jobs · 5 drivers'). GET /api/marketplace/heat returned 200 (regions=[helsinki,tampere,turku,oulu,kuopio,lapland]; only helsinki has supply>0 so only Uusimaa chip renders — matches MarketHeatStrip filter r.demand>0||r.supply>0). Sliding online + going offline both work; no crash on either transition. Bundle endpoint health-checked across all 25 seeded available orders: 25/25 returned 200; 8 had bundle_count>0 (e.g. {bundle_count:2, extra_earnings_if_all:€56.87}, with 1–2 nearby loads and detours <25 km), 17 returned bundle_count=0. JobDetailSheet bundle-card render path is code-correct (JobDetailSheet.tsx:257-264 gates on bundle.bundle_count>0 and lists up to 3 lines '+{extra_distance_km} km · {dropoff_name} · earn €{driver_earnings}'); the marketplace 'Market Heat + empty-run' card (lines 240-255) still renders independently. End-to-end UI tap of a job marker could NOT be exercised on the web preview because MapView on web uses SvgMapView (src/components/MapView.tsx:26-29) which has no onPress / customMarkers handler — so taps on the SVG map don't open the JobDetailSheet. This is a pre-existing web-only limitation (not introduced by this iteration) and does NOT affect native iOS/Android where react-native-maps drives the markers. Primary pass criteria from the review request are MET: no redbox, both APIs return 200, both UI pieces self-hide correctly when empty.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_51.json"
+  ],
+  "action_items": [
+    "(Web preview only, low priority) MapView.web (SvgMapView) does not implement customMarkers / onPress, so JobDetailSheet cannot be opened by tapping the map on web. If the team wants the bundle card and marketplace card exercised via Playwright in the future, add a minimal tappable overlay on SvgMapView that mirrors NativeMapView.customMarkers, or expose a debug deeplink like /driver-home?open=ORDER_ID that pre-opens JobDetailSheet for a given order id.",
+    "(Optional) When all regions have demand=0 (e.g. right after re-seed before any pending order is dispatched), the heat strip shows only the chip(s) that have supply>0. The Uusimaa chip says '0 jobs · 5 drivers' which is correct but reads slightly off in isolation. Consider showing a small 'Quiet market' subtitle when total demand across the visible chips is 0, so drivers don't read it as ambiguous."
+  ],
+  "critical_code_review_comments": [
+    "MarketHeatStrip.tsx is clean: best-effort fetch with cancellation flag, self-hides when no chip qualifies (length===0), uses theme colors from ThemeContext, all text wrapped in <Text>, horizontal ScrollView (good for mobile touch targets). No issues.",
+    "JobDetailSheet.tsx bundle card placement (lines 257-264) is correct and isolated from the existing marketplace card (lines 240-255). Both cards independently mount and unmount with the open order; bundle state resets to null on currentOrderId change to avoid stale data on the next sheet open.",
+    "api.getBundleSuggestions / api.getMarketHeat (src/api.ts:370-373) use the shared request() helper with auth header — consistent with the rest of the API surface.",
+    "Map web preview limitation is structural (SvgMapView has no customMarkers prop in MapProps either). Not a regression; just makes Playwright-on-web testing of the JobDetailSheet impossible without a code-side hook."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "API spot-check 100% (1/1 heat + 25/25 bundle-suggestions returned 200)", "frontend": "MarketHeatStrip end-to-end UI verified; JobDetailSheet bundle card verified by code+API only (web preview map markers not tappable — pre-existing web-fallback limitation, not a regression)"},
+  "seed_data_creation": "Re-seeded demo data via DELETE /api/seed-demo then POST /api/seed-demo (25 pending orders + 8 history + demo.driver / demo.shipper). This was required because the demo driver was mid-delivery, which would have hidden the offline 'ready' view and the new MarketHeatStrip.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Demo driver login through UI works fine — after login the app redirects to /driver-home and shows the offline view because demo driver default is is_online=false. To repro: re-seed via POST /api/seed-demo, login as demo.driver@nadaruns.com / demo1234, scroll the driver-home offline view, the 'Market heat' strip will be just under the 'Ready to start earning…' callout. To exercise the JobDetailSheet bundle card via Playwright, you need either (a) a native build (markers tappable on iOS/Android) or (b) a code-side hook on SvgMapView. Otherwise, the bundle path is best validated via direct curl against /api/orders/{id}/bundle-suggestions (8 of 25 seeded orders currently return bundle_count>0)."
+}

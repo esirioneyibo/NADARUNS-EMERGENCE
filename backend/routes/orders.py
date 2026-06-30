@@ -317,7 +317,7 @@ async def order_bundle_suggestions(order_id: str, request: Request):
     m_pickup = {"lat": main["pickup"]["lat"], "lng": main["pickup"]["lng"]}
     m_dropoff = {"lat": main["dropoff"]["lat"], "lng": main["dropoff"]["lng"]}
     vt = main.get("vehicle_type", "cargo_van")
-    capacity = float((VEHICLE_TYPES.get(vt) or {}).get("capacity_kg") or 0)
+    capacity = float((VEHICLE_TYPES.get(vt) or {}).get("max_weight_kg") or 0)
     main_weight = float(main.get("cargo_weight_kg") or 0)
 
     candidates = await db.orders.find(
@@ -339,6 +339,14 @@ async def order_bundle_suggestions(order_id: str, request: Request):
         if capacity and (combined_weight + c_weight) > capacity:
             continue  # would exceed payload
         c_price = float(c.get("price_quote") or 0)
+        if c_price <= 0:
+            try:
+                c_price = pricing.calculate_price(
+                    vehicle_type=vt,
+                    distance_km=c.get("road_distance_km") or c.get("distance_km") or 0,
+                    weight_kg=c_weight)["total_price"]
+            except Exception:
+                c_price = 0.0
         suggestions.append({
             "order_id": c["id"],
             "pickup_name": (c.get("pickup") or {}).get("name"),
@@ -359,6 +367,20 @@ async def order_bundle_suggestions(order_id: str, request: Request):
         "extra_earnings_if_all": extra_earnings,
         "suggestions": suggestions,
     }
+
+
+@router.get("/marketplace/heat")
+async def marketplace_heat_overview():
+    """Market Heat Score for every region (drives the driver-home heat strip)."""
+    regions = []
+    for key in marketplace.REGIONS:
+        sd = await marketplace.region_supply_demand(db, key)
+        regions.append({
+            "region": key, "region_name": sd["region_name"],
+            "demand": sd["demand"], "supply": sd["supply"], "heat": sd["heat"],
+        })
+    regions.sort(key=lambda r: (r["heat"]["ratio"], r["demand"]), reverse=True)
+    return {"regions": regions}
 
 
 

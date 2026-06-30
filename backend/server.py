@@ -1245,6 +1245,14 @@ def build_logistics_order(status: OrderStatus = "pending", completed_offset_hour
     vehicle_info = VEHICLE_TYPES.get(vehicle_type, VEHICLE_TYPES["cargo_van"])
     base_rate = vehicle_info["base_rate_per_km"]
     earnings = round(road_distance * base_rate + random.uniform(5, 15), 2)
+    # Quoted shipper price via the marketplace engine (so bundling/analytics
+    # show realistic numbers for seeded demo jobs too).
+    try:
+        _pb = pricing.calculate_price(vehicle_type=vehicle_type, distance_km=road_distance,
+                                      weight_kg=cargo["weight_kg"])
+        price_quote = _pb["total_price"]
+    except Exception:
+        price_quote = earnings
     
     eta = int(road_distance * 2.0) + random.randint(15, 45)  # ~2 min per km + loading time
     
@@ -1279,6 +1287,8 @@ def build_logistics_order(status: OrderStatus = "pending", completed_offset_hour
         ),
         items=[OrderItem(**i) for i in cargo["items"]],
         distance_km=road_distance,  # Use accurate road distance
+        road_distance_km=road_distance,
+        price_quote=price_quote,
         eta_minutes=eta,
         earnings=earnings,
         tip=0.0,  # B2B logistics typically no tips

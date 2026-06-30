@@ -193,4 +193,5 @@ export const adminApi = {
     req<any>(`/admin/pricing/activate/${version}`, { method: "POST" }),
   previewPricing: (config: any, sample: any) =>
     req<any>("/admin/pricing/preview", { method: "POST", body: JSON.stringify({ config, sample }) }),
+  getPricingSignals: () => req<any>("/admin/pricing/signals"),
 };

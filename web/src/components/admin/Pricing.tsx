@@ -40,6 +40,7 @@ export default function Pricing({ notify }: { notify: (m: string, t?: "ok" | "er
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState<any>(null);
+  const [signals, setSignals] = useState<any>(null);
   const [sample, setSample] = useState<any>({ vehicle_type: "box_truck", distance_km: 120, cargo_weight_kg: 3000, urgency: "express", empty_run_discount_pct: 0, supply_demand_pct: 0, route_match_discount_pct: 0 });
 
   const load = async () => {
@@ -50,7 +51,7 @@ export default function Pricing({ notify }: { notify: (m: string, t?: "ok" | "er
       setCfg(JSON.parse(JSON.stringify(d.config)));
     } catch (e: any) { setErr(e.message || "Failed to load pricing"); }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); adminApi.getPricingSignals().then(setSignals).catch(() => {}); }, []);
 
   const vehicleTypes: string[] = useMemo(() => data?.vehicle_types || Object.keys(cfg?.base_fees || {}), [data, cfg]);
 
@@ -239,6 +240,22 @@ export default function Pricing({ notify }: { notify: (m: string, t?: "ok" | "er
               </div>
             ))}
           </div>
+        </Card>
+
+        <Card title="📈 Live pricing signals" desc="Accept-rate & time-to-accept by region — powers the deterministic self-tuning.">
+          {signals && signals.regions?.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ color: "#64748B", fontSize: 12 }}>{signals.total_signals} signals captured</div>
+              {signals.regions.map((r: any) => (
+                <div key={r.region} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "6px 8px", background: "#F8FAFC", borderRadius: 8 }}>
+                  <span style={{ fontWeight: 700 }}>{r.region_name || r.region}</span>
+                  <span style={{ color: "#475569" }}>{r.accepted}/{r.total} acc ({Math.round((r.acceptance_rate || 0) * 100)}%){r.median_time_to_accept_min != null ? ` · ${r.median_time_to_accept_min}m` : ""}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ color: "#94A3B8", fontSize: 13 }}>No signals yet — they accrue as shipments are quoted &amp; accepted.</div>
+          )}
         </Card>
       </div>
     </div>

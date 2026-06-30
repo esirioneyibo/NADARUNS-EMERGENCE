@@ -1272,6 +1272,37 @@ async def admin_preview_pricing(body: dict = Body(...), user: dict = Depends(get
     return {"quote": result}
 
 
+@router.get("/admin/pricing/signals")
+async def admin_pricing_signals(user: dict = Depends(get_admin_user)):
+    """Phase D analytics: accept-rate + time-to-accept by region (makes the
+    deterministic self-tuning observable)."""
+    sigs = await db.pricing_signals.find({}, {"_id": 0}).sort("created_at", -1).limit(2000).to_list(2000)
+    by_region: dict = {}
+    for s in sigs:
+        r = s.get("region") or "unknown"
+        g = by_region.setdefault(r, {"total": 0, "accepted": 0, "times": [], "prices": []})
+        g["total"] += 1
+        if s.get("accepted"):
+            g["accepted"] += 1
+        if s.get("time_to_accept_seconds") is not None:
+            g["times"].append(s["time_to_accept_seconds"])
+        if s.get("price"):
+            g["prices"].append(s["price"])
+    rows = []
+    for r, g in by_region.items():
+        times = sorted(g["times"])
+        med = times[len(times) // 2] if times else None
+        rows.append({
+            "region": r, "region_name": marketplace.region_name(r) if r != "unknown" else None,
+            "total": g["total"], "accepted": g["accepted"],
+            "acceptance_rate": round(g["accepted"] / g["total"], 3) if g["total"] else 0,
+            "median_time_to_accept_min": round(med / 60, 1) if med is not None else None,
+            "avg_price": round(sum(g["prices"]) / len(g["prices"]), 2) if g["prices"] else None,
+        })
+    rows.sort(key=lambda x: x["total"], reverse=True)
+    return {"regions": rows, "total_signals": len(sigs)}
+
+
 
 @router.get("/admin/fleet/companies")
 async def admin_list_companies(

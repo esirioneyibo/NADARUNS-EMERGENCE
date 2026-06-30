@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
+import MarketHeatStrip from "../src/components/MarketHeatStrip";
 import {
   ActivityIndicator,
   Alert,
@@ -512,6 +513,8 @@ export default function HomeScreen() {
               {t("driverHome.readyMessage")}
             </Text>
           </Animated.View>
+
+          <MarketHeatStrip />
 
           {/* Slide to go online */}
           <Animated.View 
