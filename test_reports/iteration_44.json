@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 44/45 backend verification. All 5 requested features verified: (1) cargo_weight_kg now required & >0 (422 on missing/zero/negative, 200 on valid weight, quote total_price scales with weight). (2) Driver payout persists bank_details onto driver doc (verified via GET /api/driver/me after POST /api/driver/wallet/payout with bank_details). (3) PATCH /api/driver/me updates bank_details and is reflected on subsequent GET. (4) POST /api/admin/settings/stripe {webhook_secret:'whsec_test123'} returns webhook_configured=true and webhook_secret_masked; persists across two GET calls. (5) Refund regression: test_full_refund_excludes_from_driver_wallet still PASSES. Full iter43 webhook/refund suite (18 tests) all green after iter45 cleanup. 9/9 new + 18/18 regression = 27/27 PASSED.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter45_weight_bank_webhook.py",
+    "/app/test_reports/pytest/iter45_full.xml"
+  ],
+  "action_items": [
+    "Frontend wiring: prefill bank details from driver.bank_details on cash-out modal; expose edit form in driver profile (PATCH /api/driver/me).",
+    "Frontend admin: display masked webhook_secret using webhook_secret_masked from /api/admin/settings/stripe.",
+    "Shipper UI: ensure cargo_weight_kg field is required (>0) before submitting POST /api/shipper/shipments so users see inline error rather than 422.",
+    "Code review: setting webhook_secret to non-empty value globally affects webhook signature verification — consider per-test isolation if more webhook tests are added."
+  ],
+  "critical_code_review_comments": [
+    "server.py is very large (>4000 lines). Continue extracting routes (already partially done in routes/*).",
+    "Stripe webhook_secret is shared global state in services/payments.py; test pollution risk. Consider supporting both an env-bootstrapped secret and a separate test-only override.",
+    "ShipmentCreateRequest.cargo_weight_kg now correctly uses Field(gt=0); BankDetails model & PayoutRequest.bank_details look clean."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter45_weight_bank_webhook.py (new)"
+  ],
+  "success_rate": {"backend": "100% (27/27)", "frontend": "n/a (skipped per request)"},
+  "seed_data_creation": "No new seed data created. Used demo accounts (demo.shipper, demo.driver, admin) via /api/seed-demo when needed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend changes for cargo_weight_kg requirement, BankDetails persistence (driver.bank_details), and Stripe webhook secret save/persist are fully verified. Test file /app/backend/tests/test_iter45_weight_bank_webhook.py includes a teardown that clears the webhook_secret to avoid polluting iter43 webhook tests. Frontend wiring is still pending per main agent note.",
+  "rca_of_issue": "Webhook secret 'not saving' bug appears resolved: POST /api/admin/settings/stripe with webhook_secret persists via _persist_stripe_settings() to DB and reflects webhook_configured=true + webhook_secret_masked on subsequent GETs across two reads."
+}

@@ -79,6 +79,7 @@ def get_status() -> dict:
         "test_key_masked": _mask(STRIPE_TEST_KEY),
         "live_key_masked": _mask(STRIPE_LIVE_KEY),
         "webhook_configured": bool(STRIPE_WEBHOOK_SECRET),
+        "webhook_secret_masked": _mask(STRIPE_WEBHOOK_SECRET),
         "active_key_masked": _mask(STRIPE_SECRET_KEY),
     }
 

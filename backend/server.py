@@ -504,7 +504,7 @@ class ShipmentCreateRequest(BaseModel):
     dropoff_notes: Optional[str] = None
     # Cargo details
     vehicle_type: str
-    cargo_weight_kg: float
+    cargo_weight_kg: float = Field(..., gt=0, description="Required cargo weight in kg (> 0)")
     cargo_dimensions: Optional[str] = None  # LxWxH
     cargo_volume_m3: Optional[float] = 0.0   # computed volume (stackable cargo)
     pallet_count: Optional[int] = 0          # FIN pallets (non-stackable)
@@ -602,6 +602,13 @@ class Vehicle(BaseModel):
     is_primary: bool = False
 
 
+class BankDetails(BaseModel):
+    account_holder: Optional[str] = None
+    iban: Optional[str] = None
+    bank_name: Optional[str] = None
+    swift_bic: Optional[str] = None
+
+
 class Driver(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
@@ -624,6 +631,7 @@ class Driver(BaseModel):
     is_suspended: bool = False
     company_id: Optional[str] = None        # Fleet: company this driver belongs to (None = independent)
     company_role: Optional[str] = None       # Fleet: "owner" | "driver" (None = independent)
+    bank_details: Optional[BankDetails] = None  # saved payout bank account
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -637,6 +645,7 @@ class DriverUpdate(BaseModel):
     phone: Optional[str] = None
     avatar: Optional[str] = None
     notifications: Optional[NotificationPrefs] = None
+    bank_details: Optional[BankDetails] = None
 
 
 class VehicleInput(BaseModel):
@@ -886,6 +895,7 @@ class WalletAccount(BaseModel):
 class PayoutRequest(BaseModel):
     amount: float
     method: str = "bank_transfer"
+    bank_details: Optional[BankDetails] = None  # save/update payout bank account
 
 
 # ===================== Payment / Withdrawal Models =====================

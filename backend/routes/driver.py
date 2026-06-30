@@ -263,6 +263,13 @@ async def request_payout(request: PayoutRequest, credentials: HTTPAuthorizationC
     
     if request.amount <= 0:
         raise HTTPException(400, "Payout amount must be positive")
+
+    # Save/refresh the driver's payout bank details so they don't have to
+    # re-enter them on every cash-out (also editable from the profile screen).
+    if request.bank_details:
+        await db.drivers.update_one(
+            {"id": driver_id}, {"$set": {"bank_details": request.bank_details.model_dump()}}
+        )
     
     # Create payout transaction
     transaction = Transaction(
