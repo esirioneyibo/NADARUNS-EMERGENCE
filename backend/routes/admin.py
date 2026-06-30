@@ -1228,6 +1228,12 @@ async def admin_save_pricing(body: dict = Body(...), user: dict = Depends(get_ad
     if not isinstance(config, dict) or not config.get("base_fees"):
         raise HTTPException(400, "A full 'config' object with base_fees is required")
     note = (body.get("note") or "").strip()
+    # Fail fast: a config that can't price a sample shipment must not be saved.
+    try:
+        pricing.compute(vehicle_type="cargo_van", distance_km=10, actual_weight_kg=100,
+                        urgency="standard", config=config)
+    except Exception as exc:
+        raise HTTPException(400, f"Invalid pricing config: {exc}")
     doc = await _srv.save_pricing_version(config, note, user.get("id"))
     return {"saved": True, "version": doc["version"], "config": doc["config"], "note": doc["note"]}
 

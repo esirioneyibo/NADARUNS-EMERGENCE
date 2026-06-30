@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
 import os
 import logging
+import copy
 import random
 import re
 import httpx
@@ -4071,10 +4072,13 @@ async def save_pricing_version(config: dict, note: str, admin_id: Optional[str] 
     """Create a NEW active pricing version (never overwrites history)."""
     last = await db.pricing_configs.find_one({}, {"_id": 0, "version": 1}, sort=[("version", -1)])
     next_version = int((last or {}).get("version", 0)) + 1
+    # Store a COMPLETE config (defaults merged with overrides) so version history
+    # is self-contained and the engine is always consistent.
+    full_config = {**copy.deepcopy(pricing.DEFAULT_CONFIG), **(config or {})}
     doc = {
         "version": next_version,
         "active": True,
-        "config": config,
+        "config": full_config,
         "note": note or f"Version {next_version}",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": admin_id or "admin",
