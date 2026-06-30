@@ -231,4 +231,13 @@ New `backend/services/marketplace.py` (pure deterministic heuristics; pricing en
 - Verified: testing_agent iter49 — full shipper create flow shows heat chip, savings box, env line, transparent breakdown (no linear weight surcharge), bonus adds to total. (testing agent fixed a JSX error I introduced in the fallback breakdown branch.)
 - **DEFERRED to next round**: DRIVER-side marketplace UI (show empty-run/route-match price + earnings + heat on the job feed/detail via `GET /orders/{id}/match`). Backend is ready & tested; only the driver screen wiring remains.
 
-**Pending phases:** Phase C driver-UI (above), D = capture pricing signals + deterministic self-tuning (NO LLM for price), E = reputation-based pricing, F = smart load bundling.
+**Pending phases:** all phases (A–F) of the pricing re-architecture are now implemented.
+
+### Phase C driver UI + Phases D/E/F (DONE & tested — iter50, 9/9 backend + frontend verified)
+- **Phase C driver UI** (`src/components/JobDetailSheet.tsx` + `api.getJobMatch`): job sheet fetches `GET /orders/{id}/match` on open and shows a **Market Heat** line (❄️/🟢/🔥 Region · Label), an empty-run/route-match tag ("♻️ Empty-run match · you earn €X" / "🧭 On your route · you earn €X"), and an **"I'm returning empty"** toggle that re-fetches with `?empty=true` (manual override on top of GPS auto-detect). Verified: toggle flips marketplace_price €439.31→€329.48.
+- **Phase E — reputation pricing** (`marketplace.reputation_adjustment`): driver rating ≥4.0 → bounded uplift (≤+8%), <4.0 → bounded discount (≤−5%); wired into `/orders/{id}/match` (shows a "Driver reputation +X%" breakdown line).
+- **Phase D — signal capture + deterministic self-tuning** (NO LLM): `pricing_signals` collection; `record_pricing_signal` on shipment create + `mark_signal_accepted` on driver accept (captures time-to-accept). `auto_tune_adjustment(region,vehicle)` reads recent accept-rate and nudges price within ±config `auto_tune.max_pct` (default 5%); needs ≥min_samples (8) else neutral. Exposed in `/shipper/quote/recommend.marketplace.auto_tune`. Predictive models can plug into this boundary later without touching the engine.
+- **Phase F — smart load bundling** (`GET /orders/{id}/bundle-suggestions`): finds vehicle-compatible pending orders within a ≤25km corridor detour, payload-capacity guarded, sorted by extra distance; returns combined extra earnings.
+- New config: `auto_tune` block in pricing DEFAULT_CONFIG; `reputation` block already existed.
+- KNOWN demo-data quirks (not bugs): seeded pending orders lack `price_quote` (bundle price may show 0); some VEHICLE_TYPES lack `capacity_kg` (capacity guard then no-ops). Real created orders are unaffected.
+- DEFERRED (nice-to-have): driver-side **bundle-suggestions UI** and a **Market Heat region strip** on driver home; admin pricing-signals analytics view. Backend ready.
