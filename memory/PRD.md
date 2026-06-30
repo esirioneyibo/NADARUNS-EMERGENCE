@@ -249,3 +249,10 @@ New `backend/services/marketplace.py` (pure deterministic heuristics; pricing en
 - **Backfill**: bundle endpoint now reads `max_weight_kg` (capacity = 8000 for box_truck etc.); seed builder + bundle endpoint compute `price_quote` via the engine so bundling/analytics show real numbers (no migration needed — self-healing fallback).
 - Marketplace endpoint added: `GET /api/marketplace/heat`. New api.ts methods: getMarketHeat, getBundleSuggestions.
 - Optional future: add web map-marker tap (or `/driver-home?open=ORDER_ID` deep link) for e2e web testing; "Quiet market" subtitle when all regions demand=0.
+
+### Gradle/Publish build fix (Jun 2026)
+- **Symptom**: Native Android Publish failed — "Gradle build failed with unknown error".
+- **Root cause**: the `@sentry/react-native` **config plugin** in `app.json` `expo.plugins` injects a Sentry Gradle source-map upload task that requires `SENTRY_AUTH_TOKEN` (not configured) → fails the release Gradle build.
+- **Fix**: removed `"@sentry/react-native"` from `app.json` plugins. Kept the dependency + the DSN-gated `Sentry.init()` in `app/_layout.tsx` (no-ops without `EXPO_PUBLIC_SENTRY_DSN`), so zero runtime loss; only the failing Gradle task is removed.
+- **Verified**: testing_agent iter52 — driver + shipper flows load cleanly, no Sentry native-module/runtime errors. NOTE: the actual APK Gradle build is NOT reproducible in preview — must be re-confirmed via Publish.
+- **Escalation if it still fails**: also remove the `@sentry/react-native` npm dependency + the import + the init block (then re-add `@sentry/react-native/expo` with a real Sentry auth token only when crash reporting is wanted).
