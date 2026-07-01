@@ -20,6 +20,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nadaruns.driver",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "Take delivery proof photos at dropoff",
         "NSPhotoLibraryUsageDescription": "Attach proof photos to deliveries",
@@ -32,6 +33,7 @@
     },
     "android": {
       "package": "com.nadaruns.driver",
+      "versionCode": 1,
       "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {

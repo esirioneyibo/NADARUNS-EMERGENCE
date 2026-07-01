@@ -109,7 +109,7 @@
     "privacyTerms": "Tietosuoja ja ehdot",
     "signOutConfirm": "Haluatko varmasti kirjautua ulos?",
     "signOutTitle": "Kirjaudu ulos",
-    "driverAppVersion": "Kuljettajasovellus v1.0.0"
+    "driverAppVersion": "Kuljettajasovellus"
   },
   "shipperSettings": {
     "title": "Yritysasetukset",
@@ -130,7 +130,8 @@
     "noPreference": "Ei asetettu (mikä tahansa ajoneuvo)",
     "loadProfileError": "Profiilin lataaminen epäonnistui",
     "saveProfileError": "Profiilin tallentaminen epäonnistui",
-    "profileUpdated": "Profiili päivitetty onnistuneesti"
+    "profileUpdated": "Profiili päivitetty onnistuneesti",
+    "shipperAppVersion": "Yrityssovellus"
   },
   "login": {
     "signInToContinue": "Kirjaudu sisään jatkaaksesi",

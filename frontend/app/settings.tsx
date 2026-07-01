@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useTranslation } from "react-i18next";
+import { getAppVersionDisplay } from "../src/utils/appVersion";
 
 import { api } from "../src/api";
 import { useAuth } from "../src/contexts/AuthContext";
@@ -417,7 +418,7 @@ export default function SettingsScreen() {
           <Text style={styles.signOutText}>{t("common.signOut")}</Text>
         </TouchableOpacity>
 
-        <Text style={styles.versionText}>{t("settings.driverAppVersion")}</Text>
+        <Text style={styles.versionText}>{t("settings.driverAppVersion")} {getAppVersionDisplay()}</Text>
       </ScrollView>
     </View>
   );

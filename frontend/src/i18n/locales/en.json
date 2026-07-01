@@ -109,7 +109,7 @@
     "privacyTerms": "Privacy & terms",
     "signOutConfirm": "Are you sure you want to sign out?",
     "signOutTitle": "Sign Out",
-    "driverAppVersion": "Driver app v1.0.0"
+    "driverAppVersion": "Driver app"
   },
   "shipperSettings": {
     "title": "Business Settings",
@@ -130,7 +130,8 @@
     "noPreference": "No preference set (any vehicle)",
     "loadProfileError": "Failed to load profile",
     "saveProfileError": "Failed to save profile",
-    "profileUpdated": "Profile updated successfully"
+    "profileUpdated": "Profile updated successfully",
+    "shipperAppVersion": "Business app"
   },
   "login": {
     "signInToContinue": "Sign in to continue",

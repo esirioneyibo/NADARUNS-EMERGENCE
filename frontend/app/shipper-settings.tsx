@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useTranslation } from "react-i18next";
+import { getAppVersionDisplay } from "../src/utils/appVersion";
 
 import { getAuthToken } from "../src/api";
 import { useAuth } from "../src/contexts/AuthContext";
@@ -452,6 +453,7 @@ export default function ShipperSettingsScreen() {
             <Text style={styles.signOutText}>{t("common.signOut")}</Text>
           </TouchableOpacity>
         </Animated.View>
+        <Text style={styles.versionText}>{t("shipperSettings.shipperAppVersion")} {getAppVersionDisplay()}</Text>
       </ScrollView>
     </View>
   );
@@ -663,5 +665,11 @@ const createStyles = (theme: any) =>
       color: "#EF4444",
       fontSize: 16,
       fontWeight: "700",
+    },
+    versionText: {
+      textAlign: "center",
+      color: theme.textSecondary,
+      fontSize: 12,
+      marginTop: spacing.xl,
     },
   });
