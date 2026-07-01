@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { Order } from "../types";
 import { radius, shadows, spacing } from "../theme";
@@ -51,6 +52,30 @@ export default function JobDetailSheet({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const styles = createStyles(theme);
+
+  // Bottom fade / "scroll for more" hint — shown only when the scrollable
+  // body has content below the fold and isn't scrolled to the bottom yet.
+  const [showScrollHint, setShowScrollHint] = useState(false);
+  const scrollDims = useRef({ contentH: 0, layoutH: 0 });
+  const evalHint = (contentH: number, layoutH: number, offsetY: number) => {
+    const scrollable = contentH > layoutH + 4;
+    const atBottom = offsetY >= contentH - layoutH - 16;
+    setShowScrollHint(scrollable && !atBottom);
+  };
+  const onBodyScroll = (e: any) => {
+    const { contentSize, layoutMeasurement, contentOffset } = e.nativeEvent;
+    scrollDims.current = { contentH: contentSize.height, layoutH: layoutMeasurement.height };
+    evalHint(contentSize.height, layoutMeasurement.height, contentOffset.y);
+  };
+  const onBodyContentSize = (_w: number, h: number) => {
+    scrollDims.current.contentH = h;
+    evalHint(h, scrollDims.current.layoutH, 0);
+  };
+  const onBodyLayout = (e: any) => {
+    const h = e.nativeEvent.layout.height;
+    scrollDims.current.layoutH = h;
+    evalHint(scrollDims.current.contentH, h, 0);
+  };
 
   // Phase B/C: per-driver marketplace pricing (empty-run + route-match + heat).
   const [match, setMatch] = useState<any>(null);
@@ -201,11 +226,16 @@ export default function JobDetailSheet({
       </View>
 
       {/* Scrollable body so the pinned Accept button is always reachable */}
+      <View style={styles.scrollWrap}>
       <ScrollView
         style={styles.scrollBody}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces={false}
+        onScroll={onBodyScroll}
+        scrollEventThrottle={16}
+        onContentSizeChange={onBodyContentSize}
+        onLayout={onBodyLayout}
       >
       {/* Order count indicator (if multiple) */}
       {hasMultiple && (
@@ -326,6 +356,19 @@ export default function JobDetailSheet({
         </View>
       </View>
       </ScrollView>
+      {showScrollHint && (
+        <View pointerEvents="none" style={styles.scrollHint}>
+          <LinearGradient
+            colors={["rgba(0,0,0,0)", theme.surface]}
+            style={styles.scrollHintGradient}
+          />
+          <View style={styles.scrollHintChip}>
+            <Ionicons name="chevron-down" size={13} color={theme.primary} />
+            <Text style={styles.scrollHintText}>Scroll for more</Text>
+          </View>
+        </View>
+      )}
+      </View>
 
       {/* Action buttons - swipe to accept prevents accidental taps */}
       <View style={styles.actions}>
@@ -369,11 +412,46 @@ const createStyles = (theme: any) =>
       borderTopRightRadius: radius.xxl,
       ...shadows.lg,
     },
+    scrollWrap: {
+      flexShrink: 1,
+      position: "relative",
+    },
     scrollBody: {
       flexShrink: 1,
     },
     scrollContent: {
       paddingBottom: spacing.sm,
+    },
+    scrollHint: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: 44,
+      alignItems: "center",
+      justifyContent: "flex-end",
+    },
+    scrollHintGradient: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: 44,
+    },
+    scrollHintChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: theme.surfaceMuted,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: radius.pill,
+      marginBottom: 2,
+    },
+    scrollHintText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.primary,
     },
     handleContainer: {
       alignItems: "center",
