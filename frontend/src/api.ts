@@ -2,7 +2,7 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet, PaymentSummary, DriverWallet, WithdrawalItem, Company, CompanyInfo, FleetDriver, FleetVehicle, JobAcceptanceMode } from "./types";
+import type { DirectionsResponse, Driver, DriverUpdate, Order, Wallet, PaymentSummary, DriverWallet, WithdrawalItem, PayoutItem, Company, CompanyInfo, FleetDriver, FleetVehicle, JobAcceptanceMode } from "./types";
 
 // Get BASE URL from environment with multiple fallback options
 // Priority: 1. EXPO_PUBLIC_BACKEND_URL env var, 2. Extra config, 3. Hardcoded production URL
@@ -418,6 +418,10 @@ export const api = {
       body: JSON.stringify(body),
     }),
   getWithdrawals: () => request<{ withdrawals: WithdrawalItem[] }>("/wallet/withdrawals"),
+  getPayouts: () => request<{ payouts: PayoutItem[] }>("/wallet/payouts"),
+  // Build an authenticated, directly-openable PDF URL for a payout document.
+  receiptPdfUrl: (receiptId: string) =>
+    `${BASE}${API_PREFIX}/receipts/${receiptId}/pdf?token=${encodeURIComponent(getAuthToken() || "")}`,
   
   // KYC
   getKYCStatus: () => request<{

@@ -32,11 +32,6 @@ export default function DriverEditScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [avatar, setAvatar] = useState("");
-  // Payout bank details (saved so drivers don't re-type on every cash-out)
-  const [accountHolder, setAccountHolder] = useState("");
-  const [iban, setIban] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [swiftBic, setSwiftBic] = useState("");
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -54,10 +49,6 @@ export default function DriverEditScreen() {
       setEmail(d.email);
       setPhone(d.phone);
       setAvatar(d.avatar);
-      setAccountHolder(d.bank_details?.account_holder || "");
-      setIban(d.bank_details?.iban || "");
-      setBankName(d.bank_details?.bank_name || "");
-      setSwiftBic(d.bank_details?.swift_bic || "");
     } catch (e) {
       console.warn("driver-edit load failed", e);
     }
@@ -111,12 +102,6 @@ export default function DriverEditScreen() {
         email: email.trim(),
         phone: phone.trim(),
         avatar,
-        bank_details: {
-          account_holder: accountHolder.trim() || null,
-          iban: iban.trim().replace(/\s+/g, "").toUpperCase() || null,
-          bank_name: bankName.trim() || null,
-          swift_bic: swiftBic.trim().toUpperCase() || null,
-        },
       });
       flash("Profile updated");
       setTimeout(() => router.back(), 700);
@@ -190,17 +175,14 @@ export default function DriverEditScreen() {
           </View>
 
           {/* Payout bank details */}
-          <Text style={styles.sectionTitle}>PAYOUT / BANK DETAILS</Text>
-          <Text style={styles.avatarHint}>Saved securely so you don&apos;t re-type them on every cash-out.</Text>
-          <View style={[styles.card, shadows.sm]}>
-            <Field label="Account holder name" icon="person-circle-outline" value={accountHolder} onChangeText={setAccountHolder} placeholder="e.g. Eero Virtanen" theme={theme} />
-            <Divider theme={theme} />
-            <Field label="IBAN" icon="card-outline" value={iban} onChangeText={setIban} placeholder="FI00 0000 0000 0000" autoCapitalize="characters" theme={theme} />
-            <Divider theme={theme} />
-            <Field label="Bank name" icon="business-outline" value={bankName} onChangeText={setBankName} placeholder="e.g. Nordea" theme={theme} />
-            <Divider theme={theme} />
-            <Field label="SWIFT / BIC" icon="globe-outline" value={swiftBic} onChangeText={setSwiftBic} placeholder="NDEAFIHH" autoCapitalize="characters" theme={theme} />
-          </View>
+          <TouchableOpacity style={[styles.linkCard, shadows.sm]} onPress={() => router.push("/driver-payouts")} activeOpacity={0.85}>
+            <Ionicons name="card-outline" size={20} color={theme.primary} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.linkCardTitle}>Payouts & bank details</Text>
+              <Text style={styles.linkCardSub}>Manage your payout account and view proofs</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+          </TouchableOpacity>
 
           <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} onPress={save} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save changes</Text>}
@@ -263,6 +245,9 @@ const createStyles = (theme: any) => StyleSheet.create({
   avatarHint: { textAlign: "center", color: theme.textSecondary, fontSize: 12.5, marginTop: spacing.sm },
   sectionTitle: { fontSize: 11, fontWeight: "800", color: theme.textSecondary, letterSpacing: 1.2, marginTop: spacing.xxl, marginBottom: spacing.md, paddingHorizontal: 4 },
   card: { backgroundColor: theme.surface, borderRadius: radius.xl, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
+  linkCard: { flexDirection: "row", alignItems: "center", backgroundColor: theme.surface, borderRadius: radius.xl, paddingHorizontal: spacing.lg, paddingVertical: spacing.lg, marginTop: spacing.xl },
+  linkCardTitle: { fontSize: 15, fontWeight: "700", color: theme.textPrimary },
+  linkCardSub: { fontSize: 12.5, color: theme.textSecondary, marginTop: 2 },
   saveBtn: { marginTop: spacing.lg, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: radius.lg, alignItems: "center" },
   saveBtnText: { color: "#fff", fontWeight: "800", fontSize: 16 },
   outlineBtn: { marginTop: spacing.lg, paddingVertical: 16, borderRadius: radius.lg, alignItems: "center", borderWidth: 1.5, borderColor: theme.primary },

@@ -395,9 +395,9 @@ export default function SettingsScreen() {
             theme={theme}
           />
           <Divider theme={theme} />
-          <LinkRow icon="card" label={t("settings.payoutsBank")} badge={t("settings.payoutsWeekly")} testID="link-payouts" onPress={() => router.push("/wallet")} theme={theme} />
+          <LinkRow icon="card" label={t("settings.payoutsBank")} badge={t("settings.payoutsWeekly")} testID="link-payouts" onPress={() => router.push("/driver-payouts")} theme={theme} />
           <Divider theme={theme} />
-          <LinkRow icon="receipt-outline" label={t("settings.taxDocuments")} testID="link-tax" theme={theme} />
+          <LinkRow icon="receipt-outline" label={t("settings.taxDocuments")} badge={t("settings.comingSoon")} badgeColor={theme.textSecondary} testID="link-tax" onPress={() => Alert.alert(t("settings.taxDocuments"), t("settings.comingSoonMsg"))} theme={theme} />
         </Animated.View>
 
         {/* Support */}

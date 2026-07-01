@@ -126,6 +126,17 @@ export interface WithdrawalItem {
   processed_at?: string | null;
 }
 
+export interface PayoutDocument {
+  id: string;
+  receipt_number?: string | null;
+  doc_type?: string | null;
+  created_at?: string | null;
+}
+
+export interface PayoutItem extends WithdrawalItem {
+  documents: PayoutDocument[];
+}
+
 export interface DriverWallet {
   available_balance: number;
   pending_balance: number;

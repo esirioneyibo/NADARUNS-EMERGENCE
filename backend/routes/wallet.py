@@ -94,3 +94,39 @@ async def wallet_withdrawals(credentials: HTTPAuthorizationCredentials = Depends
         {"driver_id": payload["sub"]}, {"_id": 0}
     ).sort("requested_at", -1).limit(100).to_list(100)
     return {"withdrawals": items}
+
+
+@router.get("/wallet/payouts")
+async def wallet_payouts(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Driver payout history joined with any linked PDF documents
+    (withdrawal invoice + payout receipt) so drivers can download proof."""
+    payload = _auth_payload(credentials)
+    if payload.get("type") != "driver":
+        raise HTTPException(403, "Driver access required")
+    driver_id = payload["sub"]
+
+    items = await db.withdrawal_requests.find(
+        {"driver_id": driver_id}, {"_id": 0}
+    ).sort("requested_at", -1).limit(100).to_list(100)
+
+    ids = [w["id"] for w in items]
+    docs = []
+    if ids:
+        docs = await db.receipts.find(
+            {"withdrawal_id": {"$in": ids}},
+            {"_id": 0, "id": 1, "receipt_number": 1, "doc_type": 1, "created_at": 1, "withdrawal_id": 1},
+        ).sort("created_at", 1).to_list(500)
+
+    by_wr: dict = {}
+    for d in docs:
+        by_wr.setdefault(d.get("withdrawal_id"), []).append({
+            "id": d.get("id"),
+            "receipt_number": d.get("receipt_number"),
+            "doc_type": d.get("doc_type"),
+            "created_at": d.get("created_at"),
+        })
+    for w in items:
+        w["documents"] = by_wr.get(w["id"], [])
+
+    return {"payouts": items}
+

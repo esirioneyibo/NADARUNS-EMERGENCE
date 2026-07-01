@@ -310,6 +310,12 @@ async def update_driver(update: DriverUpdate, request: Request):
     # wallet sending only the IBAN) never wipes other saved fields.
     if "bank_details" in payload and isinstance(payload["bank_details"], dict):
         bank = payload.pop("bank_details")
+        # If the driver has no bank_details document yet (null/missing), a
+        # dot-notation $set fails ("cannot create field in element null"), so
+        # ensure the parent is an object before applying per-field updates.
+        existing = await db.drivers.find_one({"id": driver_id}, {"_id": 0, "bank_details": 1})
+        if not isinstance((existing or {}).get("bank_details"), dict):
+            await db.drivers.update_one({"id": driver_id}, {"$set": {"bank_details": {}}})
         for bk, bv in bank.items():
             payload[f"bank_details.{bk}"] = bv
     
